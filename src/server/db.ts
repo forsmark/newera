@@ -1,6 +1,9 @@
 import { Database } from 'bun:sqlite';
 
-const db = new Database('/app/db/jobs.db');
+const db = new Database('/app/db/jobs.db', { create: true });
+
+db.run('PRAGMA journal_mode = WAL;');
+db.run('PRAGMA foreign_keys = ON;');
 
 db.run(`
   CREATE TABLE IF NOT EXISTS jobs (
