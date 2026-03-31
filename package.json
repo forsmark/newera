@@ -1,0 +1,9 @@
+{
+  "name": "new-era",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "src/server",
+    "src/client"
+  ]
+}
