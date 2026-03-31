@@ -42,7 +42,7 @@ async function fetchQuery(query: string): Promise<JSearchItem[]> {
   return json.data ?? [];
 }
 
-function mapItem(item: JSearchItem): JobPartial {
+function mapItem(item: JSearchItem, fetchedAt: string): JobPartial {
   return {
     source: 'jsearch',
     external_id: item.job_id,
@@ -52,7 +52,7 @@ function mapItem(item: JSearchItem): JobPartial {
     url: item.job_apply_link,
     description: item.job_description ?? null,
     posted_at: item.job_posted_at_datetime_utc ?? null,
-    fetched_at: new Date().toISOString(),
+    fetched_at: fetchedAt,
   };
 }
 
@@ -62,6 +62,8 @@ export async function fetchJSearch(): Promise<JobPartial[]> {
     console.warn('[jsearch] JSEARCH_API_KEY is not set — skipping fetch');
     return [];
   }
+
+  const fetchedAt = new Date().toISOString();
 
   const queries = [
     'frontend developer Copenhagen',
@@ -89,5 +91,5 @@ export async function fetchJSearch(): Promise<JobPartial[]> {
     }
   }
 
-  return unique.map(mapItem);
+  return unique.map((item) => mapItem(item, fetchedAt));
 }

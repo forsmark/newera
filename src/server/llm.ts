@@ -2,7 +2,7 @@ import { readFile } from 'fs/promises';
 import type { Job } from './types';
 
 const OLLAMA_URL = 'http://host.docker.internal:11434/api/generate';
-const MODEL = 'qwen3:8b';
+const MODEL = 'qwen3.5:9b';
 const TIMEOUT_MS = 60_000;
 
 const RESUME_PATH = '/app/data/resume.md';
