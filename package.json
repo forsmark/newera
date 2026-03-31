@@ -5,5 +5,10 @@
   "workspaces": [
     "src/server",
     "src/client"
-  ]
+  ],
+  "scripts": {
+    "build": "bun run --cwd src/client build",
+    "dev": "bun run --cwd src/client dev",
+    "start": "bun run src/server/index.ts"
+  }
 }
