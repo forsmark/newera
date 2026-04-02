@@ -87,4 +87,44 @@ app.patch('/:id', async (c) => {
   return c.json(updated);
 });
 
+// POST /api/jobs/bulk-status
+// Body: { ids: string[], status: 'saved' | 'rejected' }
+// Updates status for all provided job IDs in a single transaction
+app.post('/bulk-status', async (c) => {
+  let body: { ids?: unknown; status?: unknown };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400);
+  }
+
+  const { ids, status } = body;
+
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return c.json({ error: 'ids must be a non-empty array' }, 400);
+  }
+  if (typeof status !== 'string' || !VALID_STATUSES.has(status)) {
+    return c.json({ error: `Invalid status. Must be one of: ${[...VALID_STATUSES].join(', ')}` }, 400);
+  }
+  // Only allow bulk-setting to saved or rejected (not applied — that needs kanban entry)
+  if (status === 'applied') {
+    return c.json({ error: 'Use the individual PATCH endpoint to mark jobs as applied' }, 400);
+  }
+
+  // Run in a transaction for atomicity
+  const updateMany = db.transaction((jobIds: string[]) => {
+    const stmt = db.prepare('UPDATE jobs SET status = ? WHERE id = ?');
+    let count = 0;
+    for (const id of jobIds) {
+      const result = stmt.run(status, id);
+      count += result.changes;
+    }
+    return count;
+  });
+
+  const updated = updateMany(ids as string[]);
+  return c.json({ updated });
+});
+
 export default app;
+
