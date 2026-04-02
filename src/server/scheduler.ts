@@ -11,7 +11,7 @@ export function getLastFetchAt(): string | null {
   return lastFetchAt;
 }
 
-export async function fetchJobs(): Promise<void> {
+export async function fetchJobs(): Promise<number> {
   console.log('[scheduler] Fetching jobs...');
 
   // 1. Fetch from both sources
@@ -54,26 +54,30 @@ export async function fetchJobs(): Promise<void> {
   console.log(`[scheduler] ${newJobIds.length} new jobs inserted`);
   lastFetchAt = new Date().toISOString();
 
-  // 3. Analyze new jobs with LLM (sequentially to avoid hammering Ollama)
-  for (const jobId of newJobIds) {
-    const job = db.query('SELECT * FROM jobs WHERE id = ?').get(jobId) as Job | null;
-    if (!job) continue;
+  // 3. Analyze new jobs with LLM in the background (don't await — return count immediately)
+  (async () => {
+    for (const jobId of newJobIds) {
+      const job = db.query('SELECT * FROM jobs WHERE id = ?').get(jobId) as Job | null;
+      if (!job) continue;
 
-    const result = await analyzeJob(job);
-    if (result) {
-      db.run('UPDATE jobs SET match_score = ?, match_reasoning = ? WHERE id = ?', [
-        result.match_score,
-        result.match_reasoning,
-        jobId,
-      ]);
-      console.log(`[scheduler] Analyzed job ${jobId}: score=${result.match_score}`);
+      const result = await analyzeJob(job);
+      if (result) {
+        db.run('UPDATE jobs SET match_score = ?, match_reasoning = ? WHERE id = ?', [
+          result.match_score,
+          result.match_reasoning,
+          jobId,
+        ]);
+        console.log(`[scheduler] Analyzed job ${jobId}: score=${result.match_score}`);
+      }
     }
-  }
 
-  // Also retry any existing jobs that weren't scored yet (e.g. Ollama was unavailable)
-  await analyzeUnscoredJobs();
+    // Also retry any existing jobs that weren't scored yet (e.g. Ollama was unavailable)
+    await analyzeUnscoredJobs();
 
-  console.log('[scheduler] Done');
+    console.log('[scheduler] Done');
+  })().catch((err) => console.error('[scheduler] Background analysis failed:', err));
+
+  return newJobIds.length;
 }
 
 export async function analyzeUnscoredJobs(): Promise<void> {

@@ -102,6 +102,7 @@ export default function App() {
   const [status, setStatus] = useState<AppStatus | null>(null);
   const [fetching, setFetching] = useState(false);
   const [jobsRefreshKey, setJobsRefreshKey] = useState(0);
+  const [fetchNotification, setFetchNotification] = useState<string | null>(null);
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -124,7 +125,13 @@ export default function App() {
   const handleFetchNow = useCallback(async () => {
     setFetching(true);
     try {
-      await fetch("/api/fetch", { method: "POST" });
+      const res = await fetch("/api/fetch", { method: "POST" });
+      if (res.ok) {
+        const data = await res.json();
+        const n = data.new_jobs ?? 0;
+        setFetchNotification(n > 0 ? `${n} new job${n === 1 ? "" : "s"} found` : "No new jobs");
+        setTimeout(() => setFetchNotification(null), 4000);
+      }
       setJobsRefreshKey((k) => k + 1);
       await fetchStatus();
     } finally {
@@ -134,7 +141,28 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      <style>{`@keyframes fadeIn { from { opacity: 0; transform: translateX(-50%) translateY(-4px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }`}</style>
       <Nav status={status} onFetchNow={handleFetchNow} fetching={fetching} />
+      {fetchNotification && (
+        <div style={{
+          position: "fixed",
+          top: "3.5rem",
+          left: "50%",
+          transform: "translateX(-50%)",
+          background: "#1e293b",
+          border: "1px solid #334155",
+          borderRadius: "0.5rem",
+          padding: "0.5rem 1.25rem",
+          color: "#f1f5f9",
+          fontSize: "0.875rem",
+          fontWeight: 500,
+          zIndex: 200,
+          boxShadow: "0 4px 16px rgba(0,0,0,0.3)",
+          animation: "fadeIn 0.2s ease",
+        }}>
+          {fetchNotification}
+        </div>
+      )}
       <div style={{ background: "#0f172a", minHeight: "calc(100vh - 49px)", color: "#f1f5f9" }}>
         <Routes>
           <Route path="/" element={<Navigate to="/jobs" replace />} />
