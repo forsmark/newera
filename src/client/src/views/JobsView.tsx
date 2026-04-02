@@ -7,7 +7,7 @@ interface Props {
   refreshKey?: number;
 }
 
-type FilterStatus = "all" | "unread" | "new" | "saved";
+type FilterStatus = "all" | "unread" | "new" | "saved" | "applied";
 type PostedWithin = 'any' | '7d' | '30d';
 type SortBy = 'score' | 'posted' | 'fetched';
 
@@ -138,6 +138,7 @@ export default function JobsView({ refreshKey }: Props) {
       if (filterStatus === "unread" && j.seen_at !== null) return false;
       if (filterStatus === "new" && j.status !== "new") return false;
       if (filterStatus === "saved" && j.status !== "saved") return false;
+      if (filterStatus === "applied" && j.status !== "applied") return false;
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
         if (!(j.title.toLowerCase().includes(q) || j.company.toLowerCase().includes(q))) return false;
@@ -202,6 +203,7 @@ export default function JobsView({ refreshKey }: Props) {
   const unreadCount = jobs.filter(j => j.seen_at === null && j.status !== 'rejected').length;
   const newCount = jobs.filter(j => j.status === 'new').length;
   const savedCount = jobs.filter(j => j.status === 'saved').length;
+  const appliedCount = jobs.filter(j => j.status === 'applied').length;
 
   const tabStyle = (active: boolean): React.CSSProperties => ({
     padding: "0.375rem 0.875rem",
@@ -284,8 +286,8 @@ export default function JobsView({ refreshKey }: Props) {
 
         {/* Status tabs */}
         <div style={{ display: "flex", gap: "0.25rem", background: "#0f172a", borderRadius: "0.5rem", padding: "0.25rem" }}>
-          {(["all", "unread", "new", "saved"] as FilterStatus[]).map((s) => {
-            const count = s === "unread" ? unreadCount : s === "new" ? newCount : s === "saved" ? savedCount : null;
+          {(["all", "unread", "new", "saved", "applied"] as FilterStatus[]).map((s) => {
+            const count = s === "unread" ? unreadCount : s === "new" ? newCount : s === "saved" ? savedCount : s === "applied" ? appliedCount : null;
             return (
               <button key={s} style={tabStyle(filterStatus === s)} onClick={() => setFilterStatus(s)}>
                 {s.charAt(0).toUpperCase() + s.slice(1)}
@@ -366,7 +368,7 @@ export default function JobsView({ refreshKey }: Props) {
             background: '#f59e0b',
             animation: 'pulse 1.5s ease-in-out infinite'
           }} />
-          Scoring jobs…
+          Scoring jobs… ({jobs.filter(j => j.match_score === null).length} pending)
         </div>
       )}
 

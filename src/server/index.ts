@@ -17,7 +17,13 @@ app.route('/api/fetch', fetchRoute);
 // GET /api/status
 app.get('/api/status', (c) => {
   const counts = db.query('SELECT status, COUNT(*) as count FROM jobs GROUP BY status').all();
-  return c.json({ last_fetch_at: getLastFetchAt(), counts, is_fetching: getIsFetching() });
+  const unscoredRow = db.query('SELECT COUNT(*) as count FROM jobs WHERE match_score IS NULL').get() as { count: number };
+  return c.json({
+    last_fetch_at: getLastFetchAt(),
+    counts,
+    is_fetching: getIsFetching(),
+    unscored_jobs: unscoredRow.count,
+  });
 });
 
 // Serve static files (built React app)
