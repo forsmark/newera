@@ -111,7 +111,12 @@ export default function JobsView({ refreshKey }: Props) {
       });
       if (res.ok) {
         const s = status as Job['status'];
-        setJobs(prev => prev.map(j => selectedIds.has(j.id) ? { ...j, status: s } : j));
+        const now = new Date().toISOString();
+        setJobs(prev => prev.map(j =>
+          selectedIds.has(j.id)
+            ? { ...j, status: s, seen_at: j.seen_at ?? now }
+            : j
+        ));
         setSelectedIds(new Set());
       }
     } finally {
