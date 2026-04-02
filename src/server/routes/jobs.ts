@@ -114,10 +114,11 @@ app.post('/bulk-status', async (c) => {
 
   // Run in a transaction for atomicity
   const updateMany = db.transaction((jobIds: string[]) => {
-    const stmt = db.prepare('UPDATE jobs SET status = ? WHERE id = ?');
+    const stmt = db.prepare('UPDATE jobs SET status = ?, seen_at = COALESCE(seen_at, ?) WHERE id = ?');
     let count = 0;
+    const now = new Date().toISOString();
     for (const id of jobIds) {
-      const result = stmt.run(status, id);
+      const result = stmt.run(status, now, id);
       count += result.changes;
     }
     return count;

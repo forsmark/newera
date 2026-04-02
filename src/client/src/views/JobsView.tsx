@@ -343,7 +343,7 @@ export default function JobsView({ refreshKey }: Props) {
             fontWeight: 500,
           }}
         >
-          {compact ? "≡ Compact" : "≡ Compact"}
+          {compact ? "⊞ Detailed" : "≡ Compact"}
         </button>
       </div>
 
@@ -441,6 +441,7 @@ export default function JobsView({ refreshKey }: Props) {
               ['k / ↑', 'Previous job'],
               ['Enter', 'Expand/collapse'],
               ['s', 'Save job'],
+              ['n', 'Un-save job'],
               ['r', 'Reject job'],
               ['a', 'Mark applied'],
               ['u', 'Open URL'],

@@ -98,6 +98,9 @@ export default function JobRow({ job, onStatusChange, onSeen, compact, selected,
         case 'a':
           if (job.status === 'new' || job.status === 'saved') patchStatus('applied');
           break;
+        case 'n':
+          if (job.status === 'saved') patchStatus('new');
+          break;
         case 'u':
           window.open(job.url, '_blank', 'noopener,noreferrer');
           break;
@@ -242,16 +245,31 @@ export default function JobRow({ job, onStatusChange, onSeen, compact, selected,
       )}
 
       {job.status === "saved" && (
-        <span
-          style={{
-            fontSize: "0.75rem",
-            color: "#60a5fa",
-            fontWeight: 600,
-            padding: "0.25rem 0.375rem",
-          }}
-        >
-          Saved
-        </span>
+        <>
+          <span
+            style={{
+              fontSize: "0.75rem",
+              color: "#60a5fa",
+              fontWeight: 600,
+              padding: "0.25rem 0.375rem",
+            }}
+          >
+            Saved
+          </span>
+          <button
+            onClick={() => patchStatus("new")}
+            disabled={loading}
+            style={{
+              ...btnBase,
+              background: "transparent",
+              borderColor: "#334155",
+              color: "#64748b",
+              fontSize: "0.7rem",
+            }}
+          >
+            × Unsave
+          </button>
+        </>
       )}
     </div>
   );
