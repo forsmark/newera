@@ -21,8 +21,12 @@ export default function JobsView({ refreshKey }: Props) {
   const [showRejected, setShowRejected] = useState(false);
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [postedWithin, setPostedWithin] = useState<PostedWithin>('any');
-  const [sortBy, setSortBy] = useState<SortBy>('score');
+  const [postedWithin, setPostedWithin] = useState<PostedWithin>(() =>
+    (localStorage.getItem('jobs-posted-within') as PostedWithin | null) ?? 'any'
+  );
+  const [sortBy, setSortBy] = useState<SortBy>(() =>
+    (localStorage.getItem('jobs-sort-by') as SortBy | null) ?? 'score'
+  );
   const [filterSource, setFilterSource] = useState<FilterSource>("all");
   const [compact, setCompact] = useState<boolean>(() => {
     return localStorage.getItem("jobs-compact-view") === "true";
@@ -280,7 +284,7 @@ export default function JobsView({ refreshKey }: Props) {
 
         <select
           value={postedWithin}
-          onChange={e => setPostedWithin(e.target.value as PostedWithin)}
+          onChange={e => { const v = e.target.value as PostedWithin; localStorage.setItem('jobs-posted-within', v); setPostedWithin(v); }}
           style={{
             padding: '0.4rem 0.625rem',
             borderRadius: '0.375rem',
@@ -299,7 +303,7 @@ export default function JobsView({ refreshKey }: Props) {
 
         <select
           value={sortBy}
-          onChange={e => setSortBy(e.target.value as SortBy)}
+          onChange={e => { const v = e.target.value as SortBy; localStorage.setItem('jobs-sort-by', v); setSortBy(v); }}
           style={{
             padding: '0.4rem 0.625rem',
             borderRadius: '0.375rem',
@@ -406,6 +410,24 @@ export default function JobsView({ refreshKey }: Props) {
           }}
         >
           {compact ? "⊞ Detailed" : "≡ Compact"}
+        </button>
+
+        <button
+          onClick={() => setShowShortcuts(true)}
+          title="Keyboard shortcuts"
+          style={{
+            padding: "0.375rem 0.5rem",
+            borderRadius: "0.375rem",
+            border: "1px solid #334155",
+            background: "transparent",
+            color: "#475569",
+            cursor: "pointer",
+            fontSize: "0.8125rem",
+            fontWeight: 600,
+            lineHeight: 1,
+          }}
+        >
+          ?
         </button>
       </div>
 

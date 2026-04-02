@@ -154,6 +154,13 @@ export default function KanbanCard({ application, onUpdate }: Props) {
         </div>
       </div>
 
+      {/* Company / location */}
+      {job.location && (
+        <div style={{ color: "#64748b", fontSize: "0.75rem", marginBottom: "0.125rem" }}>
+          {job.location}
+        </div>
+      )}
+
       {/* Applied date */}
       <div style={{ color: "#64748b", fontSize: "0.75rem", marginBottom: "0.25rem" }}>
         Applied: {daysAgo(application.applied_at)}
