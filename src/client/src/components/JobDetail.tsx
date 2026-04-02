@@ -6,8 +6,11 @@ interface Props {
   onRescore?: (id: string) => void;
 }
 
+const DESC_LIMIT = 500;
+
 export default function JobDetail({ job, onRescore }: Props) {
   const [copied, setCopied] = useState(false);
+  const [descExpanded, setDescExpanded] = useState(false);
 
   async function handleCopy() {
     const text = [
@@ -20,10 +23,9 @@ export default function JobDetail({ job, onRescore }: Props) {
     setTimeout(() => setCopied(false), 2000);
   }
 
-  const descPreview = job.description
-    ? job.description.length > 500
-      ? job.description.slice(0, 500) + "..."
-      : job.description
+  const hasLongDesc = job.description !== null && job.description.length > DESC_LIMIT;
+  const descText = job.description
+    ? (hasLongDesc && !descExpanded ? job.description.slice(0, DESC_LIMIT) + '…' : job.description)
     : null;
 
   return (
@@ -70,7 +72,7 @@ export default function JobDetail({ job, onRescore }: Props) {
         </div>
       ) : null}
 
-      {descPreview && (
+      {descText && (
         <div>
           <div
             style={{
@@ -84,15 +86,26 @@ export default function JobDetail({ job, onRescore }: Props) {
           >
             Description
           </div>
-          <div
-            style={{
-              color: "#94a3b8",
-              fontSize: "0.875rem",
-              lineHeight: 1.6,
-            }}
-          >
-            {descPreview}
+          <div style={{ color: "#94a3b8", fontSize: "0.875rem", lineHeight: 1.6 }}>
+            {descText}
           </div>
+          {hasLongDesc && (
+            <button
+              onClick={() => setDescExpanded(v => !v)}
+              style={{
+                marginTop: '0.375rem',
+                padding: 0,
+                border: 'none',
+                background: 'transparent',
+                color: '#475569',
+                fontSize: '0.75rem',
+                cursor: 'pointer',
+                textDecoration: 'underline',
+              }}
+            >
+              {descExpanded ? 'Show less' : 'Show full description'}
+            </button>
+          )}
         </div>
       )}
 

@@ -161,9 +161,25 @@ export default function KanbanCard({ application, onUpdate }: Props) {
         </div>
       )}
 
-      {/* Applied date */}
-      <div style={{ color: "#64748b", fontSize: "0.75rem", marginBottom: "0.25rem" }}>
-        Applied: {daysAgo(application.applied_at)}
+      {/* Source + applied date row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', marginBottom: '0.25rem' }}>
+        <span style={{
+          background: '#0f172a',
+          border: '1px solid #334155',
+          borderRadius: '0.2rem',
+          padding: '0.05rem 0.3rem',
+          fontSize: '0.65rem',
+          color: '#475569',
+          textTransform: 'uppercase',
+          letterSpacing: '0.04em',
+          fontWeight: 600,
+          flexShrink: 0,
+        }}>
+          {job.source}
+        </span>
+        <span style={{ color: "#64748b", fontSize: "0.75rem" }}>
+          Applied: {daysAgo(application.applied_at)}
+        </span>
       </div>
 
       {/* View job link */}
