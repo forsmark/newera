@@ -6,7 +6,7 @@ interface Props {
   refreshKey?: number;
 }
 
-type FilterStatus = "all" | "new" | "saved";
+type FilterStatus = "all" | "unread" | "new" | "saved";
 
 export default function JobsView({ refreshKey }: Props) {
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -82,6 +82,7 @@ export default function JobsView({ refreshKey }: Props) {
   const filtered = jobs
     .filter((j) => {
       if (!showRejected && j.status === "rejected") return false;
+      if (filterStatus === "unread" && j.seen_at !== null) return false;
       if (filterStatus === "new" && j.status !== "new") return false;
       if (filterStatus === "saved" && j.status !== "saved") return false;
       if (searchQuery) {
@@ -98,6 +99,10 @@ export default function JobsView({ refreshKey }: Props) {
       if (b.match_score === null) return -1;
       return b.match_score - a.match_score;
     });
+
+  const unreadCount = jobs.filter(j => j.seen_at === null && j.status !== 'rejected').length;
+  const newCount = jobs.filter(j => j.status === 'new').length;
+  const savedCount = jobs.filter(j => j.status === 'saved').length;
 
   const tabStyle = (active: boolean): React.CSSProperties => ({
     padding: "0.375rem 0.875rem",
@@ -142,11 +147,29 @@ export default function JobsView({ refreshKey }: Props) {
 
         {/* Status tabs */}
         <div style={{ display: "flex", gap: "0.25rem", background: "#0f172a", borderRadius: "0.5rem", padding: "0.25rem" }}>
-          {(["all", "new", "saved"] as FilterStatus[]).map((s) => (
-            <button key={s} style={tabStyle(filterStatus === s)} onClick={() => setFilterStatus(s)}>
-              {s.charAt(0).toUpperCase() + s.slice(1)}
-            </button>
-          ))}
+          {(["all", "unread", "new", "saved"] as FilterStatus[]).map((s) => {
+            const count = s === "unread" ? unreadCount : s === "new" ? newCount : s === "saved" ? savedCount : null;
+            return (
+              <button key={s} style={tabStyle(filterStatus === s)} onClick={() => setFilterStatus(s)}>
+                {s.charAt(0).toUpperCase() + s.slice(1)}
+                {count !== null && count > 0 && (
+                  <span style={{
+                    marginLeft: '0.375rem',
+                    background: filterStatus === s ? 'rgba(255,255,255,0.2)' : '#1e293b',
+                    color: filterStatus === s ? '#fff' : '#94a3b8',
+                    borderRadius: '9999px',
+                    padding: '0 0.375rem',
+                    fontSize: '0.7rem',
+                    fontWeight: 700,
+                    lineHeight: '1.4',
+                    display: 'inline-block',
+                  }}>
+                    {count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
 
         <label
