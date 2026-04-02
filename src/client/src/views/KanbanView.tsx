@@ -11,7 +11,9 @@ const COLUMNS: { key: KanbanCol; title: string; color: string }[] = [
   { key: "rejected", title: "Rejected", color: "#ef4444" },
 ];
 
-export default function KanbanView() {
+interface Props { refreshKey?: number; }
+
+export default function KanbanView({ refreshKey }: Props) {
   const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -29,7 +31,7 @@ export default function KanbanView() {
       }
     }
     fetchKanban();
-  }, []);
+  }, [refreshKey]); // re-fetch when parent signals a refresh
 
   async function handleDrop(jobId: string, column: KanbanCol) {
     const original = applications;  // snapshot before mutation

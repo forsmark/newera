@@ -4,7 +4,7 @@ import { resolve } from 'path';
 import jobsRoute from './routes/jobs';
 import kanbanRoute from './routes/kanban';
 import fetchRoute from './routes/fetch';
-import { startScheduler, getLastFetchAt } from './scheduler';
+import { startScheduler, getLastFetchAt, getIsFetching } from './scheduler';
 import db from './db';
 
 const app = new Hono();
@@ -17,7 +17,7 @@ app.route('/api/fetch', fetchRoute);
 // GET /api/status
 app.get('/api/status', (c) => {
   const counts = db.query('SELECT status, COUNT(*) as count FROM jobs GROUP BY status').all();
-  return c.json({ last_fetch_at: getLastFetchAt(), counts });
+  return c.json({ last_fetch_at: getLastFetchAt(), counts, is_fetching: getIsFetching() });
 });
 
 // Serve static files (built React app)

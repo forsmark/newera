@@ -18,6 +18,7 @@ export interface Job {
 export interface AppStatus {
   last_fetch_at: string | null;
   counts: { status: string; count: number }[];
+  is_fetching?: boolean;
 }
 
 export interface Application {

@@ -77,6 +77,18 @@ function Nav({ status, onFetchNow, fetching }: NavProps) {
       <span style={{ color: "#475569", fontSize: "0.8125rem" }}>
         Last fetch: {formatLastFetch(status?.last_fetch_at ?? null)}
       </span>
+      {status?.is_fetching && (
+        <span style={{
+          display: 'inline-block',
+          width: '6px',
+          height: '6px',
+          borderRadius: '50%',
+          background: '#3b82f6',
+          animation: 'pulse 1s ease-in-out infinite',
+          marginLeft: '0.25rem',
+          verticalAlign: 'middle',
+        }} />
+      )}
 
       <button
         onClick={onFetchNow}
@@ -141,7 +153,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <style>{`@keyframes fadeIn { from { opacity: 0; transform: translateX(-50%) translateY(-4px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }`}</style>
+      <style>{`@keyframes fadeIn { from { opacity: 0; transform: translateX(-50%) translateY(-4px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } } @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }`}</style>
       <Nav status={status} onFetchNow={handleFetchNow} fetching={fetching} />
       {fetchNotification && (
         <div style={{
@@ -167,7 +179,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Navigate to="/jobs" replace />} />
           <Route path="/jobs" element={<JobsView refreshKey={jobsRefreshKey} />} />
-          <Route path="/kanban" element={<KanbanView />} />
+          <Route path="/kanban" element={<KanbanView refreshKey={jobsRefreshKey} />} />
         </Routes>
       </div>
     </BrowserRouter>
