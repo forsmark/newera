@@ -4,6 +4,10 @@ import JobsView from "./views/JobsView";
 import KanbanView from "./views/KanbanView";
 import { AppStatus } from "./types";
 
+function getCount(status: AppStatus | null, statusKey: string): number {
+  return status?.counts.find(c => c.status === statusKey)?.count ?? 0;
+}
+
 function formatLastFetch(dateStr: string | null): string {
   if (!dateStr) return "never";
   const date = new Date(dateStr);
@@ -46,6 +50,29 @@ function Nav({ status, onFetchNow, fetching }: NavProps) {
 
       <NavLink to="/jobs" style={navLinkStyle}>Jobs</NavLink>
       <NavLink to="/kanban" style={navLinkStyle}>Kanban</NavLink>
+
+      {status && (() => {
+        const stats = [
+          { key: 'new', color: '#94a3b8' },
+          { key: 'saved', color: '#60a5fa' },
+          { key: 'applied', color: '#a855f7' },
+        ].map(({ key, color }) => ({ key, color, n: getCount(status, key) }))
+         .filter(({ n }) => n > 0);
+
+        if (stats.length === 0) return null;
+
+        return (
+          <div style={{ display: 'flex', gap: '0.375rem', alignItems: 'center', fontSize: '0.75rem', color: '#475569' }}>
+            {stats.map(({ key, color, n }, i) => (
+              <span key={key}>
+                {i > 0 && <span style={{ marginRight: '0.375rem', color: '#334155' }}>·</span>}
+                <span style={{ color, fontWeight: 600 }}>{n}</span>
+                {' '}{key}
+              </span>
+            ))}
+          </div>
+        );
+      })()}
 
       <span style={{ color: "#475569", fontSize: "0.8125rem" }}>
         Last fetch: {formatLastFetch(status?.last_fetch_at ?? null)}
