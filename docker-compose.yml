@@ -1,0 +1,14 @@
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/app/data:ro
+      - jobs-db:/app/db
+    env_file: .env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  jobs-db:
