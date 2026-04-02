@@ -56,6 +56,27 @@ function mapItem(item: JSearchItem, fetchedAt: string): JobPartial {
   };
 }
 
+const DEFAULT_QUERIES = ['frontend developer Copenhagen', 'web developer Copenhagen'];
+
+async function loadSearchQueries(): Promise<string[]> {
+  try {
+    const text = await Bun.file('/app/data/preferences.md').text();
+    // Look for a section like:
+    // ## Search Terms
+    // - frontend developer Copenhagen
+    // - React developer Copenhagen
+    const match = text.match(/##\s+Search(?:\s+[Tt]erms|\s+[Qq]ueries)?\s*\n((?:\s*[-*]\s*.+\n?)+)/);
+    if (!match) return DEFAULT_QUERIES;
+    const lines = match[1]
+      .split('\n')
+      .map(l => l.replace(/^\s*[-*]\s*/, '').trim())
+      .filter(l => l.length > 0);
+    return lines.length > 0 ? lines : DEFAULT_QUERIES;
+  } catch {
+    return DEFAULT_QUERIES;
+  }
+}
+
 // Returns array of Job objects ready for DB insert (no id set — caller assigns)
 export async function fetchJSearch(): Promise<JobPartial[]> {
   if (!JSEARCH_API_KEY) {
@@ -65,10 +86,7 @@ export async function fetchJSearch(): Promise<JobPartial[]> {
 
   const fetchedAt = new Date().toISOString();
 
-  const queries = [
-    'frontend developer Copenhagen',
-    'web developer Copenhagen',
-  ];
+  const queries = await loadSearchQueries();
 
   let allItems: JSearchItem[] = [];
 

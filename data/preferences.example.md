@@ -18,3 +18,8 @@ Mid to senior level
 ## Avoid
 - Companies: [list companies to skip]
 - Keywords: [list keywords to skip, e.g. "Java", "SAP"]
+
+## Search Terms
+- frontend developer Copenhagen
+- React developer Copenhagen
+- TypeScript developer Copenhagen
