@@ -70,7 +70,35 @@ export async function fetchJobs(): Promise<void> {
     }
   }
 
+  // Also retry any existing jobs that weren't scored yet (e.g. Ollama was unavailable)
+  await analyzeUnscoredJobs();
+
   console.log('[scheduler] Done');
+}
+
+export async function analyzeUnscoredJobs(): Promise<void> {
+  const unscoredJobs = db.query(`
+    SELECT * FROM jobs
+    WHERE match_score IS NULL
+    ORDER BY fetched_at DESC
+    LIMIT 20
+  `).all() as Job[];
+
+  if (unscoredJobs.length === 0) return;
+
+  console.log(`[scheduler] Retrying analysis for ${unscoredJobs.length} unscored jobs`);
+
+  for (const job of unscoredJobs) {
+    const result = await analyzeJob(job);
+    if (result) {
+      db.run('UPDATE jobs SET match_score = ?, match_reasoning = ? WHERE id = ?', [
+        result.match_score,
+        result.match_reasoning,
+        job.id,
+      ]);
+      console.log(`[scheduler] Scored job ${job.id}: ${result.match_score}`);
+    }
+  }
 }
 
 const INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
