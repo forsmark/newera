@@ -1,3 +1,149 @@
-export default function JobsView() {
-  return <div>JobsView</div>;
+import { useCallback, useEffect, useState } from "react";
+import { Job } from "../types";
+import JobRow from "../components/JobRow";
+
+interface Props {
+  onRefresh?: () => void;
+}
+
+type FilterStatus = "all" | "new" | "saved";
+
+export default function JobsView({ onRefresh }: Props) {
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showRejected, setShowRejected] = useState(false);
+  const [filterStatus, setFilterStatus] = useState<FilterStatus>("all");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const fetchJobs = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/jobs");
+      if (res.ok) {
+        const data = await res.json();
+        setJobs(data);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchJobs();
+  }, [fetchJobs]);
+
+  function handleStatusChange(id: string, status: string) {
+    setJobs((prev) =>
+      prev.map((j) => (j.id === id ? { ...j, status: status as Job["status"] } : j))
+    );
+    onRefresh?.();
+  }
+
+  const filtered = jobs
+    .filter((j) => {
+      if (!showRejected && j.status === "rejected") return false;
+      if (filterStatus === "new" && j.status !== "new") return false;
+      if (filterStatus === "saved" && j.status !== "saved") return false;
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        return (
+          j.title.toLowerCase().includes(q) || j.company.toLowerCase().includes(q)
+        );
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      if (a.match_score === null && b.match_score === null) return 0;
+      if (a.match_score === null) return 1;
+      if (b.match_score === null) return -1;
+      return b.match_score - a.match_score;
+    });
+
+  const tabStyle = (active: boolean): React.CSSProperties => ({
+    padding: "0.375rem 0.875rem",
+    borderRadius: "0.375rem",
+    border: "none",
+    cursor: "pointer",
+    fontSize: "0.875rem",
+    fontWeight: active ? 600 : 400,
+    background: active ? "#1d4ed8" : "transparent",
+    color: active ? "#fff" : "#94a3b8",
+  });
+
+  return (
+    <div style={{ maxWidth: "900px", margin: "0 auto", padding: "1.5rem 1rem" }}>
+      {/* Filter bar */}
+      <div
+        style={{
+          display: "flex",
+          gap: "0.75rem",
+          marginBottom: "1rem",
+          alignItems: "center",
+          flexWrap: "wrap",
+        }}
+      >
+        <input
+          type="text"
+          placeholder="Search title or company..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          style={{
+            flex: 1,
+            minWidth: "180px",
+            padding: "0.4rem 0.75rem",
+            borderRadius: "0.375rem",
+            border: "1px solid #334155",
+            background: "#1e293b",
+            color: "#f1f5f9",
+            fontSize: "0.875rem",
+            outline: "none",
+          }}
+        />
+
+        {/* Status tabs */}
+        <div style={{ display: "flex", gap: "0.25rem", background: "#0f172a", borderRadius: "0.5rem", padding: "0.25rem" }}>
+          {(["all", "new", "saved"] as FilterStatus[]).map((s) => (
+            <button key={s} style={tabStyle(filterStatus === s)} onClick={() => setFilterStatus(s)}>
+              {s.charAt(0).toUpperCase() + s.slice(1)}
+            </button>
+          ))}
+        </div>
+
+        <label
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "0.375rem",
+            fontSize: "0.875rem",
+            color: "#94a3b8",
+            cursor: "pointer",
+            userSelect: "none",
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={showRejected}
+            onChange={(e) => setShowRejected(e.target.checked)}
+            style={{ accentColor: "#6b7280" }}
+          />
+          Show rejected
+        </label>
+      </div>
+
+      {/* Job list */}
+      {loading ? (
+        <div style={{ color: "#64748b", textAlign: "center", padding: "3rem 0" }}>
+          Loading jobs...
+        </div>
+      ) : filtered.length === 0 ? (
+        <div style={{ color: "#64748b", textAlign: "center", padding: "3rem 0" }}>
+          No jobs found.
+        </div>
+      ) : (
+        filtered.map((job) => (
+          <JobRow key={job.id} job={job} onStatusChange={handleStatusChange} />
+        ))
+      )}
+    </div>
+  );
 }
