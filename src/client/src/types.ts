@@ -19,3 +19,13 @@ export interface AppStatus {
   last_fetch_at: string | null;
   counts: { status: string; count: number }[];
 }
+
+export interface Application {
+  job_id: string;
+  kanban_column: 'applied' | 'interview' | 'offer' | 'rejected';
+  notes: string | null;
+  interview_at: string | null;
+  applied_at: string;
+  updated_at: string;
+  job: Job;
+}
