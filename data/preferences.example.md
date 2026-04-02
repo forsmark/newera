@@ -6,6 +6,10 @@
 - [Add your preferences]
 
 ## Location
+# This section also controls which Jobindex area is searched.
+# Recognised keywords: Copenhagen/København, North Zealand, Fyn/Funen,
+# North Jutland, Mid Jutland, South Jutland, Remote/Udlandet.
+# Default (if no keyword matches): Greater Copenhagen (storkoebenhavn).
 - Copenhagen, Denmark
 - Remote or hybrid preferred
 

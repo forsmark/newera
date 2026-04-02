@@ -53,7 +53,35 @@ function resolveUrl(href: string): string {
   return `https://www.jobindex.dk${href}`;
 }
 
+const AREA_MAP: [RegExp, string][] = [
+  [/copenhagen|københavn|storkoebenhavn/i, 'storkoebenhavn'],
+  [/north.?zealand|nordsjæl/i, 'nordsjælland'],
+  [/fyn|funen/i, 'fyn'],
+  [/north.?jutland|nordjyl/i, 'nordjylland'],
+  [/mid.?jutland|midtjyl/i, 'midtjylland'],
+  [/south.?jutland|sydjyl/i, 'sydjylland'],
+  [/remote|udlandet/i, 'udlandet'],
+];
+const DEFAULT_AREA = 'storkoebenhavn';
+
+async function loadJobindexArea(): Promise<string> {
+  try {
+    const text = await Bun.file('/app/data/preferences.md').text();
+    // Find ## Location section
+    const match = text.match(/##\s+Location\s*\n((?:.+\n?){1,5})/i);
+    if (!match) return DEFAULT_AREA;
+    const section = match[1];
+    for (const [pattern, code] of AREA_MAP) {
+      if (pattern.test(section)) return code;
+    }
+    return DEFAULT_AREA;
+  } catch {
+    return DEFAULT_AREA;
+  }
+}
+
 async function loadJobindexSearchUrls(): Promise<string[]> {
+  const area = await loadJobindexArea();
   try {
     const text = await Bun.file('/app/data/preferences.md').text();
     // Look for a section like:
@@ -61,18 +89,18 @@ async function loadJobindexSearchUrls(): Promise<string[]> {
     // - frontend udvikler
     // - webudvikler
     const match = text.match(/##\s+Jobindex\s+Search\s+Terms\s*\n((?:\s*[-*]\s*.+\n?)+)/i);
-    if (!match) return DEFAULT_SEARCH_URLS;
+    if (!match) return DEFAULT_SEARCH_URLS.map(url => url.replace('storkoebenhavn', area));
     const terms = match[1]
       .split('\n')
       .map(l => l.replace(/^\s*[-*]\s*/, '').trim())
       .filter(l => l.length > 0);
-    if (terms.length === 0) return DEFAULT_SEARCH_URLS;
+    if (terms.length === 0) return DEFAULT_SEARCH_URLS.map(url => url.replace('storkoebenhavn', area));
     return terms.map(
       term =>
-        `https://www.jobindex.dk/jobsoegning?q=${encodeURIComponent(term)}&superjob=1&area=storkoebenhavn`,
+        `https://www.jobindex.dk/jobsoegning?q=${encodeURIComponent(term)}&superjob=1&area=${area}`,
     );
   } catch {
-    return DEFAULT_SEARCH_URLS;
+    return DEFAULT_SEARCH_URLS.map(url => url.replace('storkoebenhavn', area));
   }
 }
 
