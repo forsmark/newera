@@ -26,6 +26,7 @@ export interface AppStatus {
     grey: number;
     pending: number;
   };
+  ollama_available?: boolean | null;
 }
 
 export interface Application {

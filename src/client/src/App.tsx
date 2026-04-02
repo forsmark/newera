@@ -88,6 +88,22 @@ function Nav({ status, onFetchNow, fetching }: NavProps) {
         );
       })()}
 
+      {status?.ollama_available === false && (
+        <span
+          title="Ollama is not reachable — job scoring is disabled"
+          style={{
+            fontSize: '0.75rem',
+            color: '#ef4444',
+            border: '1px solid #7f1d1d',
+            borderRadius: '0.25rem',
+            padding: '0.1rem 0.4rem',
+            fontWeight: 500,
+          }}
+        >
+          Ollama ✗
+        </span>
+      )}
+
       <span style={{ color: "#475569", fontSize: "0.8125rem" }}>
         Last fetch: {formatLastFetch(status?.last_fetch_at ?? null)}
       </span>

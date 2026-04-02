@@ -5,6 +5,7 @@ import jobsRoute from './routes/jobs';
 import kanbanRoute from './routes/kanban';
 import fetchRoute from './routes/fetch';
 import { startScheduler, getLastFetchAt, getIsFetching } from './scheduler';
+import { checkOllamaHealth, getOllamaAvailable } from './llm';
 import db from './db';
 
 const app = new Hono();
@@ -33,6 +34,7 @@ app.get('/api/status', (c) => {
     is_fetching: getIsFetching(),
     unscored_jobs: unscoredRow.count,
     score_distribution: scoreDist,
+    ollama_available: getOllamaAvailable(),
   });
 });
 
@@ -42,7 +44,8 @@ app.use('/*', serveStatic({ root: DIST }));
 // Fallback: serve index.html for client-side routing
 app.get('/*', serveStatic({ path: resolve(DIST, 'index.html') }));
 
-// Start scheduler
+// Start Ollama health check and scheduler
+checkOllamaHealth().catch(console.error);
 startScheduler();
 
 export default {

@@ -5,6 +5,27 @@ const OLLAMA_URL = 'http://host.docker.internal:11434/api/generate';
 const MODEL = 'qwen3.5:9b';
 const TIMEOUT_MS = 60_000;
 
+let ollamaAvailable: boolean | null = null; // null = not yet checked
+
+export function getOllamaAvailable(): boolean | null {
+  return ollamaAvailable;
+}
+
+export async function checkOllamaHealth(): Promise<boolean> {
+  try {
+    const res = await fetch('http://host.docker.internal:11434/api/tags', {
+      signal: AbortSignal.timeout(5000),
+    });
+    ollamaAvailable = res.ok;
+    if (!res.ok) console.warn('[llm] Ollama health check failed — HTTP', res.status);
+    else console.log('[llm] Ollama is reachable');
+  } catch (err) {
+    ollamaAvailable = false;
+    console.warn('[llm] Ollama is not reachable:', (err as Error).message);
+  }
+  return ollamaAvailable;
+}
+
 const RESUME_PATH = '/app/data/resume.md';
 const PREFERENCES_PATH = '/app/data/preferences.md';
 
@@ -104,6 +125,10 @@ export async function analyzeJob(job: Job): Promise<AnalysisResult | null> {
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') {
       console.error(`[llm] analyzeJob timed out after ${TIMEOUT_MS}ms for job ${job.id}`);
+      ollamaAvailable = false;
+    } else if (err instanceof Error && (err.message.includes('ECONNREFUSED') || err.name === 'AbortError')) {
+      ollamaAvailable = false;
+      console.error('[llm] analyzeJob failed for job', job.id, ':', err);
     } else {
       console.error('[llm] analyzeJob failed for job', job.id, ':', err);
     }
