@@ -14,6 +14,9 @@ export default function JobsView({ refreshKey }: Props) {
   const [showRejected, setShowRejected] = useState(false);
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [compact, setCompact] = useState<boolean>(() => {
+    return localStorage.getItem("jobs-compact-view") === "true";
+  });
 
   const fetchJobs = useCallback(async () => {
     setLoading(true);
@@ -60,6 +63,20 @@ export default function JobsView({ refreshKey }: Props) {
     setJobs((prev) =>
       prev.map((j) => (j.id === id ? { ...j, status: status as Job["status"] } : j))
     );
+  }
+
+  function handleSeen(id: string) {
+    setJobs((prev) =>
+      prev.map((j) => (j.id === id ? { ...j, seen_at: new Date().toISOString() } : j))
+    );
+  }
+
+  function toggleCompact() {
+    setCompact((v) => {
+      const next = !v;
+      localStorage.setItem("jobs-compact-view", String(next));
+      return next;
+    });
   }
 
   const filtered = jobs
@@ -151,6 +168,23 @@ export default function JobsView({ refreshKey }: Props) {
           />
           Show rejected
         </label>
+
+        <button
+          onClick={toggleCompact}
+          title={compact ? "Switch to detailed view" : "Switch to compact view"}
+          style={{
+            padding: "0.375rem 0.625rem",
+            borderRadius: "0.375rem",
+            border: "1px solid #334155",
+            background: compact ? "#1d4ed8" : "transparent",
+            color: compact ? "#fff" : "#94a3b8",
+            cursor: "pointer",
+            fontSize: "0.8125rem",
+            fontWeight: 500,
+          }}
+        >
+          {compact ? "≡ Compact" : "≡ Compact"}
+        </button>
       </div>
 
       {/* Scoring status indicator */}
@@ -187,7 +221,13 @@ export default function JobsView({ refreshKey }: Props) {
         </div>
       ) : (
         filtered.map((job) => (
-          <JobRow key={job.id} job={job} onStatusChange={handleStatusChange} />
+          <JobRow
+            key={job.id}
+            job={job}
+            onStatusChange={handleStatusChange}
+            onSeen={handleSeen}
+            compact={compact}
+          />
         ))
       )}
     </div>
