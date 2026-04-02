@@ -6,6 +6,19 @@ const app = new Hono();
 
 const VALID_COLUMNS = new Set(['applied', 'interview', 'offer', 'rejected']);
 
+function reshapeRow(row: Record<string, unknown>): ApplicationWithJob {
+  const job: Record<string, unknown> = {};
+  const app: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(row)) {
+    if (key.startsWith('job__')) {
+      job[key.slice(5)] = value;
+    } else {
+      app[key] = value;
+    }
+  }
+  return { ...app, job } as ApplicationWithJob;
+}
+
 // GET /api/kanban
 // Returns all applications with joined job data
 app.get('/', (c) => {
@@ -37,20 +50,7 @@ app.get('/', (c) => {
   `).all() as Record<string, unknown>[];
 
   // Reshape flat rows into ApplicationWithJob shape
-  const result: ApplicationWithJob[] = rows.map((row) => {
-    const job: Record<string, unknown> = {};
-    const app: Record<string, unknown> = {};
-
-    for (const [key, value] of Object.entries(row)) {
-      if (key.startsWith('job__')) {
-        job[key.slice(5)] = value;
-      } else {
-        app[key] = value;
-      }
-    }
-
-    return { ...app, job } as ApplicationWithJob;
-  });
+  const result: ApplicationWithJob[] = rows.map(reshapeRow);
 
   return c.json(result);
 });
@@ -59,11 +59,12 @@ app.get('/', (c) => {
 // Body: { kanban_column?, notes?, interview_at? }
 app.patch('/:id', async (c) => {
   const jobId = c.req.param('id');
-  const body = await c.req.json<{
-    kanban_column?: string;
-    notes?: string;
-    interview_at?: string | null;
-  }>();
+  let body: { kanban_column?: string; notes?: string; interview_at?: string | null };
+  try {
+    body = await c.req.json<{ kanban_column?: string; notes?: string; interview_at?: string | null }>();
+  } catch {
+    return c.json({ error: 'Malformed request body' }, 400);
+  }
 
   if (body.kanban_column !== undefined && !VALID_COLUMNS.has(body.kanban_column)) {
     return c.json(
@@ -116,17 +117,7 @@ app.patch('/:id', async (c) => {
     WHERE a.job_id = ?
   `).get(jobId) as Record<string, unknown>;
 
-  const job: Record<string, unknown> = {};
-  const appFields: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(updated)) {
-    if (key.startsWith('job__')) {
-      job[key.slice(5)] = value;
-    } else {
-      appFields[key] = value;
-    }
-  }
-
-  return c.json({ ...appFields, job } as ApplicationWithJob);
+  return c.json(reshapeRow(updated));
 });
 
 export default app;

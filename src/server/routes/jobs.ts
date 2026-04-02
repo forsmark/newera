@@ -12,6 +12,10 @@ app.get('/', (c) => {
   const status = c.req.query('status');
   const q = c.req.query('q');
 
+  if (status !== undefined && !VALID_STATUSES.has(status)) {
+    return c.json({ error: 'Invalid status' }, 400);
+  }
+
   const conditions: string[] = [];
   const params: string[] = [];
 
@@ -37,11 +41,22 @@ app.get('/', (c) => {
 // Body: { status: string }
 app.patch('/:id', async (c) => {
   const id = c.req.param('id');
-  const body = await c.req.json<{ status: string }>();
+
+  let body: { status: string };
+  try {
+    body = await c.req.json<{ status: string }>();
+  } catch {
+    return c.json({ error: 'Malformed request body' }, 400);
+  }
   const { status } = body;
 
   if (!status || !VALID_STATUSES.has(status)) {
     return c.json({ error: `Invalid status. Must be one of: ${[...VALID_STATUSES].join(', ')}` }, 400);
+  }
+
+  const job = db.query('SELECT * FROM jobs WHERE id = ?').get(id) as Job | null;
+  if (!job) {
+    return c.json({ error: 'Job not found' }, 404);
   }
 
   db.run('UPDATE jobs SET status = ? WHERE id = ?', [status, id]);
@@ -55,12 +70,7 @@ app.patch('/:id', async (c) => {
     );
   }
 
-  const job = db.query('SELECT * FROM jobs WHERE id = ?').get(id) as Job | null;
-  if (!job) {
-    return c.json({ error: 'Job not found' }, 404);
-  }
-
-  return c.json(job);
+  return c.json({ ...job, status });
 });
 
 export default app;

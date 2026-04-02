@@ -3,6 +3,7 @@ import { fetchJobindex } from './sources/jobindex';
 import { analyzeJob } from './llm';
 import db from './db';
 import { randomUUID } from 'crypto';
+import type { Job } from './types';
 
 let lastFetchAt: string | null = null;
 
@@ -14,10 +15,11 @@ export async function fetchJobs(): Promise<void> {
   console.log('[scheduler] Fetching jobs...');
 
   // 1. Fetch from both sources
-  const [jsearchJobs, jobindexJobs] = await Promise.all([
-    fetchJSearch(),
-    fetchJobindex(),
-  ]);
+  const [jsearchResult, jobindexResult] = await Promise.allSettled([fetchJSearch(), fetchJobindex()]);
+  const jsearchJobs = jsearchResult.status === 'fulfilled' ? jsearchResult.value : [];
+  const jobindexJobs = jobindexResult.status === 'fulfilled' ? jobindexResult.value : [];
+  if (jsearchResult.status === 'rejected') console.error('[scheduler] JSearch failed:', jsearchResult.reason);
+  if (jobindexResult.status === 'rejected') console.error('[scheduler] Jobindex failed:', jobindexResult.reason);
 
   const allJobs = [...jsearchJobs, ...jobindexJobs];
   console.log(`[scheduler] Fetched ${allJobs.length} jobs`);
@@ -54,7 +56,7 @@ export async function fetchJobs(): Promise<void> {
 
   // 3. Analyze new jobs with LLM (sequentially to avoid hammering Ollama)
   for (const jobId of newJobIds) {
-    const job = db.query('SELECT * FROM jobs WHERE id = ?').get(jobId) as any;
+    const job = db.query('SELECT * FROM jobs WHERE id = ?').get(jobId) as Job | null;
     if (!job) continue;
 
     const result = await analyzeJob(job);
