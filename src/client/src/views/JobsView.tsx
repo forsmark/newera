@@ -32,6 +32,30 @@ export default function JobsView({ refreshKey }: Props) {
     fetchJobs();
   }, [fetchJobs, refreshKey]);
 
+  const hasPendingScores = jobs.some(j => j.match_score === null);
+
+  // Auto-poll while any jobs have pending scores (max 10 min)
+  useEffect(() => {
+    if (!hasPendingScores) return;
+
+    const MAX_POLL_MS = 10 * 60 * 1000;
+    const startedAt = Date.now();
+
+    const interval = setInterval(() => {
+      if (Date.now() - startedAt > MAX_POLL_MS) {
+        clearInterval(interval);
+        return;
+      }
+      // Refresh silently (don't set loading=true — avoid flickering the list)
+      fetch('/api/jobs')
+        .then(r => r.json())
+        .then((data: Job[]) => setJobs(data))
+        .catch(() => {}); // ignore errors during background poll
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [hasPendingScores]);
+
   function handleStatusChange(id: string, status: string) {
     setJobs((prev) =>
       prev.map((j) => (j.id === id ? { ...j, status: status as Job["status"] } : j))
@@ -128,6 +152,29 @@ export default function JobsView({ refreshKey }: Props) {
           Show rejected
         </label>
       </div>
+
+      {/* Scoring status indicator */}
+      <style>{`@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }`}</style>
+      {hasPendingScores && (
+        <div style={{
+          fontSize: '0.75rem',
+          color: '#94a3b8',
+          padding: '6px 12px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px'
+        }}>
+          <span style={{
+            display: 'inline-block',
+            width: '6px',
+            height: '6px',
+            borderRadius: '50%',
+            background: '#f59e0b',
+            animation: 'pulse 1.5s ease-in-out infinite'
+          }} />
+          Scoring jobs…
+        </div>
+      )}
 
       {/* Job list */}
       {loading ? (
