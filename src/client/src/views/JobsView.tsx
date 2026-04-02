@@ -9,6 +9,7 @@ interface Props {
 
 type FilterStatus = "all" | "unread" | "new" | "saved";
 type PostedWithin = 'any' | '7d' | '30d';
+type SortBy = 'score' | 'posted' | 'fetched';
 
 export default function JobsView({ refreshKey }: Props) {
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -17,6 +18,7 @@ export default function JobsView({ refreshKey }: Props) {
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [postedWithin, setPostedWithin] = useState<PostedWithin>('any');
+  const [sortBy, setSortBy] = useState<SortBy>('score');
   const [compact, setCompact] = useState<boolean>(() => {
     return localStorage.getItem("jobs-compact-view") === "true";
   });
@@ -143,10 +145,21 @@ export default function JobsView({ refreshKey }: Props) {
       return true;
     })
     .sort((a, b) => {
-      if (a.match_score === null && b.match_score === null) return 0;
-      if (a.match_score === null) return 1;
-      if (b.match_score === null) return -1;
-      return b.match_score - a.match_score;
+      if (sortBy === 'score') {
+        if (a.match_score === null && b.match_score === null) return 0;
+        if (a.match_score === null) return 1;
+        if (b.match_score === null) return -1;
+        return b.match_score - a.match_score;
+      }
+      if (sortBy === 'posted') {
+        // nulls last
+        if (!a.posted_at && !b.posted_at) return 0;
+        if (!a.posted_at) return 1;
+        if (!b.posted_at) return -1;
+        return new Date(b.posted_at).getTime() - new Date(a.posted_at).getTime();
+      }
+      // fetched: newest first, always has a value
+      return new Date(b.fetched_at).getTime() - new Date(a.fetched_at).getTime();
     });
 
   useEffect(() => {
@@ -243,6 +256,25 @@ export default function JobsView({ refreshKey }: Props) {
           <option value="any">Any time</option>
           <option value="7d">Last 7 days</option>
           <option value="30d">Last 30 days</option>
+        </select>
+
+        <select
+          value={sortBy}
+          onChange={e => setSortBy(e.target.value as SortBy)}
+          style={{
+            padding: '0.4rem 0.625rem',
+            borderRadius: '0.375rem',
+            border: '1px solid #334155',
+            background: '#1e293b',
+            color: '#94a3b8',
+            fontSize: '0.875rem',
+            cursor: 'pointer',
+            outline: 'none',
+          }}
+        >
+          <option value="score">↓ Score</option>
+          <option value="posted">↓ Posted date</option>
+          <option value="fetched">↓ Fetched date</option>
         </select>
 
         {/* Status tabs */}
