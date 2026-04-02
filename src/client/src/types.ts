@@ -27,6 +27,7 @@ export interface AppStatus {
     pending: number;
   };
   ollama_available?: boolean | null;
+  data_files?: { resume: boolean; preferences: boolean };
 }
 
 export interface Application {

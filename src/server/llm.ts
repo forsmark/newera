@@ -126,9 +126,9 @@ export async function analyzeJob(job: Job): Promise<AnalysisResult | null> {
     if (err instanceof Error && err.name === 'AbortError') {
       console.error(`[llm] analyzeJob timed out after ${TIMEOUT_MS}ms for job ${job.id}`);
       ollamaAvailable = false;
-    } else if (err instanceof Error && (err.message.includes('ECONNREFUSED') || err.name === 'AbortError')) {
+    } else if (err instanceof Error && (err.message.includes('ECONNREFUSED') || err.message.includes('fetch failed'))) {
       ollamaAvailable = false;
-      console.error('[llm] analyzeJob failed for job', job.id, ':', err);
+      console.error('[llm] Ollama unreachable for job', job.id, ':', err.message);
     } else {
       console.error('[llm] analyzeJob failed for job', job.id, ':', err);
     }

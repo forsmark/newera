@@ -88,6 +88,26 @@ function Nav({ status, onFetchNow, fetching }: NavProps) {
         );
       })()}
 
+      {status?.data_files && (!status.data_files.resume || !status.data_files.preferences) && (
+        <span
+          title={[
+            !status.data_files.resume && 'data/resume.md is missing',
+            !status.data_files.preferences && 'data/preferences.md is missing',
+          ].filter(Boolean).join(' · ')}
+          style={{
+            fontSize: '0.75rem',
+            color: '#f59e0b',
+            border: '1px solid #78350f',
+            borderRadius: '0.25rem',
+            padding: '0.1rem 0.4rem',
+            fontWeight: 500,
+            cursor: 'help',
+          }}
+        >
+          Data ⚠
+        </span>
+      )}
+
       {status?.ollama_available === false && (
         <span
           title="Ollama is not reachable — job scoring is disabled"

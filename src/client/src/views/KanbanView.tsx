@@ -68,10 +68,19 @@ export default function KanbanView({ refreshKey }: Props) {
 
   if (loading) {
     return (
-      <div
-        style={{ color: "#64748b", textAlign: "center", padding: "4rem 0" }}
-      >
+      <div style={{ color: "#64748b", textAlign: "center", padding: "4rem 0" }}>
         Loading applications...
+      </div>
+    );
+  }
+
+  if (applications.length === 0) {
+    return (
+      <div style={{ color: "#64748b", textAlign: "center", padding: "5rem 1rem" }}>
+        <div style={{ fontSize: '1.25rem', marginBottom: '0.5rem', color: '#94a3b8' }}>No applications yet</div>
+        <div style={{ fontSize: '0.875rem' }}>
+          Mark a job as <strong style={{ color: '#94a3b8' }}>Applied →</strong> in the Jobs view to track it here.
+        </div>
       </div>
     );
   }
