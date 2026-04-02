@@ -1,4 +1,5 @@
-data/
+data/*
+!data/*.example.md
 .env
 node_modules/
 dist/
