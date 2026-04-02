@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Application } from "../types";
 
 interface Props {
@@ -55,6 +55,13 @@ export default function KanbanCard({ application, onUpdate }: Props) {
   );
   const [saving, setSaving] = useState(false);
 
+  useEffect(() => {
+    if (!editing) {
+      setNotes(application.notes ?? '');
+      setInterviewAt(application.interview_at ?? '');
+    }
+  }, [application.notes, application.interview_at, editing]);
+
   function handleDragStart(e: React.DragEvent) {
     e.dataTransfer.setData("text/plain", application.job_id);
     e.dataTransfer.effectAllowed = "move";
@@ -73,11 +80,7 @@ export default function KanbanCard({ application, onUpdate }: Props) {
         body: JSON.stringify(body),
       });
       if (res.ok) {
-        const updated: Application = {
-          ...application,
-          notes: notes || null,
-          interview_at: interviewAt || null,
-        };
+        const updated = await res.json();
         onUpdate(updated);
         setEditing(false);
       }
@@ -100,7 +103,7 @@ export default function KanbanCard({ application, onUpdate }: Props) {
 
   return (
     <div
-      draggable
+      draggable={!saving}
       onDragStart={handleDragStart}
       style={{
         background: "#1e293b",

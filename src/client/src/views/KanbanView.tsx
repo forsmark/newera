@@ -32,25 +32,17 @@ export default function KanbanView() {
   }, []);
 
   async function handleDrop(jobId: string, column: KanbanCol) {
-    // Optimistic update
+    const original = applications;  // snapshot before mutation
     setApplications((prev) =>
-      prev.map((a) =>
-        a.job_id === jobId ? { ...a, kanban_column: column } : a
-      )
+      prev.map((a) => (a.job_id === jobId ? { ...a, kanban_column: column } : a))
     );
-
     const res = await fetch(`/api/kanban/${jobId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ kanban_column: column }),
     });
-
     if (!res.ok) {
-      // Revert on failure — re-fetch
-      const revertRes = await fetch("/api/kanban");
-      if (revertRes.ok) {
-        setApplications(await revertRes.json());
-      }
+      setApplications(original);  // instant revert, no network round-trip
     }
   }
 

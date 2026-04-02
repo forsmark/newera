@@ -1,13 +1,13 @@
 import { useState } from "react";
-import { Application } from "../types";
+import type { Application } from "../types";
 import KanbanCard from "./KanbanCard";
 
 interface Props {
   title: string;
-  column: string;
+  column: Application['kanban_column'];
   color: string;
   cards: Application[];
-  onDrop: (jobId: string, column: string) => void;
+  onDrop: (jobId: string, column: Application['kanban_column']) => void;
   onCardUpdate: (updated: Application) => void;
 }
 
@@ -26,7 +26,8 @@ export default function KanbanColumn({
     setDragOver(true);
   }
 
-  function handleDragLeave() {
+  function handleDragLeave(e: React.DragEvent) {
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
     setDragOver(false);
   }
 
