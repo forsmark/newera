@@ -9,6 +9,7 @@ interface Props {
   compact?: boolean;
   selected?: boolean;
   onToggleSelect?: (id: string) => void;
+  onRescore?: (id: string) => void;
 }
 
 function scoreBadgeStyle(score: number | null): React.CSSProperties {
@@ -58,7 +59,7 @@ const btnBase: React.CSSProperties = {
   lineHeight: 1.4,
 };
 
-export default function JobRow({ job, onStatusChange, onSeen, compact, selected, onToggleSelect }: Props) {
+export default function JobRow({ job, onStatusChange, onSeen, compact, selected, onToggleSelect, onRescore }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -268,7 +269,7 @@ export default function JobRow({ job, onStatusChange, onSeen, compact, selected,
           {actionButtons}
         </div>
 
-        {expanded && <JobDetail job={job} />}
+        {expanded && <JobDetail job={job} onRescore={onRescore} />}
       </div>
     );
   }

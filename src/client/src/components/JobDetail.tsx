@@ -2,9 +2,10 @@ import { Job } from "../types";
 
 interface Props {
   job: Job;
+  onRescore?: (id: string) => void;
 }
 
-export default function JobDetail({ job }: Props) {
+export default function JobDetail({ job, onRescore }: Props) {
   const descPreview = job.description
     ? job.description.length > 500
       ? job.description.slice(0, 500) + "..."
@@ -80,6 +81,26 @@ export default function JobDetail({ job }: Props) {
           </div>
         </div>
       )}
+
+      <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid #1e293b' }}>
+        <button
+          onClick={async () => {
+            const res = await fetch(`/api/jobs/${job.id}/analyze`, { method: 'POST' });
+            if (res.ok) onRescore?.(job.id);
+          }}
+          style={{
+            padding: '0.25rem 0.625rem',
+            fontSize: '0.75rem',
+            borderRadius: '0.25rem',
+            border: '1px solid #334155',
+            background: 'transparent',
+            color: '#64748b',
+            cursor: 'pointer',
+          }}
+        >
+          Re-score ↺
+        </button>
+      </div>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import db from '../db';
 import type { Job } from '../types';
+import { analyzeJob } from '../llm';
 
 const app = new Hono();
 
@@ -124,6 +125,31 @@ app.post('/bulk-status', async (c) => {
 
   const updated = updateMany(ids as string[]);
   return c.json({ updated });
+});
+
+// POST /api/jobs/:id/analyze
+// Resets match_score and match_reasoning to null, then triggers async re-analysis
+// Returns 202 immediately; score fills in via the polling mechanism
+app.post('/:id/analyze', async (c) => {
+  const id = c.req.param('id');
+
+  const job = db.query('SELECT * FROM jobs WHERE id = ?').get(id) as Job | null;
+  if (!job) return c.json({ error: 'Job not found' }, 404);
+
+  // Reset scores so frontend polling picks it up as pending
+  db.run('UPDATE jobs SET match_score = NULL, match_reasoning = NULL WHERE id = ?', [id]);
+
+  // Fire-and-forget re-analysis
+  const freshJob = db.query('SELECT * FROM jobs WHERE id = ?').get(id) as Job;
+  analyzeJob(freshJob).then((result) => {
+    if (result) {
+      db.run('UPDATE jobs SET match_score = ?, match_reasoning = ? WHERE id = ?', [
+        result.match_score, result.match_reasoning, id,
+      ]);
+    }
+  }).catch(console.error);
+
+  return c.json({ message: 'Re-analysis queued' }, 202);
 });
 
 export default app;

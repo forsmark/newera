@@ -74,6 +74,10 @@ export default function JobsView({ refreshKey }: Props) {
     );
   }
 
+  function handleRescore(id: string) {
+    setJobs(prev => prev.map(j => j.id === id ? { ...j, match_score: null, match_reasoning: null } : j));
+  }
+
   function toggleSelect(id: string) {
     setSelectedIds(prev => {
       const next = new Set(prev);
@@ -315,6 +319,7 @@ export default function JobsView({ refreshKey }: Props) {
               compact={compact}
               selected={selectedIds.has(job.id)}
               onToggleSelect={toggleSelect}
+              onRescore={handleRescore}
             />
           ))}
         </>
