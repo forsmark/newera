@@ -9,6 +9,7 @@ interface Props {
 }
 
 type FilterStatus = "all" | "unread" | "new" | "saved" | "applied";
+type FilterSource = "all" | "jsearch" | "jobindex";
 type PostedWithin = 'any' | '7d' | '30d';
 type SortBy = 'score' | 'posted' | 'fetched';
 
@@ -22,6 +23,7 @@ export default function JobsView({ refreshKey }: Props) {
   const [searchQuery, setSearchQuery] = useState("");
   const [postedWithin, setPostedWithin] = useState<PostedWithin>('any');
   const [sortBy, setSortBy] = useState<SortBy>('score');
+  const [filterSource, setFilterSource] = useState<FilterSource>("all");
   const [compact, setCompact] = useState<boolean>(() => {
     return localStorage.getItem("jobs-compact-view") === "true";
   });
@@ -165,6 +167,7 @@ export default function JobsView({ refreshKey }: Props) {
       if (filterStatus === "new" && j.status !== "new") return false;
       if (filterStatus === "saved" && j.status !== "saved") return false;
       if (filterStatus === "applied" && j.status !== "applied") return false;
+      if (filterSource !== "all" && j.source !== filterSource) return false;
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
         if (!(j.title.toLowerCase().includes(q) || j.company.toLowerCase().includes(q))) return false;
@@ -197,7 +200,7 @@ export default function JobsView({ refreshKey }: Props) {
   useEffect(() => {
     setSelectedIds(new Set());
     setFocusedIndex(-1);
-  }, [filterStatus, searchQuery, postedWithin]);
+  }, [filterStatus, filterSource, searchQuery, postedWithin]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -225,6 +228,9 @@ export default function JobsView({ refreshKey }: Props) {
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [filtered.length]);
+
+  const jsearchCount = jobs.filter(j => j.source === 'jsearch').length;
+  const jobindexCount = jobs.filter(j => j.source === 'jobindex').length;
 
   const unreadCount = jobs.filter(j => j.seen_at === null && j.status !== 'rejected').length;
   const newCount = jobs.filter(j => j.status === 'new').length;
@@ -309,6 +315,34 @@ export default function JobsView({ refreshKey }: Props) {
           <option value="posted">↓ Posted date</option>
           <option value="fetched">↓ Fetched date</option>
         </select>
+
+        {/* Source pills — only show if both sources have data */}
+        {jsearchCount > 0 && jobindexCount > 0 && (
+          <div style={{ display: 'flex', gap: '0.25rem' }}>
+            {([
+              { key: 'all' as FilterSource, label: 'All' },
+              { key: 'jsearch' as FilterSource, label: 'JSearch' },
+              { key: 'jobindex' as FilterSource, label: 'Jobindex' },
+            ]).map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => setFilterSource(key)}
+                style={{
+                  padding: '0.3rem 0.625rem',
+                  borderRadius: '9999px',
+                  border: `1px solid ${filterSource === key ? '#1d4ed8' : '#334155'}`,
+                  background: filterSource === key ? '#1d4ed8' : 'transparent',
+                  color: filterSource === key ? '#fff' : '#64748b',
+                  cursor: 'pointer',
+                  fontSize: '0.75rem',
+                  fontWeight: 500,
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Status tabs */}
         <div style={{ display: "flex", gap: "0.25rem", background: "#0f172a", borderRadius: "0.5rem", padding: "0.25rem" }}>

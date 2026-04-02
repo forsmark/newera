@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Job } from "../types";
 
 interface Props {
@@ -6,6 +7,19 @@ interface Props {
 }
 
 export default function JobDetail({ job, onRescore }: Props) {
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopy() {
+    const text = [
+      `${job.title} — ${job.company}`,
+      job.url,
+      `Match score: ${job.match_score ?? 'pending'}`,
+    ].join('\n');
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
   const descPreview = job.description
     ? job.description.length > 500
       ? job.description.slice(0, 500) + "..."
@@ -82,7 +96,7 @@ export default function JobDetail({ job, onRescore }: Props) {
         </div>
       )}
 
-      <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid #1e293b' }}>
+      <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid #1e293b', display: 'flex', gap: '0.5rem' }}>
         <button
           onClick={async () => {
             const res = await fetch(`/api/jobs/${job.id}/analyze`, { method: 'POST' });
@@ -99,6 +113,21 @@ export default function JobDetail({ job, onRescore }: Props) {
           }}
         >
           Re-score ↺
+        </button>
+        <button
+          onClick={handleCopy}
+          style={{
+            padding: '0.25rem 0.625rem',
+            fontSize: '0.75rem',
+            borderRadius: '0.25rem',
+            border: `1px solid ${copied ? '#166534' : '#334155'}`,
+            background: copied ? '#14532d' : 'transparent',
+            color: copied ? '#22c55e' : '#64748b',
+            cursor: 'pointer',
+            transition: 'background 0.15s, color 0.15s, border-color 0.15s',
+          }}
+        >
+          {copied ? 'Copied ✓' : 'Copy'}
         </button>
       </div>
     </div>
