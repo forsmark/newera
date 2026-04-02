@@ -23,3 +23,8 @@ Mid to senior level
 - frontend developer Copenhagen
 - React developer Copenhagen
 - TypeScript developer Copenhagen
+
+## Jobindex Search Terms
+- frontend udvikler
+- webudvikler
+- React udvikler

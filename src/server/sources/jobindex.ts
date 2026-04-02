@@ -3,7 +3,39 @@ import type { Job } from '../types';
 
 type JobPartial = Omit<Job, 'id' | 'match_score' | 'match_reasoning' | 'status' | 'seen_at'>;
 
-const SEARCH_URLS = [
+// Tried in order — first selector that returns at least one element wins
+const LISTING_SELECTORS = [
+  '.PaidJob',
+  '.jix_robotjob',
+  'article.job-listing',
+  'article[class*="job"]',
+  'li[class*="job"]',
+  'li[class*="Job"]',
+  '.job-list-item',
+  '[class*="JobAd"]',
+  '[class*="jobad"]',
+];
+
+const TITLE_SELECTORS = [
+  'h4 a',
+  'h3 a',
+  'h2 a',
+  '.jix-toolbar__title a',
+  '[class*="title"] a',
+  'a[href*="jobannonce"]',
+];
+
+const COMPANY_SELECTORS = [
+  '.jix-toolbar__company-name',
+  '.jix-toolbar__company',
+  '.company-name',
+  '.company',
+  '[class*="company"]',
+  '[class*="Company"]',
+  'em', // jobindex sometimes uses <em> for company
+];
+
+const DEFAULT_SEARCH_URLS = [
   'https://www.jobindex.dk/jobsoegning?q=frontend+udvikler&superjob=1&area=storkoebenhavn',
   'https://www.jobindex.dk/jobsoegning?q=webudvikler&superjob=1&area=storkoebenhavn',
 ];
@@ -19,6 +51,29 @@ function extractExternalId(href: string): string {
 function resolveUrl(href: string): string {
   if (href.startsWith('http')) return href;
   return `https://www.jobindex.dk${href}`;
+}
+
+async function loadJobindexSearchUrls(): Promise<string[]> {
+  try {
+    const text = await Bun.file('/app/data/preferences.md').text();
+    // Look for a section like:
+    // ## Jobindex Search Terms
+    // - frontend udvikler
+    // - webudvikler
+    const match = text.match(/##\s+Jobindex\s+Search\s+Terms\s*\n((?:\s*[-*]\s*.+\n?)+)/i);
+    if (!match) return DEFAULT_SEARCH_URLS;
+    const terms = match[1]
+      .split('\n')
+      .map(l => l.replace(/^\s*[-*]\s*/, '').trim())
+      .filter(l => l.length > 0);
+    if (terms.length === 0) return DEFAULT_SEARCH_URLS;
+    return terms.map(
+      term =>
+        `https://www.jobindex.dk/jobsoegning?q=${encodeURIComponent(term)}&superjob=1&area=storkoebenhavn`,
+    );
+  } catch {
+    return DEFAULT_SEARCH_URLS;
+  }
 }
 
 async function fetchPage(url: string): Promise<JobPartial[]> {
@@ -39,21 +94,45 @@ async function fetchPage(url: string): Promise<JobPartial[]> {
   const html = await response.text();
   const root = parse(html);
 
-  const jobs: JobPartial[] = [];
-  const fetched_at = new Date().toISOString();
-
-  // Each job listing lives inside a .PaidJob or .jix_robotjob element
-  const listings = root.querySelectorAll('.PaidJob, .jix_robotjob');
+  // Try each listing selector in order — stop at the first one that yields results
+  let listings: ReturnType<typeof root.querySelectorAll> = [];
+  let matchedSelector = '';
+  for (const sel of LISTING_SELECTORS) {
+    const found = root.querySelectorAll(sel);
+    if (found.length > 0) {
+      listings = found;
+      matchedSelector = sel;
+      break;
+    }
+  }
 
   if (listings.length === 0) {
-    console.warn(`[jobindex] No job listings found on ${url} — page structure may have changed`);
+    console.warn(
+      `[jobindex] No job listings found on ${url} — page structure may have changed. Tried: ${LISTING_SELECTORS.join(', ')}`,
+    );
+    // Dump the first 5000 chars of the HTML for debugging
+    try {
+      await Bun.write('/tmp/jobindex-debug.html', html.slice(0, 5000));
+      console.warn('[jobindex] Saved first 5000 chars to /tmp/jobindex-debug.html for debugging');
+    } catch {}
     return [];
   }
 
+  console.log(`[jobindex] Found ${listings.length} listings on ${url} (selector: "${matchedSelector}")`);
+
+  const jobs: JobPartial[] = [];
+  const fetched_at = new Date().toISOString();
+
   for (const listing of listings) {
     try {
-      // Title and URL come from the first <a> inside an <h4>
-      const anchor = listing.querySelector('h4 a') ?? listing.querySelector('a');
+      // Try each title selector in order
+      let anchor: ReturnType<typeof listing.querySelector> = null;
+      for (const sel of TITLE_SELECTORS) {
+        anchor = listing.querySelector(sel);
+        if (anchor) break;
+      }
+      // Last-resort: any anchor in the listing
+      if (!anchor) anchor = listing.querySelector('a');
       if (!anchor) continue;
 
       const title = anchor.text.trim();
@@ -63,11 +142,12 @@ async function fetchPage(url: string): Promise<JobPartial[]> {
       const jobUrl = resolveUrl(href);
       const external_id = extractExternalId(href);
 
-      // Company name
-      const companyEl =
-        listing.querySelector('.jix-toolbar__company-name') ??
-        listing.querySelector('.company-name') ??
-        listing.querySelector('[class*="company"]');
+      // Try each company selector in order
+      let companyEl: ReturnType<typeof listing.querySelector> = null;
+      for (const sel of COMPANY_SELECTORS) {
+        companyEl = listing.querySelector(sel);
+        if (companyEl) break;
+      }
       const company = companyEl ? companyEl.text.trim() : '';
 
       // Location info (best-effort)
@@ -98,9 +178,11 @@ async function fetchPage(url: string): Promise<JobPartial[]> {
 }
 
 export async function fetchJobindex(): Promise<JobPartial[]> {
+  const searchUrls = await loadJobindexSearchUrls();
+
   let allJobs: JobPartial[] = [];
 
-  for (const url of SEARCH_URLS) {
+  for (const url of searchUrls) {
     try {
       const jobs = await fetchPage(url);
       allJobs = allJobs.concat(jobs);
@@ -118,6 +200,8 @@ export async function fetchJobindex(): Promise<JobPartial[]> {
       unique.push(job);
     }
   }
+
+  console.log(`[jobindex] Fetch complete — ${unique.length} unique jobs from ${searchUrls.length} URL(s)`);
 
   return unique;
 }
