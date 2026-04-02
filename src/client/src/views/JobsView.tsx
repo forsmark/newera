@@ -14,6 +14,8 @@ type SortBy = 'score' | 'posted' | 'fetched';
 export default function JobsView({ refreshKey }: Props) {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
+  const [totalJobs, setTotalJobs] = useState(0);
+  const [offset, setOffset] = useState(0);
   const [showRejected, setShowRejected] = useState(false);
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -27,22 +29,32 @@ export default function JobsView({ refreshKey }: Props) {
   const [focusedIndex, setFocusedIndex] = useState<number>(-1);
   const [showShortcuts, setShowShortcuts] = useState(false);
 
-  const fetchJobs = useCallback(async () => {
-    setLoading(true);
+  const fetchJobs = useCallback(async (resetOffset?: number) => {
+    const useOffset = resetOffset ?? offset;
+    const isReset = resetOffset !== undefined;
+    if (isReset) setLoading(true);
     try {
-      const res = await fetch("/api/jobs");
+      const res = await fetch(`/api/jobs?limit=100&offset=${useOffset}`);
       if (res.ok) {
         const data = await res.json();
-        setJobs(data);
+        if (isReset) {
+          setJobs(data.jobs);
+          setOffset(100);
+        } else {
+          setJobs(prev => [...prev, ...data.jobs]);
+          setOffset(prev => prev + data.jobs.length);
+        }
+        setTotalJobs(data.total);
       }
     } finally {
-      setLoading(false);
+      if (isReset) setLoading(false);
     }
-  }, []);
+  }, [offset]);
 
   useEffect(() => {
-    fetchJobs();
-  }, [fetchJobs, refreshKey]);
+    fetchJobs(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey]);
 
   const hasPendingScores = jobs.some(j => j.match_score === null);
 
@@ -59,9 +71,18 @@ export default function JobsView({ refreshKey }: Props) {
         return;
       }
       // Refresh silently (don't set loading=true — avoid flickering the list)
-      fetch('/api/jobs')
+      // Fetches with default limit=100 to refresh scores on the first page
+      fetch('/api/jobs?limit=100&offset=0')
         .then(r => r.json())
-        .then((data: Job[]) => setJobs(data))
+        .then((data: { jobs: Job[]; total: number }) => {
+          setJobs(prev => {
+            // Replace first page worth of jobs with fresh data, keep any beyond that
+            const fresh = data.jobs;
+            const rest = prev.slice(fresh.length);
+            return [...fresh, ...rest];
+          });
+          setTotalJobs(data.total);
+        })
         .catch(() => {}); // ignore errors during background poll
     }, 5000);
 
@@ -426,6 +447,24 @@ export default function JobsView({ refreshKey }: Props) {
               onRescore={handleRescore}
             />
           ))}
+          {jobs.length < totalJobs && (
+            <div style={{ textAlign: 'center', padding: '1rem 0' }}>
+              <button
+                onClick={() => fetchJobs()}
+                style={{
+                  padding: '0.5rem 1.5rem',
+                  borderRadius: '0.5rem',
+                  border: '1px solid #334155',
+                  background: 'transparent',
+                  color: '#94a3b8',
+                  cursor: 'pointer',
+                  fontSize: '0.875rem',
+                }}
+              >
+                Load more ({totalJobs - jobs.length} remaining)
+              </button>
+            </div>
+          )}
         </>
       )}
 

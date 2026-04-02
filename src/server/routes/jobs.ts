@@ -8,34 +8,42 @@ const app = new Hono();
 const VALID_STATUSES = new Set(['new', 'saved', 'applied', 'rejected']);
 
 // GET /api/jobs
-// Query params: status (filter by status), q (text search in title+company)
+// Query params: status (filter by status), q (text search in title+company), limit, offset
 app.get('/', (c) => {
   const status = c.req.query('status');
   const q = c.req.query('q');
+  const limitParam = c.req.query('limit');
+  const offsetParam = c.req.query('offset');
+  const limit = Math.min(parseInt(limitParam ?? '100', 10) || 100, 200); // cap at 200
+  const offset = parseInt(offsetParam ?? '0', 10) || 0;
 
   if (status !== undefined && !VALID_STATUSES.has(status)) {
     return c.json({ error: 'Invalid status' }, 400);
   }
 
   const conditions: string[] = [];
-  const params: string[] = [];
+  const countParams: string[] = [];
 
   if (status) {
     conditions.push('status = ?');
-    params.push(status);
+    countParams.push(status);
   }
 
   if (q) {
     conditions.push('(title LIKE ? OR company LIKE ?)');
     const like = `%${q}%`;
-    params.push(like, like);
+    countParams.push(like, like);
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-  const sql = `SELECT * FROM jobs ${where} ORDER BY match_score DESC NULLS LAST, fetched_at DESC`;
+  const params = [...countParams, limit as unknown as string, offset as unknown as string];
+
+  const sql = `SELECT * FROM jobs ${where} ORDER BY match_score DESC NULLS LAST, fetched_at DESC LIMIT ? OFFSET ?`;
+  const countSql = `SELECT COUNT(*) as total FROM jobs ${where}`;
 
   const jobs = db.query(sql).all(...params) as Job[];
-  return c.json(jobs);
+  const countRow = db.query(countSql).get(...countParams) as { total: number };
+  return c.json({ jobs, total: countRow.total, limit, offset });
 });
 
 // PATCH /api/jobs/:id
