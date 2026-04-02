@@ -74,6 +74,19 @@ function Nav({ status, onFetchNow, fetching }: NavProps) {
         );
       })()}
 
+      {status?.score_distribution && (() => {
+        const { green, amber, grey } = status.score_distribution;
+        const total = green + amber + grey;
+        if (total === 0) return null;
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', fontSize: '0.75rem' }}>
+            {green > 0 && <span title={`${green} strong matches`} style={{ color: '#22c55e', fontWeight: 600 }}>{green}●</span>}
+            {amber > 0 && <span title={`${amber} partial matches`} style={{ color: '#f59e0b', fontWeight: 600 }}>{amber}●</span>}
+            {grey > 0 && <span title={`${grey} weak matches`} style={{ color: '#475569', fontWeight: 600 }}>{grey}●</span>}
+          </div>
+        );
+      })()}
+
       <span style={{ color: "#475569", fontSize: "0.8125rem" }}>
         Last fetch: {formatLastFetch(status?.last_fetch_at ?? null)}
       </span>

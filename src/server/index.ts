@@ -18,11 +18,21 @@ app.route('/api/fetch', fetchRoute);
 app.get('/api/status', (c) => {
   const counts = db.query('SELECT status, COUNT(*) as count FROM jobs GROUP BY status').all();
   const unscoredRow = db.query('SELECT COUNT(*) as count FROM jobs WHERE match_score IS NULL').get() as { count: number };
+  const scoreDist = db.query(`
+    SELECT
+      COUNT(CASE WHEN match_score >= 80 THEN 1 END) as green,
+      COUNT(CASE WHEN match_score >= 50 AND match_score < 80 THEN 1 END) as amber,
+      COUNT(CASE WHEN match_score < 50 THEN 1 END) as grey,
+      COUNT(CASE WHEN match_score IS NULL THEN 1 END) as pending
+    FROM jobs
+    WHERE status != 'rejected'
+  `).get() as { green: number; amber: number; grey: number; pending: number };
   return c.json({
     last_fetch_at: getLastFetchAt(),
     counts,
     is_fetching: getIsFetching(),
     unscored_jobs: unscoredRow.count,
+    score_distribution: scoreDist,
   });
 });
 

@@ -20,6 +20,12 @@ export interface AppStatus {
   counts: { status: string; count: number }[];
   is_fetching?: boolean;
   unscored_jobs?: number;
+  score_distribution?: {
+    green: number;
+    amber: number;
+    grey: number;
+    pending: number;
+  };
 }
 
 export interface Application {
