@@ -20,6 +20,8 @@ export default function JobsView({ refreshKey }: Props) {
   });
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
+  const [focusedIndex, setFocusedIndex] = useState<number>(-1);
+  const [showShortcuts, setShowShortcuts] = useState(false);
 
   const fetchJobs = useCallback(async () => {
     setLoading(true);
@@ -144,7 +146,35 @@ export default function JobsView({ refreshKey }: Props) {
 
   useEffect(() => {
     setSelectedIds(new Set());
+    setFocusedIndex(-1);
   }, [filterStatus, searchQuery]);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) return;
+
+      const total = filtered.length;
+      if (total === 0 && e.key !== '?') return;
+
+      switch (e.key) {
+        case 'j':
+        case 'ArrowDown':
+          e.preventDefault();
+          setFocusedIndex(i => Math.min(i + 1, total - 1));
+          break;
+        case 'k':
+        case 'ArrowUp':
+          e.preventDefault();
+          setFocusedIndex(i => Math.max(i - 1, 0));
+          break;
+        case '?':
+          setShowShortcuts(v => !v);
+          break;
+      }
+    }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [filtered.length]);
 
   const unreadCount = jobs.filter(j => j.seen_at === null && j.status !== 'rejected').length;
   const newCount = jobs.filter(j => j.status === 'new').length;
@@ -310,10 +340,12 @@ export default function JobsView({ refreshKey }: Props) {
               </span>
             </div>
           )}
-          {filtered.map((job) => (
+          {filtered.map((job, index) => (
             <JobRow
               key={job.id}
               job={job}
+              focused={index === focusedIndex}
+              onFocusRequest={() => setFocusedIndex(index)}
               onStatusChange={handleStatusChange}
               onSeen={handleSeen}
               compact={compact}
@@ -323,6 +355,44 @@ export default function JobsView({ refreshKey }: Props) {
             />
           ))}
         </>
+      )}
+
+      {showShortcuts && (
+        <div
+          onClick={() => setShowShortcuts(false)}
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 300,
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: '#1e293b', border: '1px solid #334155',
+              borderRadius: '0.75rem', padding: '1.5rem',
+              minWidth: '280px', color: '#f1f5f9',
+            }}
+          >
+            <h3 style={{ margin: '0 0 1rem', fontSize: '1rem', fontWeight: 600 }}>Keyboard Shortcuts</h3>
+            {[
+              ['j / ↓', 'Next job'],
+              ['k / ↑', 'Previous job'],
+              ['Enter', 'Expand/collapse'],
+              ['s', 'Save job'],
+              ['r', 'Reject job'],
+              ['a', 'Mark applied'],
+              ['u', 'Open URL'],
+              ['?', 'Show/hide this help'],
+            ].map(([key, desc]) => (
+              <div key={key} style={{ display: 'flex', justifyContent: 'space-between', gap: '2rem', marginBottom: '0.5rem', fontSize: '0.875rem' }}>
+                <kbd style={{ background: '#0f172a', border: '1px solid #475569', borderRadius: '0.25rem', padding: '0.125rem 0.5rem', fontFamily: 'monospace', color: '#94a3b8' }}>{key}</kbd>
+                <span style={{ color: '#94a3b8' }}>{desc}</span>
+              </div>
+            ))}
+            <p style={{ margin: '1rem 0 0', fontSize: '0.75rem', color: '#475569' }}>Click anywhere to close</p>
+          </div>
+        </div>
       )}
 
       {selectedIds.size > 0 && (

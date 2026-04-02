@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Job } from "../types";
 import JobDetail from "./JobDetail";
 
@@ -10,6 +10,8 @@ interface Props {
   selected?: boolean;
   onToggleSelect?: (id: string) => void;
   onRescore?: (id: string) => void;
+  focused?: boolean;
+  onFocusRequest?: () => void;
 }
 
 function scoreBadgeStyle(score: number | null): React.CSSProperties {
@@ -59,11 +61,51 @@ const btnBase: React.CSSProperties = {
   lineHeight: 1.4,
 };
 
-export default function JobRow({ job, onStatusChange, onSeen, compact, selected, onToggleSelect, onRescore }: Props) {
+export default function JobRow({ job, onStatusChange, onSeen, compact, selected, onToggleSelect, onRescore, focused, onFocusRequest }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(false);
+  const rowRef = useRef<HTMLDivElement>(null);
 
   const isLowScore = job.match_score !== null && job.match_score < 50;
+
+  useEffect(() => {
+    if (focused) rowRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [focused]);
+
+  useEffect(() => {
+    if (!focused) return;
+    function onKey(e: KeyboardEvent) {
+      if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) return;
+      switch (e.key) {
+        case 'Enter':
+        case ' ':
+          e.preventDefault();
+          setExpanded(v => !v);
+          if (!expanded && job.seen_at === null) {
+            fetch(`/api/jobs/${job.id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ seen_at: new Date().toISOString() }),
+            }).then(res => { if (res.ok) onSeen?.(job.id); }).catch(() => {});
+          }
+          break;
+        case 's':
+          if (job.status === 'new') patchStatus('saved');
+          break;
+        case 'r':
+          if (job.status === 'new' || job.status === 'saved') patchStatus('rejected');
+          break;
+        case 'a':
+          if (job.status === 'new' || job.status === 'saved') patchStatus('applied');
+          break;
+        case 'u':
+          window.open(job.url, '_blank', 'noopener,noreferrer');
+          break;
+      }
+    }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [focused, job, expanded, onSeen]);
 
   async function patchStatus(status: string) {
     setLoading(true);
@@ -86,6 +128,7 @@ export default function JobRow({ job, onStatusChange, onSeen, compact, selected,
   function handleRowClick(e: React.MouseEvent) {
     const target = e.target as HTMLElement;
     if (target.closest("button") || target.closest("a")) return;
+    onFocusRequest?.();
     if (!expanded && job.seen_at === null) {
       fetch(`/api/jobs/${job.id}`, {
         method: "PATCH",
@@ -216,6 +259,7 @@ export default function JobRow({ job, onStatusChange, onSeen, compact, selected,
   if (compact) {
     return (
       <div
+        ref={rowRef}
         style={{
           border: `1px solid ${selected ? '#1d4ed8' : '#334155'}`,
           borderRadius: "0.5rem",
@@ -223,6 +267,7 @@ export default function JobRow({ job, onStatusChange, onSeen, compact, selected,
           background: selected ? '#0f1f3d' : "#1e293b",
           opacity: isLowScore ? 0.65 : 1,
           overflow: "hidden",
+          boxShadow: focused ? 'inset 3px 0 0 #1d4ed8' : 'none',
         }}
       >
         <div
@@ -276,6 +321,7 @@ export default function JobRow({ job, onStatusChange, onSeen, compact, selected,
 
   return (
     <div
+      ref={rowRef}
       style={{
         border: `1px solid ${selected ? '#1d4ed8' : '#334155'}`,
         borderRadius: "0.5rem",
@@ -283,6 +329,7 @@ export default function JobRow({ job, onStatusChange, onSeen, compact, selected,
         background: selected ? '#0f1f3d' : "#1e293b",
         opacity: isLowScore ? 0.65 : 1,
         overflow: "hidden",
+        boxShadow: focused ? 'inset 3px 0 0 #1d4ed8' : 'none',
       }}
     >
       <div
