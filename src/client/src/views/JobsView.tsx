@@ -8,6 +8,7 @@ interface Props {
 }
 
 type FilterStatus = "all" | "unread" | "new" | "saved";
+type PostedWithin = 'any' | '7d' | '30d';
 
 export default function JobsView({ refreshKey }: Props) {
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -15,6 +16,7 @@ export default function JobsView({ refreshKey }: Props) {
   const [showRejected, setShowRejected] = useState(false);
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [postedWithin, setPostedWithin] = useState<PostedWithin>('any');
   const [compact, setCompact] = useState<boolean>(() => {
     return localStorage.getItem("jobs-compact-view") === "true";
   });
@@ -131,9 +133,12 @@ export default function JobsView({ refreshKey }: Props) {
       if (filterStatus === "saved" && j.status !== "saved") return false;
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
-        return (
-          j.title.toLowerCase().includes(q) || j.company.toLowerCase().includes(q)
-        );
+        if (!(j.title.toLowerCase().includes(q) || j.company.toLowerCase().includes(q))) return false;
+      }
+      if (postedWithin !== 'any' && j.posted_at) {
+        const days = postedWithin === '7d' ? 7 : 30;
+        const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+        if (new Date(j.posted_at).getTime() < cutoff) return false;
       }
       return true;
     })
@@ -147,7 +152,7 @@ export default function JobsView({ refreshKey }: Props) {
   useEffect(() => {
     setSelectedIds(new Set());
     setFocusedIndex(-1);
-  }, [filterStatus, searchQuery]);
+  }, [filterStatus, searchQuery, postedWithin]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -220,6 +225,25 @@ export default function JobsView({ refreshKey }: Props) {
             outline: "none",
           }}
         />
+
+        <select
+          value={postedWithin}
+          onChange={e => setPostedWithin(e.target.value as PostedWithin)}
+          style={{
+            padding: '0.4rem 0.625rem',
+            borderRadius: '0.375rem',
+            border: '1px solid #334155',
+            background: '#1e293b',
+            color: postedWithin !== 'any' ? '#f1f5f9' : '#64748b',
+            fontSize: '0.875rem',
+            cursor: 'pointer',
+            outline: 'none',
+          }}
+        >
+          <option value="any">Any time</option>
+          <option value="7d">Last 7 days</option>
+          <option value="30d">Last 30 days</option>
+        </select>
 
         {/* Status tabs */}
         <div style={{ display: "flex", gap: "0.25rem", background: "#0f172a", borderRadius: "0.5rem", padding: "0.25rem" }}>
