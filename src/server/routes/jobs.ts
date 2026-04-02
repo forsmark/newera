@@ -38,19 +38,25 @@ app.get('/', (c) => {
 });
 
 // PATCH /api/jobs/:id
-// Body: { status: string }
+// Body: { status?: string; seen_at?: string | null }
 app.patch('/:id', async (c) => {
   const id = c.req.param('id');
 
-  let body: { status: string };
+  let body: { status?: string; seen_at?: string | null };
   try {
-    body = await c.req.json<{ status: string }>();
+    body = await c.req.json<{ status?: string; seen_at?: string | null }>();
   } catch {
     return c.json({ error: 'Malformed request body' }, 400);
   }
-  const { status } = body;
 
-  if (!status || !VALID_STATUSES.has(status)) {
+  const hasStatus = 'status' in body;
+  const hasSeenAt = 'seen_at' in body;
+
+  if (!hasStatus && !hasSeenAt) {
+    return c.json({ error: 'No fields to update' }, 400);
+  }
+
+  if (hasStatus && (!body.status || !VALID_STATUSES.has(body.status))) {
     return c.json({ error: `Invalid status. Must be one of: ${[...VALID_STATUSES].join(', ')}` }, 400);
   }
 
@@ -59,18 +65,26 @@ app.patch('/:id', async (c) => {
     return c.json({ error: 'Job not found' }, 404);
   }
 
-  db.run('UPDATE jobs SET status = ? WHERE id = ?', [status, id]);
+  if (hasStatus) {
+    const { status } = body as { status: string };
+    db.run('UPDATE jobs SET status = ? WHERE id = ?', [status, id]);
 
-  if (status === 'applied') {
-    const now = new Date().toISOString();
-    db.run(
-      `INSERT OR IGNORE INTO applications (job_id, kanban_column, applied_at, updated_at)
-       VALUES (?, 'applied', ?, ?)`,
-      [id, now, now],
-    );
+    if (status === 'applied') {
+      const now = new Date().toISOString();
+      db.run(
+        `INSERT OR IGNORE INTO applications (job_id, kanban_column, applied_at, updated_at)
+         VALUES (?, 'applied', ?, ?)`,
+        [id, now, now],
+      );
+    }
   }
 
-  return c.json({ ...job, status });
+  if (hasSeenAt) {
+    db.run('UPDATE jobs SET seen_at = ? WHERE id = ?', [body.seen_at ?? null, id]);
+  }
+
+  const updated = db.query('SELECT * FROM jobs WHERE id = ?').get(id) as Job;
+  return c.json(updated);
 });
 
 export default app;
