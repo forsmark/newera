@@ -159,6 +159,23 @@ export default function KanbanCard({ application, onUpdate }: Props) {
         Applied: {daysAgo(application.applied_at)}
       </div>
 
+      {/* View job link */}
+      <a
+        href={job.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={e => e.stopPropagation()}
+        style={{
+          display: 'inline-block',
+          color: '#475569',
+          fontSize: '0.75rem',
+          textDecoration: 'none',
+          marginBottom: '0.25rem',
+        }}
+      >
+        View job ↗
+      </a>
+
       {/* Interview date */}
       {application.interview_at && !editing && (
         <div
@@ -186,6 +203,25 @@ export default function KanbanCard({ application, onUpdate }: Props) {
         >
           {application.notes.slice(0, 100)}
           {application.notes.length > 100 ? "..." : ""}
+        </div>
+      )}
+
+      {/* Match reasoning */}
+      {job.match_reasoning && !editing && (
+        <div
+          style={{
+            marginTop: '0.375rem',
+            padding: '0.375rem 0.5rem',
+            background: '#0f172a',
+            borderRadius: '0.25rem',
+            borderLeft: '2px solid #334155',
+            color: '#64748b',
+            fontSize: '0.75rem',
+            lineHeight: 1.5,
+            fontStyle: 'italic',
+          }}
+        >
+          {job.match_reasoning}
         </div>
       )}
 
