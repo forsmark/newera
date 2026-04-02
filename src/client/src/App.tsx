@@ -90,22 +90,27 @@ function Nav({ status, onFetchNow, fetching }: NavProps) {
         }} />
       )}
 
-      <button
-        onClick={onFetchNow}
-        disabled={fetching}
-        style={{
-          padding: "0.3rem 0.75rem",
-          fontSize: "0.8125rem",
-          borderRadius: "0.375rem",
-          border: "1px solid #334155",
-          background: fetching ? "#1e293b" : "#1e293b",
-          color: fetching ? "#475569" : "#94a3b8",
-          cursor: fetching ? "not-allowed" : "pointer",
-          fontWeight: 500,
-        }}
-      >
-        {fetching ? "Fetching..." : "Fetch now"}
-      </button>
+      {(() => {
+        const isBusy = fetching || (status?.is_fetching ?? false);
+        return (
+          <button
+            onClick={onFetchNow}
+            disabled={isBusy}
+            style={{
+              padding: "0.3rem 0.75rem",
+              fontSize: "0.8125rem",
+              borderRadius: "0.375rem",
+              border: "1px solid #334155",
+              background: "#1e293b",
+              color: isBusy ? "#475569" : "#94a3b8",
+              cursor: isBusy ? "not-allowed" : "pointer",
+              fontWeight: 500,
+            }}
+          >
+            {isBusy ? "Fetching..." : "Fetch now"}
+          </button>
+        );
+      })()}
     </nav>
   );
 }

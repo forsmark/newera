@@ -377,7 +377,16 @@ export default function JobsView({ refreshKey }: Props) {
         </div>
       ) : filtered.length === 0 ? (
         <div style={{ color: "#64748b", textAlign: "center", padding: "3rem 0" }}>
-          No jobs found.
+          {jobs.length === 0 ? (
+            <>
+              <div style={{ fontSize: '1.25rem', marginBottom: '0.5rem' }}>No jobs yet</div>
+              <div style={{ fontSize: '0.875rem' }}>
+                Click <strong style={{ color: '#94a3b8' }}>Fetch now</strong> in the nav bar to pull jobs from all sources.
+              </div>
+            </>
+          ) : (
+            'No jobs match the current filters.'
+          )}
         </div>
       ) : (
         <>
