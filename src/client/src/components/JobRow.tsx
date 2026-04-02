@@ -7,6 +7,8 @@ interface Props {
   onStatusChange: (id: string, status: string) => void;
   onSeen?: (id: string) => void;
   compact?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (id: string) => void;
 }
 
 function scoreBadgeStyle(score: number | null): React.CSSProperties {
@@ -56,7 +58,7 @@ const btnBase: React.CSSProperties = {
   lineHeight: 1.4,
 };
 
-export default function JobRow({ job, onStatusChange, onSeen, compact }: Props) {
+export default function JobRow({ job, onStatusChange, onSeen, compact, selected, onToggleSelect }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -214,10 +216,10 @@ export default function JobRow({ job, onStatusChange, onSeen, compact }: Props) 
     return (
       <div
         style={{
-          border: "1px solid #334155",
+          border: `1px solid ${selected ? '#1d4ed8' : '#334155'}`,
           borderRadius: "0.5rem",
           marginBottom: "0.375rem",
-          background: "#1e293b",
+          background: selected ? '#0f1f3d' : "#1e293b",
           opacity: isLowScore ? 0.65 : 1,
           overflow: "hidden",
         }}
@@ -232,6 +234,16 @@ export default function JobRow({ job, onStatusChange, onSeen, compact }: Props) 
             cursor: "pointer",
           }}
         >
+          {onToggleSelect && (
+            <div onClick={e => e.stopPropagation()} style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+              <input
+                type="checkbox"
+                checked={selected ?? false}
+                onChange={() => onToggleSelect(job.id)}
+                style={{ accentColor: '#1d4ed8', width: '14px', height: '14px', cursor: 'pointer' }}
+              />
+            </div>
+          )}
           {scoreBadge}
 
           {/* Title + company + location inline */}
@@ -264,10 +276,10 @@ export default function JobRow({ job, onStatusChange, onSeen, compact }: Props) 
   return (
     <div
       style={{
-        border: "1px solid #334155",
+        border: `1px solid ${selected ? '#1d4ed8' : '#334155'}`,
         borderRadius: "0.5rem",
         marginBottom: "0.5rem",
-        background: "#1e293b",
+        background: selected ? '#0f1f3d' : "#1e293b",
         opacity: isLowScore ? 0.65 : 1,
         overflow: "hidden",
       }}
@@ -282,6 +294,16 @@ export default function JobRow({ job, onStatusChange, onSeen, compact }: Props) 
           cursor: "pointer",
         }}
       >
+        {onToggleSelect && (
+          <div onClick={e => e.stopPropagation()} style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+            <input
+              type="checkbox"
+              checked={selected ?? false}
+              onChange={() => onToggleSelect(job.id)}
+              style={{ accentColor: '#1d4ed8', width: '14px', height: '14px', cursor: 'pointer' }}
+            />
+          </div>
+        )}
         {scoreBadge}
 
         {/* Main content */}

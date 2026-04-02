@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Job } from "../types";
 import JobRow from "../components/JobRow";
 
+
 interface Props {
   refreshKey?: number;
 }
@@ -17,6 +18,8 @@ export default function JobsView({ refreshKey }: Props) {
   const [compact, setCompact] = useState<boolean>(() => {
     return localStorage.getItem("jobs-compact-view") === "true";
   });
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkLoading, setBulkLoading] = useState(false);
 
   const fetchJobs = useCallback(async () => {
     setLoading(true);
@@ -71,6 +74,41 @@ export default function JobsView({ refreshKey }: Props) {
     );
   }
 
+  function toggleSelect(id: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.size === filtered.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filtered.map(j => j.id)));
+    }
+  }
+
+  async function bulkSetStatus(status: 'saved' | 'rejected') {
+    if (selectedIds.size === 0) return;
+    setBulkLoading(true);
+    try {
+      const res = await fetch('/api/jobs/bulk-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [...selectedIds], status }),
+      });
+      if (res.ok) {
+        const s = status as Job['status'];
+        setJobs(prev => prev.map(j => selectedIds.has(j.id) ? { ...j, status: s } : j));
+        setSelectedIds(new Set());
+      }
+    } finally {
+      setBulkLoading(false);
+    }
+  }
+
   function toggleCompact() {
     setCompact((v) => {
       const next = !v;
@@ -99,6 +137,10 @@ export default function JobsView({ refreshKey }: Props) {
       if (b.match_score === null) return -1;
       return b.match_score - a.match_score;
     });
+
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [filterStatus, searchQuery]);
 
   const unreadCount = jobs.filter(j => j.seen_at === null && j.status !== 'rejected').length;
   const newCount = jobs.filter(j => j.status === 'new').length;
@@ -243,15 +285,107 @@ export default function JobsView({ refreshKey }: Props) {
           No jobs found.
         </div>
       ) : (
-        filtered.map((job) => (
-          <JobRow
-            key={job.id}
-            job={job}
-            onStatusChange={handleStatusChange}
-            onSeen={handleSeen}
-            compact={compact}
-          />
-        ))
+        <>
+          {filtered.length > 0 && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              padding: '0.375rem 0.5rem',
+              marginBottom: '0.25rem',
+            }}>
+              <input
+                type="checkbox"
+                checked={selectedIds.size > 0 && selectedIds.size === filtered.length}
+                ref={el => { if (el) el.indeterminate = selectedIds.size > 0 && selectedIds.size < filtered.length; }}
+                onChange={toggleSelectAll}
+                style={{ accentColor: '#1d4ed8', width: '14px', height: '14px', cursor: 'pointer' }}
+              />
+              <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                {selectedIds.size > 0 ? `${selectedIds.size} selected` : `${filtered.length} jobs`}
+              </span>
+            </div>
+          )}
+          {filtered.map((job) => (
+            <JobRow
+              key={job.id}
+              job={job}
+              onStatusChange={handleStatusChange}
+              onSeen={handleSeen}
+              compact={compact}
+              selected={selectedIds.has(job.id)}
+              onToggleSelect={toggleSelect}
+            />
+          ))}
+        </>
+      )}
+
+      {selectedIds.size > 0 && (
+        <div style={{
+          position: 'fixed',
+          bottom: '1.5rem',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: '#1e293b',
+          border: '1px solid #334155',
+          borderRadius: '0.75rem',
+          padding: '0.75rem 1.25rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.75rem',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+          zIndex: 100,
+        }}>
+          <span style={{ color: '#94a3b8', fontSize: '0.875rem', fontWeight: 500 }}>
+            {selectedIds.size} selected
+          </span>
+          <button
+            onClick={() => bulkSetStatus('saved')}
+            disabled={bulkLoading}
+            style={{
+              padding: '0.375rem 0.875rem',
+              borderRadius: '0.375rem',
+              border: '1px solid #1d4ed8',
+              background: 'transparent',
+              color: '#60a5fa',
+              cursor: 'pointer',
+              fontSize: '0.875rem',
+              fontWeight: 500,
+            }}
+          >
+            Save all
+          </button>
+          <button
+            onClick={() => bulkSetStatus('rejected')}
+            disabled={bulkLoading}
+            style={{
+              padding: '0.375rem 0.875rem',
+              borderRadius: '0.375rem',
+              border: '1px solid #7f1d1d',
+              background: 'transparent',
+              color: '#f87171',
+              cursor: 'pointer',
+              fontSize: '0.875rem',
+              fontWeight: 500,
+            }}
+          >
+            Reject all
+          </button>
+          <button
+            onClick={() => setSelectedIds(new Set())}
+            style={{
+              padding: '0.375rem 0.5rem',
+              borderRadius: '0.375rem',
+              border: 'none',
+              background: 'transparent',
+              color: '#64748b',
+              cursor: 'pointer',
+              fontSize: '0.875rem',
+            }}
+          >
+            ✕
+          </button>
+        </div>
       )}
     </div>
   );
