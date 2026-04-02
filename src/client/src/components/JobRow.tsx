@@ -63,11 +63,15 @@ export default function JobRow({ job, onStatusChange }: Props) {
   async function patchStatus(status: string) {
     setLoading(true);
     try {
-      await fetch(`/api/jobs/${job.id}`, {
+      const res = await fetch(`/api/jobs/${job.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status }),
       });
+      if (!res.ok) {
+        console.error(`Failed to update job status: ${res.status} ${res.statusText}`);
+        return;
+      }
       onStatusChange(job.id, status);
     } finally {
       setLoading(false);

@@ -3,12 +3,12 @@ import { Job } from "../types";
 import JobRow from "../components/JobRow";
 
 interface Props {
-  onRefresh?: () => void;
+  refreshKey?: number;
 }
 
 type FilterStatus = "all" | "new" | "saved";
 
-export default function JobsView({ onRefresh }: Props) {
+export default function JobsView({ refreshKey }: Props) {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [showRejected, setShowRejected] = useState(false);
@@ -30,13 +30,12 @@ export default function JobsView({ onRefresh }: Props) {
 
   useEffect(() => {
     fetchJobs();
-  }, [fetchJobs]);
+  }, [fetchJobs, refreshKey]);
 
   function handleStatusChange(id: string, status: string) {
     setJobs((prev) =>
       prev.map((j) => (j.id === id ? { ...j, status: status as Job["status"] } : j))
     );
-    onRefresh?.();
   }
 
   const filtered = jobs

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate, NavLink } from "react-router-dom";
 import JobsView from "./views/JobsView";
 import KanbanView from "./views/KanbanView";
@@ -74,7 +74,7 @@ function Nav({ status, onFetchNow, fetching }: NavProps) {
 export default function App() {
   const [status, setStatus] = useState<AppStatus | null>(null);
   const [fetching, setFetching] = useState(false);
-  const refreshJobsRef = useRef<(() => void) | null>(null);
+  const [jobsRefreshKey, setJobsRefreshKey] = useState(0);
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -94,20 +94,16 @@ export default function App() {
     return () => clearInterval(interval);
   }, [fetchStatus]);
 
-  async function handleFetchNow() {
+  const handleFetchNow = useCallback(async () => {
     setFetching(true);
     try {
       await fetch("/api/fetch", { method: "POST" });
+      setJobsRefreshKey((k) => k + 1);
       await fetchStatus();
-      refreshJobsRef.current?.();
     } finally {
       setFetching(false);
     }
-  }
-
-  function onJobsRefresh() {
-    fetchStatus();
-  }
+  }, [fetchStatus]);
 
   return (
     <BrowserRouter>
@@ -115,7 +111,7 @@ export default function App() {
       <div style={{ background: "#0f172a", minHeight: "calc(100vh - 49px)", color: "#f1f5f9" }}>
         <Routes>
           <Route path="/" element={<Navigate to="/jobs" replace />} />
-          <Route path="/jobs" element={<JobsView onRefresh={onJobsRefresh} />} />
+          <Route path="/jobs" element={<JobsView refreshKey={jobsRefreshKey} />} />
           <Route path="/kanban" element={<KanbanView />} />
         </Routes>
       </div>
