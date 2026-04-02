@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Application } from "../types";
 import KanbanColumn from "../components/KanbanColumn";
+import { toast } from "../components/Toast";
 
 type KanbanCol = Application["kanban_column"];
 
@@ -23,7 +24,9 @@ export default function KanbanView({ refreshKey }: Props) {
       setLoading(true);
       try {
         const res = await fetch("/api/kanban");
-        if (res.ok) {
+        if (!res.ok) {
+          toast('Failed to load kanban');
+        } else {
           const data = await res.json();
           setApplications(data);
         }
@@ -46,6 +49,7 @@ export default function KanbanView({ refreshKey }: Props) {
     });
     if (!res.ok) {
       setApplications(original);  // instant revert, no network round-trip
+      toast('Failed to move card — try again');
     }
   }
 

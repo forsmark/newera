@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, NavLink } from "react-router-do
 import JobsView from "./views/JobsView";
 import KanbanView from "./views/KanbanView";
 import { AppStatus } from "./types";
+import ToastContainer from "./components/Toast";
 
 function getCount(status: AppStatus | null, statusKey: string): number {
   return status?.counts.find(c => c.status === statusKey)?.count ?? 0;
@@ -172,6 +173,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <style>{`@keyframes fadeIn { from { opacity: 0; transform: translateX(-50%) translateY(-4px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } } @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }`}</style>
+      <ToastContainer />
       <Nav status={status} onFetchNow={handleFetchNow} fetching={fetching} />
       {fetchNotification && (
         <div style={{

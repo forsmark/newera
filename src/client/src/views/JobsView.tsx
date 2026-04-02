@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Job } from "../types";
 import JobRow from "../components/JobRow";
+import { toast } from "../components/Toast";
 
 
 interface Props {
@@ -35,7 +36,9 @@ export default function JobsView({ refreshKey }: Props) {
     if (isReset) setLoading(true);
     try {
       const res = await fetch(`/api/jobs?limit=100&offset=${useOffset}`);
-      if (res.ok) {
+      if (!res.ok) {
+        toast('Failed to load jobs');
+      } else {
         const data = await res.json();
         if (isReset) {
           setJobs(data.jobs);
@@ -130,7 +133,9 @@ export default function JobsView({ refreshKey }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids: [...selectedIds], status }),
       });
-      if (res.ok) {
+      if (!res.ok) {
+        toast('Bulk update failed — please try again');
+      } else {
         const s = status as Job['status'];
         const now = new Date().toISOString();
         setJobs(prev => prev.map(j =>
