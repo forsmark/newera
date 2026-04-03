@@ -1,7 +1,10 @@
 import { readFile } from 'fs/promises';
+import { join } from 'path';
 import type { Job } from './types';
+import { DATA_DIR, OLLAMA_BASE_URL } from './config';
 
-const OLLAMA_URL = 'http://host.docker.internal:11434/api/generate';
+const OLLAMA_URL = `${OLLAMA_BASE_URL}/api/generate`;
+const OLLAMA_HEALTH_URL = `${OLLAMA_BASE_URL}/api/tags`;
 const MODEL = 'qwen3.5:9b';
 const TIMEOUT_MS = 60_000;
 
@@ -13,7 +16,7 @@ export function getOllamaAvailable(): boolean | null {
 
 export async function checkOllamaHealth(): Promise<boolean> {
   try {
-    const res = await fetch('http://host.docker.internal:11434/api/tags', {
+    const res = await fetch(OLLAMA_HEALTH_URL, {
       signal: AbortSignal.timeout(5000),
     });
     ollamaAvailable = res.ok;
@@ -26,8 +29,8 @@ export async function checkOllamaHealth(): Promise<boolean> {
   return ollamaAvailable;
 }
 
-const RESUME_PATH = '/app/data/resume.md';
-const PREFERENCES_PATH = '/app/data/preferences.md';
+const RESUME_PATH = join(DATA_DIR, 'resume.md');
+const PREFERENCES_PATH = join(DATA_DIR, 'preferences.md');
 
 export interface AnalysisResult {
   match_score: number;      // 0–100

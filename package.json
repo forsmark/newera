@@ -8,6 +8,8 @@
   ],
   "scripts": {
     "build": "bun run --cwd src/client build",
+    "dev:client": "bun run --cwd src/client dev",
+    "dev:server": "bun --watch run src/server/index.ts",
     "dev": "bun run --cwd src/client dev",
     "start": "bun run src/server/index.ts"
   }

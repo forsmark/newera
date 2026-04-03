@@ -1,5 +1,7 @@
 import { parse } from 'node-html-parser';
+import { join } from 'path';
 import type { Job } from '../types';
+import { DATA_DIR } from '../config';
 
 type JobPartial = Omit<Job, 'id' | 'match_score' | 'match_reasoning' | 'status' | 'seen_at'>;
 
@@ -67,7 +69,7 @@ const DEFAULT_AREA = 'storkoebenhavn';
 async function loadJobindexSearchUrls(): Promise<string[]> {
   let area = DEFAULT_AREA;
   try {
-    const text = await Bun.file('/app/data/preferences.md').text();
+    const text = await Bun.file(join(DATA_DIR, 'preferences.md')).text();
 
     // Resolve area from ## Location section
     const areaMatch = text.match(/##\s+Location\s*\n((?:.+\n?){1,5})/i);

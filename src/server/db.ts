@@ -1,6 +1,10 @@
 import { Database } from 'bun:sqlite';
+import { mkdirSync } from 'fs';
+import { dirname } from 'path';
+import { DB_PATH } from './config';
 
-const db = new Database('/app/db/jobs.db', { create: true });
+mkdirSync(dirname(DB_PATH), { recursive: true });
+const db = new Database(DB_PATH, { create: true });
 
 db.run('PRAGMA journal_mode = WAL;');
 db.run('PRAGMA foreign_keys = ON;');

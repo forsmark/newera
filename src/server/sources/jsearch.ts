@@ -1,4 +1,6 @@
+import { join } from 'path';
 import type { Job } from '../types';
+import { DATA_DIR } from '../config';
 
 const JSEARCH_API_KEY = process.env.JSEARCH_API_KEY ?? '';
 const JSEARCH_BASE = 'https://jsearch.p.rapidapi.com/search';
@@ -61,7 +63,7 @@ const DEFAULT_QUERIES = ['frontend developer Copenhagen', 'web developer Copenha
 
 async function loadSearchQueries(): Promise<string[]> {
   try {
-    const text = await Bun.file('/app/data/preferences.md').text();
+    const text = await Bun.file(join(DATA_DIR, 'preferences.md')).text();
     // Look for a section like:
     // ## Search Terms
     // - frontend developer Copenhagen

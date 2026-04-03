@@ -1,5 +1,6 @@
 data/*
 !data/*.example.md
+db/
 .env
 node_modules/
 dist/
