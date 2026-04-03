@@ -32,6 +32,7 @@ async function fetchQuery(query: string): Promise<JSearchItem[]> {
       'X-RapidAPI-Key': JSEARCH_API_KEY,
       'X-RapidAPI-Host': 'jsearch.p.rapidapi.com',
     },
+    signal: AbortSignal.timeout(15_000),
   });
 
   if (!response.ok) {

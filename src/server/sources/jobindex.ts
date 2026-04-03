@@ -64,44 +64,36 @@ const AREA_MAP: [RegExp, string][] = [
 ];
 const DEFAULT_AREA = 'storkoebenhavn';
 
-async function loadJobindexArea(): Promise<string> {
-  try {
-    const text = await Bun.file('/app/data/preferences.md').text();
-    // Find ## Location section
-    const match = text.match(/##\s+Location\s*\n((?:.+\n?){1,5})/i);
-    if (!match) return DEFAULT_AREA;
-    const section = match[1];
-    for (const [pattern, code] of AREA_MAP) {
-      if (pattern.test(section)) return code;
-    }
-    return DEFAULT_AREA;
-  } catch {
-    return DEFAULT_AREA;
-  }
-}
-
 async function loadJobindexSearchUrls(): Promise<string[]> {
-  const area = await loadJobindexArea();
+  let area = DEFAULT_AREA;
   try {
     const text = await Bun.file('/app/data/preferences.md').text();
-    // Look for a section like:
-    // ## Jobindex Search Terms
-    // - frontend udvikler
-    // - webudvikler
-    const match = text.match(/##\s+Jobindex\s+Search\s+Terms\s*\n((?:\s*[-*]\s*.+\n?)+)/i);
-    if (!match) return DEFAULT_SEARCH_URLS.map(url => url.replace('storkoebenhavn', area));
-    const terms = match[1]
-      .split('\n')
-      .map(l => l.replace(/^\s*[-*]\s*/, '').trim())
-      .filter(l => l.length > 0);
-    if (terms.length === 0) return DEFAULT_SEARCH_URLS.map(url => url.replace('storkoebenhavn', area));
-    return terms.map(
-      term =>
-        `https://www.jobindex.dk/jobsoegning?q=${encodeURIComponent(term)}&superjob=1&area=${area}`,
-    );
+
+    // Resolve area from ## Location section
+    const areaMatch = text.match(/##\s+Location\s*\n((?:.+\n?){1,5})/i);
+    if (areaMatch) {
+      for (const [pattern, code] of AREA_MAP) {
+        if (pattern.test(areaMatch[1])) { area = code; break; }
+      }
+    }
+
+    // Resolve search terms from ## Jobindex Search Terms section
+    const termsMatch = text.match(/##\s+Jobindex\s+Search\s+Terms\s*\n((?:\s*[-*]\s*.+\n?)+)/i);
+    if (termsMatch) {
+      const terms = termsMatch[1]
+        .split('\n')
+        .map(l => l.replace(/^\s*[-*]\s*/, '').trim())
+        .filter(l => l.length > 0);
+      if (terms.length > 0) {
+        return terms.map(
+          term => `https://www.jobindex.dk/jobsoegning?q=${encodeURIComponent(term)}&superjob=1&area=${area}`,
+        );
+      }
+    }
   } catch {
-    return DEFAULT_SEARCH_URLS.map(url => url.replace('storkoebenhavn', area));
+    // preferences.md not found — fall through to defaults
   }
+  return DEFAULT_SEARCH_URLS.map(url => url.replace('storkoebenhavn', area));
 }
 
 async function fetchPage(url: string): Promise<JobPartial[]> {
@@ -113,6 +105,7 @@ async function fetchPage(url: string): Promise<JobPartial[]> {
       Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       'Accept-Language': 'da,en;q=0.9',
     },
+    signal: AbortSignal.timeout(15_000),
   });
 
   if (!response.ok) {
