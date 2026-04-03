@@ -10,6 +10,7 @@ export interface Job {
   posted_at: string | null;
   match_score: number | null;
   match_reasoning: string | null;
+  tags: string[] | null;
   status: 'new' | 'saved' | 'applied' | 'rejected';
   seen_at: string | null;
   fetched_at: string;

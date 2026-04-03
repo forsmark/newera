@@ -28,6 +28,7 @@ export default function JobsView({ refreshKey }: Props) {
     (localStorage.getItem('jobs-sort-by') as SortBy | null) ?? 'score'
   );
   const [filterSource, setFilterSource] = useState<FilterSource>("all");
+  const [activeTag, setActiveTag] = useState<string | null>(null);
   const [compact, setCompact] = useState<boolean>(() => {
     return localStorage.getItem("jobs-compact-view") === "true";
   });
@@ -172,6 +173,7 @@ export default function JobsView({ refreshKey }: Props) {
       if (filterStatus === "saved" && j.status !== "saved") return false;
       if (filterStatus === "applied" && j.status !== "applied") return false;
       if (filterSource !== "all" && j.source !== filterSource) return false;
+      if (activeTag && !(j.tags?.includes(activeTag))) return false;
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
         if (!(j.title.toLowerCase().includes(q) || j.company.toLowerCase().includes(q))) return false;
@@ -204,7 +206,7 @@ export default function JobsView({ refreshKey }: Props) {
   useEffect(() => {
     setSelectedIds(new Set());
     setFocusedIndex(-1);
-  }, [filterStatus, filterSource, searchQuery, postedWithin]);
+  }, [filterStatus, filterSource, activeTag, searchQuery, postedWithin]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -345,6 +347,22 @@ export default function JobsView({ refreshKey }: Props) {
                 {label}
               </button>
             ))}
+          </div>
+        )}
+
+        {/* Active tag filter chip */}
+        {activeTag && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+            <span style={{
+              background: '#1e3a5f', border: '1px solid #3b82f6', color: '#60a5fa',
+              borderRadius: '0.25rem', padding: '0.25rem 0.5rem', fontSize: '0.75rem', fontWeight: 500,
+            }}>
+              {activeTag}
+            </span>
+            <button onClick={() => setActiveTag(null)} style={{
+              padding: '0.2rem 0.4rem', borderRadius: '0.25rem', border: '1px solid #334155',
+              background: 'transparent', color: '#64748b', cursor: 'pointer', fontSize: '0.75rem',
+            }}>✕</button>
           </div>
         )}
 
@@ -506,6 +524,8 @@ export default function JobsView({ refreshKey }: Props) {
               selected={selectedIds.has(job.id)}
               onToggleSelect={toggleSelect}
               onRescore={handleRescore}
+              onTagClick={tag => setActiveTag(prev => prev === tag ? null : tag)}
+              activeTag={activeTag ?? undefined}
             />
           ))}
           {jobs.length < totalJobs && (

@@ -16,6 +16,10 @@ function reshapeRow(row: Record<string, unknown>): ApplicationWithJob {
       app[key] = value;
     }
   }
+  // Parse tags from JSON string
+  if (typeof job['tags'] === 'string') {
+    try { job['tags'] = JSON.parse(job['tags']); } catch { job['tags'] = null; }
+  }
   return { ...app, job } as ApplicationWithJob;
 }
 
@@ -41,6 +45,7 @@ app.get('/', (c) => {
       j.posted_at    AS job__posted_at,
       j.match_score  AS job__match_score,
       j.match_reasoning AS job__match_reasoning,
+      j.tags         AS job__tags,
       j.status       AS job__status,
       j.seen_at      AS job__seen_at,
       j.fetched_at   AS job__fetched_at
@@ -111,7 +116,7 @@ app.patch('/:id', async (c) => {
       j.title AS job__title, j.company AS job__company, j.location AS job__location,
       j.url AS job__url, j.description AS job__description, j.posted_at AS job__posted_at,
       j.match_score AS job__match_score, j.match_reasoning AS job__match_reasoning,
-      j.status AS job__status, j.seen_at AS job__seen_at, j.fetched_at AS job__fetched_at
+      j.tags AS job__tags, j.status AS job__status, j.seen_at AS job__seen_at, j.fetched_at AS job__fetched_at
     FROM applications a
     JOIN jobs j ON a.job_id = j.id
     WHERE a.job_id = ?

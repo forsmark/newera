@@ -22,6 +22,7 @@ db.run(`
     posted_at   TEXT,
     match_score INTEGER,
     match_reasoning TEXT,
+    tags        TEXT,
     status      TEXT NOT NULL DEFAULT 'new',
     seen_at     TEXT,
     fetched_at  TEXT NOT NULL,
@@ -39,5 +40,8 @@ db.run(`
     updated_at    TEXT NOT NULL
   )
 `);
+
+// Migrate existing DBs — ignore error if column already exists
+try { db.run('ALTER TABLE jobs ADD COLUMN tags TEXT'); } catch { /* already exists */ }
 
 export default db;

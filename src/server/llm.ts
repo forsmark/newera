@@ -35,6 +35,7 @@ const PREFERENCES_PATH = join(DATA_DIR, 'preferences.md');
 export interface AnalysisResult {
   match_score: number;      // 0–100
   match_reasoning: string;  // 1-2 sentence explanation
+  tags: string[];           // tech stack tags extracted from the job posting
 }
 
 function buildPrompt(resume: string, preferences: string, job: Job): string {
@@ -54,7 +55,9 @@ Description: ${job.description ?? 'Not provided'}
 
 ## Task
 Return ONLY a JSON object with this exact format (no markdown, no explanation):
-{"match_score": <0-100>, "match_reasoning": "<1-2 sentences>"}`;
+{"match_score": <0-100>, "match_reasoning": "<1-2 sentences>", "tags": ["<tech1>", "<tech2>"]}
+
+tags: up to 8 specific technologies, languages, frameworks, or tools mentioned in the job (e.g. "React", "TypeScript", "Node.js", "AWS"). Empty array if none identifiable.`;
 }
 
 function extractJson(raw: string): AnalysisResult {
@@ -71,6 +74,10 @@ function extractJson(raw: string): AnalysisResult {
 
   const match_score = Number(parsed['match_score']);
   const match_reasoning = String(parsed['match_reasoning'] ?? '');
+  const rawTags = parsed['tags'];
+  const tags = Array.isArray(rawTags)
+    ? rawTags.map(t => String(t).trim()).filter(t => t.length > 0).slice(0, 8)
+    : [];
 
   if (Number.isNaN(match_score) || match_score < 0 || match_score > 100) {
     throw new Error(`Invalid match_score: ${parsed['match_score']}`);
@@ -79,7 +86,7 @@ function extractJson(raw: string): AnalysisResult {
     throw new Error('Empty match_reasoning');
   }
 
-  return { match_score, match_reasoning };
+  return { match_score, match_reasoning, tags };
 }
 
 export async function analyzeJob(job: Job): Promise<AnalysisResult | null> {

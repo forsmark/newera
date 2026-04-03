@@ -41,7 +41,8 @@ app.get('/', (c) => {
   const sql = `SELECT * FROM jobs ${where} ORDER BY match_score DESC NULLS LAST, fetched_at DESC LIMIT ? OFFSET ?`;
   const countSql = `SELECT COUNT(*) as total FROM jobs ${where}`;
 
-  const jobs = db.query(sql).all(...params) as Job[];
+  const rawJobs = db.query(sql).all(...params) as (Job & { tags: string | null })[];
+  const jobs = rawJobs.map(j => ({ ...j, tags: j.tags ? JSON.parse(j.tags) as string[] : null }));
   const countRow = db.query(countSql).get(...countParams) as { total: number };
   return c.json({ jobs, total: countRow.total, limit, offset });
 });
@@ -92,8 +93,8 @@ app.patch('/:id', async (c) => {
     db.run('UPDATE jobs SET seen_at = ? WHERE id = ?', [body.seen_at ?? null, id]);
   }
 
-  const updated = db.query('SELECT * FROM jobs WHERE id = ?').get(id) as Job;
-  return c.json(updated);
+  const raw = db.query('SELECT * FROM jobs WHERE id = ?').get(id) as Job & { tags: string | null };
+  return c.json({ ...raw, tags: raw.tags ? JSON.parse(raw.tags) as string[] : null });
 });
 
 // POST /api/jobs/bulk-status
@@ -146,14 +147,14 @@ app.post('/:id/analyze', async (c) => {
   if (!job) return c.json({ error: 'Job not found' }, 404);
 
   // Reset scores so frontend polling picks it up as pending
-  db.run('UPDATE jobs SET match_score = NULL, match_reasoning = NULL WHERE id = ?', [id]);
+  db.run('UPDATE jobs SET match_score = NULL, match_reasoning = NULL, tags = NULL WHERE id = ?', [id]);
 
   // Fire-and-forget re-analysis
   const freshJob = db.query('SELECT * FROM jobs WHERE id = ?').get(id) as Job;
   analyzeJob(freshJob).then((result) => {
     if (result) {
-      db.run('UPDATE jobs SET match_score = ?, match_reasoning = ? WHERE id = ?', [
-        result.match_score, result.match_reasoning, id,
+      db.run('UPDATE jobs SET match_score = ?, match_reasoning = ?, tags = ? WHERE id = ?', [
+        result.match_score, result.match_reasoning, JSON.stringify(result.tags), id,
       ]);
     }
   }).catch(console.error);

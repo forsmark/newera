@@ -109,6 +109,17 @@ export default function JobDetail({ job, onRescore }: Props) {
         </div>
       )}
 
+      {job.tags && job.tags.length > 0 && (
+        <div style={{ marginTop: '0.625rem', display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
+          {job.tags.map(tag => (
+            <span key={tag} style={{
+              background: '#0f172a', border: '1px solid #334155', color: '#475569',
+              borderRadius: '0.25rem', padding: '0.1rem 0.4rem', fontSize: '0.75rem',
+            }}>{tag}</span>
+          ))}
+        </div>
+      )}
+
       <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid #1e293b', display: 'flex', gap: '0.5rem' }}>
         <button
           onClick={async () => {

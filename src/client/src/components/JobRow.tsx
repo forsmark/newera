@@ -12,6 +12,8 @@ interface Props {
   onRescore?: (id: string) => void;
   focused?: boolean;
   onFocusRequest?: () => void;
+  onTagClick?: (tag: string) => void;
+  activeTag?: string;
 }
 
 function scoreBadgeStyle(score: number | null): React.CSSProperties {
@@ -61,7 +63,7 @@ const btnBase: React.CSSProperties = {
   lineHeight: 1.4,
 };
 
-export default function JobRow({ job, onStatusChange, onSeen, compact, selected, onToggleSelect, onRescore, focused, onFocusRequest }: Props) {
+export default function JobRow({ job, onStatusChange, onSeen, compact, selected, onToggleSelect, onRescore, focused, onFocusRequest, onTagClick, activeTag }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(false);
   const rowRef = useRef<HTMLDivElement>(null);
@@ -407,13 +409,32 @@ export default function JobRow({ job, onStatusChange, onSeen, compact, selected,
               {job.source}
             </span>
             {job.posted_at && <span>{formatDate(job.posted_at)}</span>}
+            {job.tags && job.tags.length > 0 && job.tags.map(tag => (
+              <span
+                key={tag}
+                onClick={e => { e.stopPropagation(); onTagClick?.(tag); }}
+                style={{
+                  background: activeTag === tag ? '#1e3a5f' : '#0f172a',
+                  border: `1px solid ${activeTag === tag ? '#3b82f6' : '#334155'}`,
+                  color: activeTag === tag ? '#60a5fa' : '#475569',
+                  borderRadius: '0.25rem',
+                  padding: '0.1rem 0.375rem',
+                  fontSize: '0.7rem',
+                  fontWeight: 500,
+                  cursor: onTagClick ? 'pointer' : 'default',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {tag}
+              </span>
+            ))}
           </div>
         </div>
 
         {actionButtons}
       </div>
 
-      {expanded && <JobDetail job={job} />}
+      {expanded && <JobDetail job={job} onRescore={onRescore} />}
     </div>
   );
 }
