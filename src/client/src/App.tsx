@@ -5,21 +5,17 @@ import KanbanView from "./views/KanbanView";
 import { AppStatus } from "./types";
 import ToastContainer from "./components/Toast";
 
-function getCount(status: AppStatus | null, statusKey: string): number {
-  return status?.counts.find(c => c.status === statusKey)?.count ?? 0;
-}
-
 function formatLastFetch(dateStr: string | null): string {
   if (!dateStr) return "never";
   const date = new Date(dateStr);
   const diffMs = Date.now() - date.getTime();
   const diffMin = Math.floor(diffMs / 60000);
   if (diffMin < 1) return "just now";
-  if (diffMin === 1) return "1 minute ago";
-  if (diffMin < 60) return `${diffMin} minutes ago`;
+  if (diffMin === 1) return "1m ago";
+  if (diffMin < 60) return `${diffMin}m ago`;
   const diffHours = Math.floor(diffMin / 60);
-  if (diffHours === 1) return "1 hour ago";
-  return `${diffHours} hours ago`;
+  if (diffHours === 1) return "1h ago";
+  return `${diffHours}h ago`;
 }
 
 interface NavProps {
@@ -29,138 +25,146 @@ interface NavProps {
 }
 
 function Nav({ status, onFetchNow, fetching }: NavProps) {
-  const navLinkStyle = ({ isActive }: { isActive: boolean }): React.CSSProperties => ({
-    color: isActive ? "#60a5fa" : "#94a3b8",
-    textDecoration: "none",
-    fontWeight: isActive ? 600 : 400,
-    fontSize: "0.9375rem",
-  });
+  const isBusy = fetching || (status?.is_fetching ?? false);
 
   return (
-    <nav
-      style={{
-        display: "flex",
-        gap: "1rem",
-        padding: "0.75rem 1.25rem",
-        borderBottom: "1px solid #334155",
-        background: "#0f172a",
-        alignItems: "center",
-      }}
-    >
-      <strong style={{ marginRight: "auto", color: "#f1f5f9", fontSize: "1rem" }}>New Era</strong>
+    <nav style={{
+      display: "flex",
+      alignItems: "center",
+      gap: "0.25rem",
+      padding: "0 1.25rem",
+      height: "48px",
+      borderBottom: "1px solid #1a2840",
+      background: "#060f1e",
+      position: "sticky",
+      top: 0,
+      zIndex: 50,
+    }}>
+      {/* Logo */}
+      <span style={{ color: "#dde6f0", fontWeight: 700, fontSize: "0.9375rem", letterSpacing: "-0.02em", marginRight: "0.75rem" }}>
+        New Era
+      </span>
 
-      <NavLink to="/jobs" style={navLinkStyle}>Jobs</NavLink>
-      <NavLink to="/kanban" style={navLinkStyle}>Kanban</NavLink>
+      {/* Nav links */}
+      <NavLink to="/jobs" className="nav-link" style={({ isActive }) => ({
+        padding: "0.25rem 0.625rem",
+        borderRadius: "var(--radius-sm)",
+        textDecoration: "none",
+        fontSize: "0.875rem",
+        fontWeight: 500,
+        color: isActive ? "#dde6f0" : "#405a74",
+        background: isActive ? "#1a2840" : "transparent",
+      })}>
+        Jobs
+      </NavLink>
+      <NavLink to="/kanban" className="nav-link" style={({ isActive }) => ({
+        padding: "0.25rem 0.625rem",
+        borderRadius: "var(--radius-sm)",
+        textDecoration: "none",
+        fontSize: "0.875rem",
+        fontWeight: 500,
+        color: isActive ? "#dde6f0" : "#405a74",
+        background: isActive ? "#1a2840" : "transparent",
+      })}>
+        Kanban
+      </NavLink>
 
-      {status && (() => {
-        const stats = [
-          { key: 'new', color: '#94a3b8' },
-          { key: 'saved', color: '#60a5fa' },
-          { key: 'applied', color: '#a855f7' },
-        ].map(({ key, color }) => ({ key, color, n: getCount(status, key) }))
-         .filter(({ n }) => n > 0);
+      {/* Spacer */}
+      <div style={{ flex: 1 }} />
 
-        if (stats.length === 0) return null;
-
-        return (
-          <div style={{ display: 'flex', gap: '0.375rem', alignItems: 'center', fontSize: '0.75rem', color: '#475569' }}>
-            {stats.map(({ key, color, n }, i) => (
-              <span key={key}>
-                {i > 0 && <span style={{ marginRight: '0.375rem', color: '#334155' }}>·</span>}
-                <span style={{ color, fontWeight: 600 }}>{n}</span>
-                {' '}{key}
-              </span>
-            ))}
-          </div>
-        );
-      })()}
-
+      {/* Score distribution — compact dots */}
       {status?.score_distribution && (() => {
         const { green, amber, grey } = status.score_distribution;
         const total = green + amber + grey;
         if (total === 0) return null;
         return (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', fontSize: '0.75rem' }}>
-            {green > 0 && <span title={`${green} strong matches`} style={{ color: '#22c55e', fontWeight: 600 }}>{green}●</span>}
-            {amber > 0 && <span title={`${amber} partial matches`} style={{ color: '#f59e0b', fontWeight: 600 }}>{amber}●</span>}
-            {grey > 0 && <span title={`${grey} weak matches`} style={{ color: '#475569', fontWeight: 600 }}>{grey}●</span>}
+          <div style={{ display: "flex", gap: "0.625rem", alignItems: "center", fontSize: "0.75rem", marginRight: "0.25rem" }}>
+            {green > 0 && (
+              <span title={`${green} strong matches`} style={{ color: "#22c55e", fontWeight: 600 }}>
+                {green}<span style={{ opacity: 0.5 }}>●</span>
+              </span>
+            )}
+            {amber > 0 && (
+              <span title={`${amber} partial matches`} style={{ color: "#f59e0b", fontWeight: 600 }}>
+                {amber}<span style={{ opacity: 0.5 }}>●</span>
+              </span>
+            )}
+            {grey > 0 && (
+              <span title={`${grey} weak matches`} style={{ color: "#405a74", fontWeight: 600 }}>
+                {grey}<span style={{ opacity: 0.5 }}>●</span>
+              </span>
+            )}
           </div>
         );
       })()}
 
+      {/* Warning badges */}
       {status?.data_files && (!status.data_files.resume || !status.data_files.preferences) && (
         <span
           title={[
-            !status.data_files.resume && 'data/resume.md is missing',
-            !status.data_files.preferences && 'data/preferences.md is missing',
-          ].filter(Boolean).join(' · ')}
+            !status.data_files.resume && "data/resume.md is missing",
+            !status.data_files.preferences && "data/preferences.md is missing",
+          ].filter(Boolean).join(" · ")}
           style={{
-            fontSize: '0.75rem',
-            color: '#f59e0b',
-            border: '1px solid #78350f',
-            borderRadius: '0.25rem',
-            padding: '0.1rem 0.4rem',
+            fontSize: "0.75rem",
+            color: "#f59e0b",
+            border: "1px solid #3a2200",
+            borderRadius: "var(--radius-sm)",
+            padding: "0.125rem 0.4rem",
             fontWeight: 500,
-            cursor: 'help',
+            cursor: "help",
           }}
         >
-          Data ⚠
+          data ⚠
         </span>
       )}
-
       {status?.ollama_available === false && (
         <span
           title="Ollama is not reachable — job scoring is disabled"
           style={{
-            fontSize: '0.75rem',
-            color: '#ef4444',
-            border: '1px solid #7f1d1d',
-            borderRadius: '0.25rem',
-            padding: '0.1rem 0.4rem',
+            fontSize: "0.75rem",
+            color: "#ef4444",
+            border: "1px solid #3a0808",
+            borderRadius: "var(--radius-sm)",
+            padding: "0.125rem 0.4rem",
             fontWeight: 500,
           }}
         >
-          Ollama ✗
+          ollama ✗
         </span>
       )}
 
-      <span style={{ color: "#475569", fontSize: "0.8125rem" }}>
-        Last fetch: {formatLastFetch(status?.last_fetch_at ?? null)}
+      {/* Last fetch */}
+      <span style={{ color: "#405a74", fontSize: "0.75rem", marginLeft: "0.25rem" }}>
+        {formatLastFetch(status?.last_fetch_at ?? null)}
       </span>
       {status?.is_fetching && (
         <span style={{
-          display: 'inline-block',
-          width: '6px',
-          height: '6px',
-          borderRadius: '50%',
-          background: '#3b82f6',
-          animation: 'pulse 1s ease-in-out infinite',
-          marginLeft: '0.25rem',
-          verticalAlign: 'middle',
+          width: "6px", height: "6px", borderRadius: "50%",
+          background: "#3b82f6", animation: "pulse 1s ease-in-out infinite",
+          display: "inline-block", flexShrink: 0,
         }} />
       )}
 
-      {(() => {
-        const isBusy = fetching || (status?.is_fetching ?? false);
-        return (
-          <button
-            onClick={onFetchNow}
-            disabled={isBusy}
-            style={{
-              padding: "0.3rem 0.75rem",
-              fontSize: "0.8125rem",
-              borderRadius: "0.375rem",
-              border: "1px solid #334155",
-              background: "#1e293b",
-              color: isBusy ? "#475569" : "#94a3b8",
-              cursor: isBusy ? "not-allowed" : "pointer",
-              fontWeight: 500,
-            }}
-          >
-            {isBusy ? "Fetching..." : "Fetch now"}
-          </button>
-        );
-      })()}
+      {/* Fetch button */}
+      <button
+        onClick={onFetchNow}
+        disabled={isBusy}
+        style={{
+          marginLeft: "0.375rem",
+          padding: "0.3125rem 0.75rem",
+          fontSize: "0.8125rem",
+          fontWeight: 500,
+          borderRadius: "var(--radius-sm)",
+          border: "1px solid #1a2840",
+          background: isBusy ? "transparent" : "#0f1e34",
+          color: isBusy ? "#405a74" : "#7a95b0",
+          cursor: isBusy ? "not-allowed" : "pointer",
+        }}
+        className={isBusy ? "" : "btn-ghost"}
+      >
+        {isBusy ? "Fetching…" : "Fetch now"}
+      </button>
     </nav>
   );
 }
@@ -174,13 +178,8 @@ export default function App() {
   const fetchStatus = useCallback(async () => {
     try {
       const res = await fetch("/api/status");
-      if (res.ok) {
-        const data = await res.json();
-        setStatus(data);
-      }
-    } catch {
-      // silently ignore
-    }
+      if (res.ok) setStatus(await res.json());
+    } catch { /* silently ignore */ }
   }, []);
 
   useEffect(() => {
@@ -208,30 +207,36 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <style>{`@keyframes fadeIn { from { opacity: 0; transform: translateX(-50%) translateY(-4px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } } @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }`}</style>
+      <style>{`
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+        @keyframes fadeSlideIn { from { opacity: 0; transform: translateX(-50%) translateY(-6px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+      `}</style>
       <ToastContainer />
       <Nav status={status} onFetchNow={handleFetchNow} fetching={fetching} />
+
       {fetchNotification && (
         <div style={{
           position: "fixed",
-          top: "3.5rem",
+          top: "3.25rem",
           left: "50%",
           transform: "translateX(-50%)",
-          background: "#1e293b",
-          border: "1px solid #334155",
-          borderRadius: "0.5rem",
+          background: "#0b1628",
+          border: "1px solid #1a2840",
+          borderRadius: "var(--radius)",
           padding: "0.5rem 1.25rem",
-          color: "#f1f5f9",
+          color: "#dde6f0",
           fontSize: "0.875rem",
           fontWeight: 500,
           zIndex: 200,
-          boxShadow: "0 4px 16px rgba(0,0,0,0.3)",
-          animation: "fadeIn 0.2s ease",
+          boxShadow: "0 4px 20px rgba(0,0,0,0.5)",
+          animation: "fadeSlideIn 0.18s ease",
+          whiteSpace: "nowrap",
         }}>
           {fetchNotification}
         </div>
       )}
-      <div style={{ background: "#0f172a", minHeight: "calc(100vh - 49px)", color: "#f1f5f9" }}>
+
+      <div style={{ background: "var(--bg)", minHeight: "calc(100vh - 48px)", color: "var(--text)" }}>
         <Routes>
           <Route path="/" element={<Navigate to="/jobs" replace />} />
           <Route path="/jobs" element={<JobsView refreshKey={jobsRefreshKey} />} />

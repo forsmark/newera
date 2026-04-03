@@ -34,7 +34,8 @@ const PREFERENCES_PATH = join(DATA_DIR, 'preferences.md');
 
 export interface AnalysisResult {
   match_score: number;      // 0–100
-  match_reasoning: string;  // 1-2 sentence explanation
+  match_reasoning: string;  // 1-2 sentence explanation of fit
+  match_summary: string;    // 2-3 sentence factual overview of the role
   tags: string[];           // tech stack tags extracted from the job posting
 }
 
@@ -55,8 +56,10 @@ Description: ${job.description ?? 'Not provided'}
 
 ## Task
 Return ONLY a JSON object with this exact format (no markdown, no explanation):
-{"match_score": <0-100>, "match_reasoning": "<1-2 sentences>", "tags": ["<tech1>", "<tech2>"]}
+{"match_score": <0-100>, "match_reasoning": "<1-2 sentences on why this candidate is or isn't a fit>", "summary": "<2-3 sentence factual overview of what the role involves and who it's for>", "tags": ["<tech1>", "<tech2>"]}
 
+summary: factual description of the role — what the job is about, not an opinion on the candidate.
+match_reasoning: personalised assessment of fit for this specific candidate.
 tags: up to 8 specific technologies, languages, frameworks, or tools mentioned in the job (e.g. "React", "TypeScript", "Node.js", "AWS"). Empty array if none identifiable.`;
 }
 
@@ -74,6 +77,7 @@ function extractJson(raw: string): AnalysisResult {
 
   const match_score = Number(parsed['match_score']);
   const match_reasoning = String(parsed['match_reasoning'] ?? '');
+  const match_summary = String(parsed['summary'] ?? '');
   const rawTags = parsed['tags'];
   const tags = Array.isArray(rawTags)
     ? rawTags.map(t => String(t).trim()).filter(t => t.length > 0).slice(0, 8)
@@ -86,7 +90,7 @@ function extractJson(raw: string): AnalysisResult {
     throw new Error('Empty match_reasoning');
   }
 
-  return { match_score, match_reasoning, tags };
+  return { match_score, match_reasoning, match_summary, tags };
 }
 
 export async function analyzeJob(job: Job): Promise<AnalysisResult | null> {

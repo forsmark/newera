@@ -16,51 +16,39 @@ interface Props {
   activeTag?: string;
 }
 
+function scoreAccentColor(score: number | null): string {
+  if (score === null) return "#243653";
+  if (score >= 80) return "#22c55e";
+  if (score >= 50) return "#f59e0b";
+  return "#1a2840";
+}
+
 function scoreBadgeStyle(score: number | null): React.CSSProperties {
-  if (score === null) {
-    return {
-      background: "#374151",
-      color: "#9ca3af",
-    };
-  }
-  if (score >= 80) {
-    return {
-      background: "#14532d",
-      color: "#22c55e",
-    };
-  }
-  if (score >= 50) {
-    return {
-      background: "#451a03",
-      color: "#f59e0b",
-    };
-  }
-  return {
-    background: "#1f2937",
-    color: "#6b7280",
-  };
+  if (score === null) return { background: "#0f1e34", color: "#405a74" };
+  if (score >= 80) return { background: "#081a10", color: "#22c55e" };
+  if (score >= 50) return { background: "#1a1000", color: "#f59e0b" };
+  return { background: "#0b1628", color: "#405a74" };
 }
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return "";
   const date = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  const diffDays = Math.floor((Date.now() - date.getTime()) / 86400000);
   if (diffDays === 0) return "today";
-  if (diffDays === 1) return "1 day ago";
-  if (diffDays < 30) return `${diffDays} days ago`;
-  return date.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  if (diffDays === 1) return "1d ago";
+  if (diffDays < 30) return `${diffDays}d ago`;
+  return date.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
-const btnBase: React.CSSProperties = {
-  padding: "0.25rem 0.625rem",
+const actionBtn: React.CSSProperties = {
+  padding: "0.1875rem 0.5rem",
   fontSize: "0.75rem",
-  borderRadius: "0.25rem",
+  borderRadius: "var(--radius-sm)",
   border: "1px solid",
   cursor: "pointer",
   fontWeight: 500,
   lineHeight: 1.4,
+  background: "transparent",
 };
 
 export default function JobRow({ job, onStatusChange, onSeen, compact, selected, onToggleSelect, onRescore, focused, onFocusRequest, onTagClick, activeTag }: Props) {
@@ -69,6 +57,7 @@ export default function JobRow({ job, onStatusChange, onSeen, compact, selected,
   const rowRef = useRef<HTMLDivElement>(null);
 
   const isLowScore = job.match_score !== null && job.match_score < 50;
+  const accent = scoreAccentColor(job.match_score);
 
   useEffect(() => {
     if (focused) rowRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
@@ -79,38 +68,30 @@ export default function JobRow({ job, onStatusChange, onSeen, compact, selected,
     function onKey(e: KeyboardEvent) {
       if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) return;
       switch (e.key) {
-        case 'Enter':
-        case ' ':
+        case 'Enter': case ' ':
           e.preventDefault();
           setExpanded(v => !v);
-          if (!expanded && job.seen_at === null) {
-            fetch(`/api/jobs/${job.id}`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ seen_at: new Date().toISOString() }),
-            }).then(res => { if (res.ok) onSeen?.(job.id); }).catch(() => {});
-          }
+          if (!expanded && job.seen_at === null) markSeen();
           break;
-        case 's':
-          if (job.status === 'new') patchStatus('saved');
-          break;
-        case 'r':
-          if (job.status === 'new' || job.status === 'saved') patchStatus('rejected');
-          break;
-        case 'a':
-          if (job.status === 'new' || job.status === 'saved') patchStatus('applied');
-          break;
-        case 'n':
-          if (job.status === 'saved') patchStatus('new');
-          break;
-        case 'u':
-          window.open(job.url, '_blank', 'noopener,noreferrer');
-          break;
+        case 's': if (job.status === 'new') patchStatus('saved'); break;
+        case 'r': if (job.status === 'new' || job.status === 'saved') patchStatus('rejected'); break;
+        case 'a': if (job.status === 'new' || job.status === 'saved') patchStatus('applied'); break;
+        case 'n': if (job.status === 'saved') patchStatus('new'); break;
+        case 'u': window.open(job.url, '_blank', 'noopener,noreferrer'); break;
       }
     }
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [focused, job, expanded, onSeen]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focused, job, expanded]);
+
+  function markSeen() {
+    fetch(`/api/jobs/${job.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ seen_at: new Date().toISOString() }),
+    }).then(res => { if (res.ok) onSeen?.(job.id); }).catch(() => {});
+  }
 
   async function patchStatus(status: string) {
     setLoading(true);
@@ -120,127 +101,67 @@ export default function JobRow({ job, onStatusChange, onSeen, compact, selected,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status }),
       });
-      if (!res.ok) {
-        console.error(`Failed to update job status: ${res.status} ${res.statusText}`);
-        return;
-      }
-      onStatusChange(job.id, status);
+      if (res.ok) onStatusChange(job.id, status);
     } finally {
       setLoading(false);
     }
   }
 
   function handleRowClick(e: React.MouseEvent) {
-    const target = e.target as HTMLElement;
-    if (target.closest("button") || target.closest("a")) return;
+    if ((e.target as HTMLElement).closest("button") || (e.target as HTMLElement).closest("a")) return;
     onFocusRequest?.();
-    if (!expanded && job.seen_at === null) {
-      fetch(`/api/jobs/${job.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ seen_at: new Date().toISOString() }),
-      }).then(res => {
-        if (res.ok) onSeen?.(job.id);
-      }).catch(() => {});
-    }
-    setExpanded((v) => !v);
+    if (!expanded && job.seen_at === null) markSeen();
+    setExpanded(v => !v);
   }
 
-  const score = job.match_score;
-  const badgeStyle = scoreBadgeStyle(score);
+  const badgeStyle = scoreBadgeStyle(job.match_score);
 
   const scoreBadge = (
     <div style={{ position: "relative", flexShrink: 0 }}>
-      <div
-        style={{
-          ...badgeStyle,
-          minWidth: "2.75rem",
-          textAlign: "center",
-          padding: "0.25rem 0.375rem",
-          borderRadius: "0.375rem",
-          fontWeight: 700,
-          fontSize: "0.875rem",
-          marginTop: "0.125rem",
-        }}
-      >
-        {score === null ? "..." : score}
+      <div style={{
+        ...badgeStyle,
+        minWidth: "2.5rem",
+        textAlign: "center",
+        padding: "0.1875rem 0.375rem",
+        borderRadius: "var(--radius-sm)",
+        fontWeight: 700,
+        fontSize: "0.8125rem",
+        fontVariantNumeric: "tabular-nums",
+      }}>
+        {job.match_score === null
+          ? <span style={{ animation: "pulse 1.5s ease-in-out infinite", display: "inline-block" }}>···</span>
+          : job.match_score}
       </div>
       {job.seen_at === null && (
-        <span
-          style={{
-            position: "absolute",
-            top: "-3px",
-            right: "-3px",
-            width: "8px",
-            height: "8px",
-            borderRadius: "50%",
-            background: "#f59e0b",
-            border: "1px solid #1e293b",
-          }}
-        />
+        <span style={{
+          position: "absolute", top: "-3px", right: "-3px",
+          width: "7px", height: "7px", borderRadius: "50%",
+          background: "#f59e0b", border: "2px solid #030b17",
+        }} />
       )}
     </div>
   );
 
   const actionButtons = (
-    <div
-      style={{ display: "flex", gap: "0.375rem", flexShrink: 0, alignItems: "center" }}
-      onClick={(e) => e.stopPropagation()}
-    >
-      <a
-        href={job.url}
-        target="_blank"
-        rel="noopener noreferrer"
-        style={{
-          ...btnBase,
-          background: "transparent",
-          borderColor: "#475569",
-          color: "#94a3b8",
-          textDecoration: "none",
-        }}
-      >
-        View ↗
-      </a>
+    <div style={{ display: "flex", gap: "0.25rem", flexShrink: 0, alignItems: "center" }} onClick={e => e.stopPropagation()}>
+      <a href={job.url} target="_blank" rel="noopener noreferrer" style={{
+        ...actionBtn, borderColor: "#1a2840", color: "#405a74", textDecoration: "none",
+      }}>↗</a>
 
       {job.status === "new" && (
-        <button
-          onClick={() => patchStatus("saved")}
-          disabled={loading}
-          style={{
-            ...btnBase,
-            background: "transparent",
-            borderColor: "#1d4ed8",
-            color: "#60a5fa",
-          }}
-        >
+        <button onClick={() => patchStatus("saved")} disabled={loading} style={{ ...actionBtn, borderColor: "#1a3060", color: "#3b82f6" }}>
           Save
         </button>
       )}
 
       {(job.status === "new" || job.status === "saved") && (
         <>
-          <button
-            onClick={() => patchStatus("applied")}
-            disabled={loading}
-            style={{
-              ...btnBase,
-              background: "#1d4ed8",
-              borderColor: "#1d4ed8",
-              color: "#fff",
-            }}
-          >
+          <button onClick={() => patchStatus("applied")} disabled={loading} style={{
+            ...actionBtn, borderColor: "#1a3060", background: "#0d1e38", color: "#3b82f6",
+          }}>
             Applied →
           </button>
-          <button
-            onClick={() => patchStatus("rejected")}
-            disabled={loading}
-            style={{
-              ...btnBase,
-              background: "transparent",
-              borderColor: "#7f1d1d",
-              color: "#f87171",
-            }}
-          >
+          <button onClick={() => patchStatus("rejected")} disabled={loading} style={{ ...actionBtn, borderColor: "#3a0808", color: "#ef4444" }}>
             Reject
           </button>
         </>
@@ -248,92 +169,66 @@ export default function JobRow({ job, onStatusChange, onSeen, compact, selected,
 
       {job.status === "saved" && (
         <>
-          <span
-            style={{
-              fontSize: "0.75rem",
-              color: "#60a5fa",
-              fontWeight: 600,
-              padding: "0.25rem 0.375rem",
-            }}
-          >
+          <span style={{ fontSize: "0.75rem", color: "#3b82f6", fontWeight: 600, padding: "0.1875rem 0.375rem" }}>
             Saved
           </span>
-          <button
-            onClick={() => patchStatus("new")}
-            disabled={loading}
-            style={{
-              ...btnBase,
-              background: "transparent",
-              borderColor: "#334155",
-              color: "#64748b",
-              fontSize: "0.7rem",
-            }}
-          >
-            × Unsave
+          <button onClick={() => patchStatus("new")} disabled={loading} style={{ ...actionBtn, borderColor: "#1a2840", color: "#405a74", fontSize: "0.6875rem" }}>
+            Unsave
           </button>
         </>
       )}
     </div>
   );
 
+  const borderStyle = `1px solid ${selected ? '#243653' : '#1a2840'}`;
+  const bgStyle = selected ? '#0b1830' : '#0b1628';
+
   if (compact) {
     return (
       <div
         ref={rowRef}
         style={{
-          border: `1px solid ${selected ? '#1d4ed8' : '#334155'}`,
-          borderRadius: "0.5rem",
-          marginBottom: "0.375rem",
-          background: selected ? '#0f1f3d' : "#1e293b",
-          opacity: isLowScore ? 0.65 : 1,
+          borderLeft: `3px solid ${selected ? '#3b82f6' : accent}`,
+          border: borderStyle,
+          borderLeftWidth: "3px",
+          borderLeftColor: selected ? '#3b82f6' : accent,
+          borderRadius: "var(--radius-sm)",
+          marginBottom: "6px",
+          background: bgStyle,
+          opacity: isLowScore ? 0.6 : 1,
           overflow: "hidden",
-          boxShadow: focused ? 'inset 3px 0 0 #1d4ed8' : 'none',
         }}
       >
         <div
           onClick={handleRowClick}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "0.75rem",
-            padding: "0.5rem 0.875rem",
-            cursor: "pointer",
-          }}
+          className="row-hover"
+          style={{ display: "flex", alignItems: "center", gap: "0.625rem", padding: "0.4375rem 0.75rem", cursor: "pointer" }}
         >
           {onToggleSelect && (
-            <div onClick={e => e.stopPropagation()} style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>
-              <input
-                type="checkbox"
-                checked={selected ?? false}
-                onChange={() => onToggleSelect(job.id)}
-                style={{ accentColor: '#1d4ed8', width: '14px', height: '14px', cursor: 'pointer' }}
-              />
+            <div onClick={e => e.stopPropagation()} style={{ flexShrink: 0, display: "flex", alignItems: "center" }}>
+              <input type="checkbox" checked={selected ?? false} onChange={() => onToggleSelect(job.id)} style={{ accentColor: "#3b82f6", width: "13px", height: "13px", cursor: "pointer" }} />
             </div>
           )}
           {scoreBadge}
-
-          {/* Title + company + location inline */}
           <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: "0.375rem", overflow: "hidden" }}>
-            <span style={{ fontWeight: 700, color: "#f1f5f9", fontSize: "0.875rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            <span style={{ fontWeight: 600, color: "#dde6f0", fontSize: "0.875rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               {job.title}
             </span>
-            <span style={{ color: "#64748b", fontSize: "0.8125rem", flexShrink: 0 }}>·</span>
-            <span style={{ color: "#94a3b8", fontSize: "0.8125rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            <span style={{ color: "#1a2840", flexShrink: 0 }}>·</span>
+            <span style={{ color: "#7a95b0", fontSize: "0.8125rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               {job.company}
             </span>
             {job.location && (
               <>
-                <span style={{ color: "#64748b", fontSize: "0.8125rem", flexShrink: 0 }}>·</span>
-                <span style={{ color: "#64748b", fontSize: "0.75rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                <span style={{ color: "#1a2840", flexShrink: 0 }}>·</span>
+                <span style={{ color: "#405a74", fontSize: "0.75rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                   {job.location}
                 </span>
               </>
             )}
           </div>
-
           {actionButtons}
         </div>
-
         {expanded && <JobDetail job={job} onRescore={onRescore} />}
       </div>
     );
@@ -343,86 +238,60 @@ export default function JobRow({ job, onStatusChange, onSeen, compact, selected,
     <div
       ref={rowRef}
       style={{
-        border: `1px solid ${selected ? '#1d4ed8' : '#334155'}`,
-        borderRadius: "0.5rem",
-        marginBottom: "0.5rem",
-        background: selected ? '#0f1f3d' : "#1e293b",
-        opacity: isLowScore ? 0.65 : 1,
+        borderLeft: `3px solid ${selected ? '#3b82f6' : accent}`,
+        border: borderStyle,
+        borderLeftWidth: "3px",
+        borderLeftColor: selected ? '#3b82f6' : accent,
+        borderRadius: "var(--radius-sm)",
+        marginBottom: "6px",
+        background: bgStyle,
+        opacity: isLowScore ? 0.6 : 1,
         overflow: "hidden",
-        boxShadow: focused ? 'inset 3px 0 0 #1d4ed8' : 'none',
       }}
     >
       <div
         onClick={handleRowClick}
-        style={{
-          display: "flex",
-          alignItems: "flex-start",
-          gap: "0.75rem",
-          padding: "0.75rem 1rem",
-          cursor: "pointer",
-        }}
+        className="row-hover"
+        style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem", padding: "0.625rem 0.875rem", cursor: "pointer" }}
       >
         {onToggleSelect && (
-          <div onClick={e => e.stopPropagation()} style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>
-            <input
-              type="checkbox"
-              checked={selected ?? false}
-              onChange={() => onToggleSelect(job.id)}
-              style={{ accentColor: '#1d4ed8', width: '14px', height: '14px', cursor: 'pointer' }}
-            />
+          <div onClick={e => e.stopPropagation()} style={{ flexShrink: 0, display: "flex", alignItems: "center", paddingTop: "2px" }}>
+            <input type="checkbox" checked={selected ?? false} onChange={() => onToggleSelect(job.id)} style={{ accentColor: "#3b82f6", width: "13px", height: "13px", cursor: "pointer" }} />
           </div>
         )}
         {scoreBadge}
 
         {/* Main content */}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-            <span style={{ fontWeight: 700, color: "#f1f5f9", fontSize: "0.9375rem" }}>
-              {job.title}
-            </span>
-            <span style={{ color: "#94a3b8", fontSize: "0.875rem" }}>{job.company}</span>
-            {job.location && (
-              <span style={{ color: "#64748b", fontSize: "0.8125rem" }}>{job.location}</span>
-            )}
+          <div style={{ display: "flex", alignItems: "baseline", gap: "0.5rem", flexWrap: "wrap" }}>
+            <span style={{ fontWeight: 600, color: "#dde6f0", fontSize: "0.9375rem" }}>{job.title}</span>
+            <span style={{ color: "#7a95b0", fontSize: "0.875rem" }}>{job.company}</span>
+            {job.location && <span style={{ color: "#405a74", fontSize: "0.8125rem" }}>{job.location}</span>}
           </div>
-          <div
-            style={{
-              display: "flex",
-              gap: "0.75rem",
-              marginTop: "0.25rem",
-              fontSize: "0.75rem",
-              color: "#64748b",
-              flexWrap: "wrap",
-            }}
-          >
-            <span
-              style={{
-                background: "#0f172a",
-                border: "1px solid #334155",
-                borderRadius: "0.25rem",
-                padding: "0.1rem 0.375rem",
-                textTransform: "uppercase",
-                letterSpacing: "0.04em",
-                fontWeight: 600,
-              }}
-            >
+          <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.25rem", flexWrap: "wrap", alignItems: "center" }}>
+            <span style={{
+              background: "#030b17", border: "1px solid #1a2840", borderRadius: "var(--radius-sm)",
+              padding: "0.0625rem 0.3125rem", textTransform: "uppercase",
+              letterSpacing: "0.05em", fontWeight: 600, fontSize: "0.625rem", color: "#405a74",
+            }}>
               {job.source}
             </span>
-            {job.posted_at && <span>{formatDate(job.posted_at)}</span>}
+            {job.posted_at && <span style={{ color: "#405a74", fontSize: "0.75rem" }}>{formatDate(job.posted_at)}</span>}
             {job.tags && job.tags.length > 0 && job.tags.map(tag => (
               <span
                 key={tag}
                 onClick={e => { e.stopPropagation(); onTagClick?.(tag); }}
+                className={onTagClick ? "tag-btn" : ""}
                 style={{
-                  background: activeTag === tag ? '#1e3a5f' : '#0f172a',
-                  border: `1px solid ${activeTag === tag ? '#3b82f6' : '#334155'}`,
-                  color: activeTag === tag ? '#60a5fa' : '#475569',
-                  borderRadius: '0.25rem',
-                  padding: '0.1rem 0.375rem',
-                  fontSize: '0.7rem',
+                  background: activeTag === tag ? '#0d1e38' : '#030b17',
+                  border: `1px solid ${activeTag === tag ? '#243653' : '#1a2840'}`,
+                  color: activeTag === tag ? '#3b82f6' : '#405a74',
+                  borderRadius: "var(--radius-sm)",
+                  padding: "0.0625rem 0.3125rem",
+                  fontSize: "0.6875rem",
                   fontWeight: 500,
-                  cursor: onTagClick ? 'pointer' : 'default',
-                  whiteSpace: 'nowrap',
+                  whiteSpace: "nowrap",
+                  cursor: onTagClick ? "pointer" : "default",
                 }}
               >
                 {tag}
@@ -433,7 +302,6 @@ export default function JobRow({ job, onStatusChange, onSeen, compact, selected,
 
         {actionButtons}
       </div>
-
       {expanded && <JobDetail job={job} onRescore={onRescore} />}
     </div>
   );

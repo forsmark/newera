@@ -71,9 +71,10 @@ export async function fetchJobs(): Promise<number> {
 
         const result = await analyzeJob(job);
         if (result) {
-          db.run('UPDATE jobs SET match_score = ?, match_reasoning = ?, tags = ? WHERE id = ?', [
+          db.run('UPDATE jobs SET match_score = ?, match_reasoning = ?, match_summary = ?, tags = ? WHERE id = ?', [
             result.match_score,
             result.match_reasoning,
+            result.match_summary,
             JSON.stringify(result.tags),
             jobId,
           ]);
@@ -108,9 +109,10 @@ export async function analyzeUnscoredJobs(): Promise<void> {
   for (const job of unscoredJobs) {
     const result = await analyzeJob(job);
     if (result) {
-      db.run('UPDATE jobs SET match_score = ?, match_reasoning = ?, tags = ? WHERE id = ?', [
+      db.run('UPDATE jobs SET match_score = ?, match_reasoning = ?, match_summary = ?, tags = ? WHERE id = ?', [
         result.match_score,
         result.match_reasoning,
+        result.match_summary,
         JSON.stringify(result.tags),
         job.id,
       ]);

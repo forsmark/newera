@@ -147,14 +147,14 @@ app.post('/:id/analyze', async (c) => {
   if (!job) return c.json({ error: 'Job not found' }, 404);
 
   // Reset scores so frontend polling picks it up as pending
-  db.run('UPDATE jobs SET match_score = NULL, match_reasoning = NULL, tags = NULL WHERE id = ?', [id]);
+  db.run('UPDATE jobs SET match_score = NULL, match_reasoning = NULL, match_summary = NULL, tags = NULL WHERE id = ?', [id]);
 
   // Fire-and-forget re-analysis
   const freshJob = db.query('SELECT * FROM jobs WHERE id = ?').get(id) as Job;
   analyzeJob(freshJob).then((result) => {
     if (result) {
-      db.run('UPDATE jobs SET match_score = ?, match_reasoning = ?, tags = ? WHERE id = ?', [
-        result.match_score, result.match_reasoning, JSON.stringify(result.tags), id,
+      db.run('UPDATE jobs SET match_score = ?, match_reasoning = ?, match_summary = ?, tags = ? WHERE id = ?', [
+        result.match_score, result.match_reasoning, result.match_summary, JSON.stringify(result.tags), id,
       ]);
     }
   }).catch(console.error);

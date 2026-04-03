@@ -10,6 +10,7 @@ export interface Job {
   posted_at: string | null;
   match_score: number | null;   // 0-100, null until analyzed
   match_reasoning: string | null;
+  match_summary: string | null; // factual role overview, null until analyzed
   tags: string[] | null;        // tech stack tags, null until analyzed
   status: 'new' | 'saved' | 'applied' | 'rejected';
   seen_at: string | null;

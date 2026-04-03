@@ -24,7 +24,7 @@ const AREA_MAP: [RegExp, string][] = [
 ];
 const DEFAULT_AREA = 'storkoebenhavn';
 
-async function loadJobindexSearchUrls(): Promise<string[]> {
+async function loadJobindexSearch(): Promise<{ urls: string[]; area: string }> {
   let area = DEFAULT_AREA;
   try {
     const text = await Bun.file(join(DATA_DIR, 'preferences.md')).text();
@@ -45,20 +45,25 @@ async function loadJobindexSearchUrls(): Promise<string[]> {
         .map(l => l.replace(/^\s*[-*]\s*/, '').trim())
         .filter(l => l.length > 0);
       if (terms.length > 0) {
-        return terms.map(
-          term => `https://www.jobindex.dk/jobsoegning?q=${encodeURIComponent(term)}&superjob=1&area=${area}`,
-        );
+        return {
+          urls: terms.map(
+            term => `https://www.jobindex.dk/jobsoegning?q=${encodeURIComponent(term)}&superjob=1&area=${area}`,
+          ),
+          area,
+        };
       }
     }
   } catch {
     // preferences.md not found — fall through to defaults
   }
 
-  const defaults = [
-    `https://www.jobindex.dk/jobsoegning?q=${encodeURIComponent('frontend udvikler')}&superjob=1&area=${area}`,
-    `https://www.jobindex.dk/jobsoegning?q=${encodeURIComponent('webudvikler')}&superjob=1&area=${area}`,
-  ];
-  return defaults;
+  return {
+    urls: [
+      `https://www.jobindex.dk/jobsoegning?q=${encodeURIComponent('frontend udvikler')}&superjob=1&area=${area}`,
+      `https://www.jobindex.dk/jobsoegning?q=${encodeURIComponent('webudvikler')}&superjob=1&area=${area}`,
+    ],
+    area,
+  };
 }
 
 /** Extract the Stash JSON object from page HTML using brace balancing. */
@@ -89,7 +94,16 @@ function extractResults(stash: Record<string, unknown>): StashResult[] {
   return results;
 }
 
-async function fetchPage(url: string): Promise<JobPartial[]> {
+/** Returns true if the job location clearly belongs to a region other than targetArea. */
+function isWrongRegion(location: string | null, targetArea: string): boolean {
+  if (!location) return false;
+  for (const [pattern, code] of AREA_MAP) {
+    if (pattern.test(location) && code !== targetArea) return true;
+  }
+  return false;
+}
+
+async function fetchPage(url: string, targetArea: string): Promise<JobPartial[]> {
   const response = await fetch(url, {
     headers: {
       'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
@@ -112,7 +126,14 @@ async function fetchPage(url: string): Promise<JobPartial[]> {
   const fetched_at = new Date().toISOString();
 
   return results
-    .filter(r => r.tid && r.headline)
+    .filter(r => {
+      if (!r.tid || !r.headline) return false;
+      if (isWrongRegion(r.area, targetArea)) {
+        console.log(`[jobindex] Skipping out-of-area job: "${r.headline}" (${r.area})`);
+        return false;
+      }
+      return true;
+    })
     .map(r => ({
       source: 'jobindex' as const,
       external_id: r.tid,
@@ -127,12 +148,12 @@ async function fetchPage(url: string): Promise<JobPartial[]> {
 }
 
 export async function fetchJobindex(): Promise<JobPartial[]> {
-  const searchUrls = await loadJobindexSearchUrls();
+  const { urls, area } = await loadJobindexSearch();
   let allJobs: JobPartial[] = [];
 
-  for (const url of searchUrls) {
+  for (const url of urls) {
     try {
-      const jobs = await fetchPage(url);
+      const jobs = await fetchPage(url, area);
       allJobs = allJobs.concat(jobs);
     } catch (err) {
       console.error(`[jobindex] Failed to fetch ${url}:`, (err as Error).message);
@@ -149,6 +170,6 @@ export async function fetchJobindex(): Promise<JobPartial[]> {
     }
   }
 
-  console.log(`[jobindex] Fetch complete — ${unique.length} unique jobs from ${searchUrls.length} URL(s)`);
+  console.log(`[jobindex] Fetch complete — ${unique.length} unique jobs from ${urls.length} URL(s)`);
   return unique;
 }

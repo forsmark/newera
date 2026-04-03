@@ -3,7 +3,6 @@ import { Job } from "../types";
 import JobRow from "../components/JobRow";
 import { toast } from "../components/Toast";
 
-
 interface Props {
   refreshKey?: number;
 }
@@ -12,6 +11,17 @@ type FilterStatus = "all" | "unread" | "new" | "saved" | "applied";
 type FilterSource = "all" | "jsearch" | "jobindex";
 type PostedWithin = 'any' | '7d' | '30d';
 type SortBy = 'score' | 'posted' | 'fetched';
+
+const selectStyle: React.CSSProperties = {
+  padding: "0.3125rem 0.5rem",
+  borderRadius: "var(--radius-sm)",
+  border: "1px solid #1a2840",
+  background: "#0b1628",
+  color: "#7a95b0",
+  fontSize: "0.8125rem",
+  cursor: "pointer",
+  outline: "none",
+};
 
 export default function JobsView({ refreshKey }: Props) {
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -29,9 +39,9 @@ export default function JobsView({ refreshKey }: Props) {
   );
   const [filterSource, setFilterSource] = useState<FilterSource>("all");
   const [activeTag, setActiveTag] = useState<string | null>(null);
-  const [compact, setCompact] = useState<boolean>(() => {
-    return localStorage.getItem("jobs-compact-view") === "true";
-  });
+  const [compact, setCompact] = useState<boolean>(() =>
+    localStorage.getItem("jobs-compact-view") === "true"
+  );
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
   const [focusedIndex, setFocusedIndex] = useState<number>(-1);
@@ -68,51 +78,37 @@ export default function JobsView({ refreshKey }: Props) {
 
   const hasPendingScores = jobs.some(j => j.match_score === null);
 
-  // Auto-poll while any jobs have pending scores (max 10 min)
   useEffect(() => {
     if (!hasPendingScores) return;
-
     const MAX_POLL_MS = 10 * 60 * 1000;
     const startedAt = Date.now();
-
     const interval = setInterval(() => {
-      if (Date.now() - startedAt > MAX_POLL_MS) {
-        clearInterval(interval);
-        return;
-      }
-      // Refresh silently (don't set loading=true — avoid flickering the list)
-      // Fetches with default limit=100 to refresh scores on the first page
+      if (Date.now() - startedAt > MAX_POLL_MS) { clearInterval(interval); return; }
       fetch('/api/jobs?limit=100&offset=0')
         .then(r => r.json())
         .then((data: { jobs: Job[]; total: number }) => {
           setJobs(prev => {
-            // Replace first page worth of jobs with fresh data, keep any beyond that
             const fresh = data.jobs;
             const rest = prev.slice(fresh.length);
             return [...fresh, ...rest];
           });
           setTotalJobs(data.total);
         })
-        .catch(() => {}); // ignore errors during background poll
+        .catch(() => {});
     }, 5000);
-
     return () => clearInterval(interval);
   }, [hasPendingScores]);
 
   function handleStatusChange(id: string, status: string) {
-    setJobs((prev) =>
-      prev.map((j) => (j.id === id ? { ...j, status: status as Job["status"] } : j))
-    );
+    setJobs(prev => prev.map(j => j.id === id ? { ...j, status: status as Job["status"] } : j));
   }
 
   function handleSeen(id: string) {
-    setJobs((prev) =>
-      prev.map((j) => (j.id === id ? { ...j, seen_at: new Date().toISOString() } : j))
-    );
+    setJobs(prev => prev.map(j => j.id === id ? { ...j, seen_at: new Date().toISOString() } : j));
   }
 
   function handleRescore(id: string) {
-    setJobs(prev => prev.map(j => j.id === id ? { ...j, match_score: null, match_reasoning: null } : j));
+    setJobs(prev => prev.map(j => j.id === id ? { ...j, match_score: null, match_reasoning: null, match_summary: null } : j));
   }
 
   function toggleSelect(id: string) {
@@ -146,9 +142,7 @@ export default function JobsView({ refreshKey }: Props) {
         const s = status as Job['status'];
         const now = new Date().toISOString();
         setJobs(prev => prev.map(j =>
-          selectedIds.has(j.id)
-            ? { ...j, status: s, seen_at: j.seen_at ?? now }
-            : j
+          selectedIds.has(j.id) ? { ...j, status: s, seen_at: j.seen_at ?? now } : j
         ));
         setSelectedIds(new Set());
       }
@@ -158,7 +152,7 @@ export default function JobsView({ refreshKey }: Props) {
   }
 
   function toggleCompact() {
-    setCompact((v) => {
+    setCompact(v => {
       const next = !v;
       localStorage.setItem("jobs-compact-view", String(next));
       return next;
@@ -166,7 +160,7 @@ export default function JobsView({ refreshKey }: Props) {
   }
 
   const filtered = jobs
-    .filter((j) => {
+    .filter(j => {
       if (!showRejected && j.status === "rejected") return false;
       if (filterStatus === "unread" && j.seen_at !== null) return false;
       if (filterStatus === "new" && j.status !== "new") return false;
@@ -193,13 +187,11 @@ export default function JobsView({ refreshKey }: Props) {
         return b.match_score - a.match_score;
       }
       if (sortBy === 'posted') {
-        // nulls last
         if (!a.posted_at && !b.posted_at) return 0;
         if (!a.posted_at) return 1;
         if (!b.posted_at) return -1;
         return new Date(b.posted_at).getTime() - new Date(a.posted_at).getTime();
       }
-      // fetched: newest first, always has a value
       return new Date(b.fetched_at).getTime() - new Date(a.fetched_at).getTime();
     });
 
@@ -211,18 +203,14 @@ export default function JobsView({ refreshKey }: Props) {
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) return;
-
       const total = filtered.length;
       if (total === 0 && e.key !== '?') return;
-
       switch (e.key) {
-        case 'j':
-        case 'ArrowDown':
+        case 'j': case 'ArrowDown':
           e.preventDefault();
           setFocusedIndex(i => Math.min(i + 1, total - 1));
           break;
-        case 'k':
-        case 'ArrowUp':
+        case 'k': case 'ArrowUp':
           e.preventDefault();
           setFocusedIndex(i => Math.max(i - 1, 0));
           break;
@@ -237,281 +225,233 @@ export default function JobsView({ refreshKey }: Props) {
 
   const jsearchCount = jobs.filter(j => j.source === 'jsearch').length;
   const jobindexCount = jobs.filter(j => j.source === 'jobindex').length;
-
   const unreadCount = jobs.filter(j => j.seen_at === null && j.status !== 'rejected').length;
   const newCount = jobs.filter(j => j.status === 'new').length;
   const savedCount = jobs.filter(j => j.status === 'saved').length;
   const appliedCount = jobs.filter(j => j.status === 'applied').length;
 
-  const tabStyle = (active: boolean): React.CSSProperties => ({
-    padding: "0.375rem 0.875rem",
-    borderRadius: "0.375rem",
-    border: "none",
-    cursor: "pointer",
-    fontSize: "0.875rem",
-    fontWeight: active ? 600 : 400,
-    background: active ? "#1d4ed8" : "transparent",
-    color: active ? "#fff" : "#94a3b8",
-  });
-
   return (
-    <div style={{ maxWidth: "900px", margin: "0 auto", padding: "1.5rem 1rem" }}>
-      {/* Filter bar */}
-      <div
-        style={{
-          display: "flex",
-          gap: "0.75rem",
-          marginBottom: "1rem",
-          alignItems: "center",
-          flexWrap: "wrap",
-        }}
-      >
-        <input
-          type="text"
-          placeholder="Search title or company..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          style={{
-            flex: 1,
-            minWidth: "180px",
-            padding: "0.4rem 0.75rem",
-            borderRadius: "0.375rem",
-            border: "1px solid #334155",
-            background: "#1e293b",
-            color: "#f1f5f9",
-            fontSize: "0.875rem",
-            outline: "none",
-          }}
-        />
+    <div style={{ maxWidth: "940px", margin: "0 auto", padding: "1.25rem 1rem" }}>
 
-        <select
-          value={postedWithin}
-          onChange={e => { const v = e.target.value as PostedWithin; localStorage.setItem('jobs-posted-within', v); setPostedWithin(v); }}
-          style={{
-            padding: '0.4rem 0.625rem',
-            borderRadius: '0.375rem',
-            border: '1px solid #334155',
-            background: '#1e293b',
-            color: postedWithin !== 'any' ? '#f1f5f9' : '#64748b',
-            fontSize: '0.875rem',
-            cursor: 'pointer',
-            outline: 'none',
-          }}
-        >
-          <option value="any">Any time</option>
-          <option value="7d">Last 7 days</option>
-          <option value="30d">Last 30 days</option>
-        </select>
+      {/* ── Filter bar ── */}
+      <div style={{ marginBottom: "1rem", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
 
-        <select
-          value={sortBy}
-          onChange={e => { const v = e.target.value as SortBy; localStorage.setItem('jobs-sort-by', v); setSortBy(v); }}
-          style={{
-            padding: '0.4rem 0.625rem',
-            borderRadius: '0.375rem',
-            border: '1px solid #334155',
-            background: '#1e293b',
-            color: '#94a3b8',
-            fontSize: '0.875rem',
-            cursor: 'pointer',
-            outline: 'none',
-          }}
-        >
-          <option value="score">↓ Score</option>
-          <option value="posted">↓ Posted date</option>
-          <option value="fetched">↓ Fetched date</option>
-        </select>
-
-        {/* Source pills — only show if both sources have data */}
-        {jsearchCount > 0 && jobindexCount > 0 && (
-          <div style={{ display: 'flex', gap: '0.25rem' }}>
-            {([
-              { key: 'all' as FilterSource, label: 'All' },
-              { key: 'jsearch' as FilterSource, label: 'JSearch' },
-              { key: 'jobindex' as FilterSource, label: 'Jobindex' },
-            ]).map(({ key, label }) => (
-              <button
-                key={key}
-                onClick={() => setFilterSource(key)}
-                style={{
-                  padding: '0.3rem 0.625rem',
-                  borderRadius: '9999px',
-                  border: `1px solid ${filterSource === key ? '#1d4ed8' : '#334155'}`,
-                  background: filterSource === key ? '#1d4ed8' : 'transparent',
-                  color: filterSource === key ? '#fff' : '#64748b',
-                  cursor: 'pointer',
-                  fontSize: '0.75rem',
-                  fontWeight: 500,
-                }}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Active tag filter chip */}
-        {activeTag && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-            <span style={{
-              background: '#1e3a5f', border: '1px solid #3b82f6', color: '#60a5fa',
-              borderRadius: '0.25rem', padding: '0.25rem 0.5rem', fontSize: '0.75rem', fontWeight: 500,
-            }}>
-              {activeTag}
-            </span>
-            <button onClick={() => setActiveTag(null)} style={{
-              padding: '0.2rem 0.4rem', borderRadius: '0.25rem', border: '1px solid #334155',
-              background: 'transparent', color: '#64748b', cursor: 'pointer', fontSize: '0.75rem',
-            }}>✕</button>
-          </div>
-        )}
-
-        {/* Status tabs */}
-        <div style={{ display: "flex", gap: "0.25rem", background: "#0f172a", borderRadius: "0.5rem", padding: "0.25rem" }}>
-          {(["all", "unread", "new", "saved", "applied"] as FilterStatus[]).map((s) => {
-            const count = s === "unread" ? unreadCount : s === "new" ? newCount : s === "saved" ? savedCount : s === "applied" ? appliedCount : null;
-            return (
-              <button key={s} style={tabStyle(filterStatus === s)} onClick={() => setFilterStatus(s)}>
-                {s.charAt(0).toUpperCase() + s.slice(1)}
-                {count !== null && count > 0 && (
-                  <span style={{
-                    marginLeft: '0.375rem',
-                    background: filterStatus === s ? 'rgba(255,255,255,0.2)' : '#1e293b',
-                    color: filterStatus === s ? '#fff' : '#94a3b8',
-                    borderRadius: '9999px',
-                    padding: '0 0.375rem',
-                    fontSize: '0.7rem',
-                    fontWeight: 700,
-                    lineHeight: '1.4',
-                    display: 'inline-block',
-                  }}>
-                    {count}
-                  </span>
-                )}
-              </button>
-            );
-          })}
+        {/* Row 1: search + view controls */}
+        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+          <input
+            type="text"
+            placeholder="Search jobs…"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            style={{
+              flex: 1,
+              padding: "0.375rem 0.75rem",
+              borderRadius: "var(--radius-sm)",
+              border: "1px solid #1a2840",
+              background: "#0b1628",
+              color: "#dde6f0",
+              fontSize: "0.875rem",
+              outline: "none",
+            }}
+          />
+          <select
+            value={postedWithin}
+            onChange={e => { const v = e.target.value as PostedWithin; localStorage.setItem('jobs-posted-within', v); setPostedWithin(v); }}
+            style={{ ...selectStyle, color: postedWithin !== 'any' ? '#dde6f0' : '#7a95b0' }}
+          >
+            <option value="any">Any time</option>
+            <option value="7d">7 days</option>
+            <option value="30d">30 days</option>
+          </select>
+          <select
+            value={sortBy}
+            onChange={e => { const v = e.target.value as SortBy; localStorage.setItem('jobs-sort-by', v); setSortBy(v); }}
+            style={selectStyle}
+          >
+            <option value="score">↓ Score</option>
+            <option value="posted">↓ Posted</option>
+            <option value="fetched">↓ Fetched</option>
+          </select>
+          <button
+            onClick={toggleCompact}
+            title={compact ? "Switch to detailed view" : "Switch to compact view"}
+            style={{
+              padding: "0.3125rem 0.625rem",
+              borderRadius: "var(--radius-sm)",
+              border: "1px solid #1a2840",
+              background: compact ? "#1a2840" : "transparent",
+              color: compact ? "#dde6f0" : "#405a74",
+              cursor: "pointer",
+              fontSize: "0.8125rem",
+              fontWeight: 500,
+            }}
+          >
+            {compact ? "≡ Compact" : "⊞ Detail"}
+          </button>
+          <button
+            onClick={() => setShowShortcuts(true)}
+            title="Keyboard shortcuts"
+            style={{
+              padding: "0.3125rem 0.5rem",
+              borderRadius: "var(--radius-sm)",
+              border: "1px solid #1a2840",
+              background: "transparent",
+              color: "#405a74",
+              cursor: "pointer",
+              fontSize: "0.8125rem",
+              fontWeight: 600,
+            }}
+          >
+            ?
+          </button>
         </div>
 
-        <label
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "0.375rem",
-            fontSize: "0.875rem",
-            color: "#94a3b8",
-            cursor: "pointer",
-            userSelect: "none",
-          }}
-        >
-          <input
-            type="checkbox"
-            checked={showRejected}
-            onChange={(e) => setShowRejected(e.target.checked)}
-            style={{ accentColor: "#6b7280" }}
-          />
-          Show rejected
-        </label>
+        {/* Row 2: status tabs + source pills + show rejected */}
+        <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
+          {/* Status tabs */}
+          <div style={{ display: "flex", gap: "0", borderBottom: "1px solid #1a2840" }}>
+            {(["all", "unread", "new", "saved", "applied"] as FilterStatus[]).map(s => {
+              const count = s === "unread" ? unreadCount : s === "new" ? newCount : s === "saved" ? savedCount : s === "applied" ? appliedCount : null;
+              const isActive = filterStatus === s;
+              return (
+                <button
+                  key={s}
+                  onClick={() => setFilterStatus(s)}
+                  style={{
+                    padding: "0.25rem 0.625rem",
+                    border: "none",
+                    borderBottom: `2px solid ${isActive ? '#3b82f6' : 'transparent'}`,
+                    background: "transparent",
+                    color: isActive ? "#dde6f0" : "#405a74",
+                    cursor: "pointer",
+                    fontSize: "0.8125rem",
+                    fontWeight: isActive ? 600 : 400,
+                    marginBottom: "-1px",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {s.charAt(0).toUpperCase() + s.slice(1)}
+                  {count !== null && count > 0 && (
+                    <span style={{
+                      marginLeft: "0.3rem",
+                      background: isActive ? "#1a2840" : "#0b1628",
+                      color: isActive ? "#7a95b0" : "#405a74",
+                      borderRadius: "9999px",
+                      padding: "0 0.3rem",
+                      fontSize: "0.6875rem",
+                      fontWeight: 600,
+                    }}>
+                      {count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
 
-        <button
-          onClick={toggleCompact}
-          title={compact ? "Switch to detailed view" : "Switch to compact view"}
-          style={{
-            padding: "0.375rem 0.625rem",
-            borderRadius: "0.375rem",
-            border: "1px solid #334155",
-            background: compact ? "#1d4ed8" : "transparent",
-            color: compact ? "#fff" : "#94a3b8",
-            cursor: "pointer",
-            fontSize: "0.8125rem",
-            fontWeight: 500,
-          }}
-        >
-          {compact ? "⊞ Detailed" : "≡ Compact"}
-        </button>
+          {/* Source pills */}
+          {jsearchCount > 0 && jobindexCount > 0 && (
+            <div style={{ display: "flex", gap: "0.25rem" }}>
+              {(["all", "jsearch", "jobindex"] as FilterSource[]).map(key => (
+                <button
+                  key={key}
+                  onClick={() => setFilterSource(key)}
+                  style={{
+                    padding: "0.1875rem 0.5rem",
+                    borderRadius: "9999px",
+                    border: `1px solid ${filterSource === key ? '#243653' : '#1a2840'}`,
+                    background: filterSource === key ? '#1a2840' : 'transparent',
+                    color: filterSource === key ? '#7a95b0' : '#405a74',
+                    cursor: "pointer",
+                    fontSize: "0.75rem",
+                    fontWeight: 500,
+                  }}
+                >
+                  {key === 'all' ? 'All sources' : key === 'jsearch' ? 'JSearch' : 'Jobindex'}
+                </button>
+              ))}
+            </div>
+          )}
 
-        <button
-          onClick={() => setShowShortcuts(true)}
-          title="Keyboard shortcuts"
-          style={{
-            padding: "0.375rem 0.5rem",
-            borderRadius: "0.375rem",
-            border: "1px solid #334155",
-            background: "transparent",
-            color: "#475569",
-            cursor: "pointer",
-            fontSize: "0.8125rem",
-            fontWeight: 600,
-            lineHeight: 1,
-          }}
-        >
-          ?
-        </button>
+          {/* Active tag chip */}
+          {activeTag && (
+            <div style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
+              <span style={{
+                background: "#0d1e38", border: "1px solid #243653", color: "#3b82f6",
+                borderRadius: "var(--radius-sm)", padding: "0.125rem 0.5rem", fontSize: "0.75rem", fontWeight: 500,
+              }}>
+                {activeTag}
+              </span>
+              <button onClick={() => setActiveTag(null)} style={{
+                padding: "0.125rem 0.375rem", borderRadius: "var(--radius-sm)",
+                border: "1px solid #1a2840", background: "transparent",
+                color: "#405a74", cursor: "pointer", fontSize: "0.75rem",
+              }}>✕</button>
+            </div>
+          )}
+
+          {/* Show rejected */}
+          <label style={{
+            display: "flex", alignItems: "center", gap: "0.375rem",
+            fontSize: "0.8125rem", color: "#405a74", cursor: "pointer", userSelect: "none",
+            marginLeft: "auto",
+          }}>
+            <input
+              type="checkbox"
+              checked={showRejected}
+              onChange={e => setShowRejected(e.target.checked)}
+              style={{ accentColor: "#405a74", width: "13px", height: "13px" }}
+            />
+            Show rejected
+          </label>
+        </div>
       </div>
 
-      {/* Scoring status indicator */}
-      <style>{`@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }`}</style>
+      {/* Scoring status */}
       {hasPendingScores && (
-        <div style={{
-          fontSize: '0.75rem',
-          color: '#94a3b8',
-          padding: '6px 12px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '6px'
-        }}>
+        <div style={{ fontSize: "0.75rem", color: "#405a74", marginBottom: "0.75rem", display: "flex", alignItems: "center", gap: "0.375rem" }}>
           <span style={{
-            display: 'inline-block',
-            width: '6px',
-            height: '6px',
-            borderRadius: '50%',
-            background: '#f59e0b',
-            animation: 'pulse 1.5s ease-in-out infinite'
+            display: "inline-block", width: "5px", height: "5px", borderRadius: "50%",
+            background: "#f59e0b", animation: "pulse 1.5s ease-in-out infinite",
           }} />
-          Scoring jobs… ({jobs.filter(j => j.match_score === null).length} pending)
+          Scoring {jobs.filter(j => j.match_score === null).length} jobs…
         </div>
       )}
 
       {/* Job list */}
       {loading ? (
-        <div style={{ color: "#64748b", textAlign: "center", padding: "3rem 0" }}>
-          Loading jobs...
+        <div style={{ color: "#405a74", textAlign: "center", padding: "4rem 0", fontSize: "0.875rem" }}>
+          Loading…
         </div>
       ) : filtered.length === 0 ? (
-        <div style={{ color: "#64748b", textAlign: "center", padding: "3rem 0" }}>
+        <div style={{ color: "#405a74", textAlign: "center", padding: "4rem 0" }}>
           {jobs.length === 0 ? (
             <>
-              <div style={{ fontSize: '1.25rem', marginBottom: '0.5rem' }}>No jobs yet</div>
-              <div style={{ fontSize: '0.875rem' }}>
-                Click <strong style={{ color: '#94a3b8' }}>Fetch now</strong> in the nav bar to pull jobs from all sources.
+              <div style={{ fontSize: "1rem", fontWeight: 600, color: "#7a95b0", marginBottom: "0.5rem" }}>No jobs yet</div>
+              <div style={{ fontSize: "0.875rem" }}>
+                Click <strong style={{ color: "#7a95b0", fontWeight: 600 }}>Fetch now</strong> in the nav to pull from all sources.
               </div>
             </>
           ) : (
-            'No jobs match the current filters.'
+            <span style={{ fontSize: "0.875rem" }}>No jobs match the current filters.</span>
           )}
         </div>
       ) : (
         <>
-          {filtered.length > 0 && (
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              padding: '0.375rem 0.5rem',
-              marginBottom: '0.25rem',
-            }}>
-              <input
-                type="checkbox"
-                checked={selectedIds.size > 0 && selectedIds.size === filtered.length}
-                ref={el => { if (el) el.indeterminate = selectedIds.size > 0 && selectedIds.size < filtered.length; }}
-                onChange={toggleSelectAll}
-                style={{ accentColor: '#1d4ed8', width: '14px', height: '14px', cursor: 'pointer' }}
-              />
-              <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                {selectedIds.size > 0 ? `${selectedIds.size} selected` : `${filtered.length} jobs`}
-              </span>
-            </div>
-          )}
+          {/* Select all row */}
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.25rem 0", marginBottom: "0.25rem" }}>
+            <input
+              type="checkbox"
+              checked={selectedIds.size > 0 && selectedIds.size === filtered.length}
+              ref={el => { if (el) el.indeterminate = selectedIds.size > 0 && selectedIds.size < filtered.length; }}
+              onChange={toggleSelectAll}
+              style={{ accentColor: "#3b82f6", width: "13px", height: "13px", cursor: "pointer" }}
+            />
+            <span style={{ fontSize: "0.75rem", color: "#405a74" }}>
+              {selectedIds.size > 0 ? `${selectedIds.size} selected` : `${filtered.length} jobs`}
+            </span>
+          </div>
+
           {filtered.map((job, index) => (
             <JobRow
               key={job.id}
@@ -528,19 +468,21 @@ export default function JobsView({ refreshKey }: Props) {
               activeTag={activeTag ?? undefined}
             />
           ))}
+
           {jobs.length < totalJobs && (
-            <div style={{ textAlign: 'center', padding: '1rem 0' }}>
+            <div style={{ textAlign: "center", padding: "1.25rem 0" }}>
               <button
                 onClick={() => fetchJobs()}
                 style={{
-                  padding: '0.5rem 1.5rem',
-                  borderRadius: '0.5rem',
-                  border: '1px solid #334155',
-                  background: 'transparent',
-                  color: '#94a3b8',
-                  cursor: 'pointer',
-                  fontSize: '0.875rem',
+                  padding: "0.4375rem 1.25rem",
+                  borderRadius: "var(--radius)",
+                  border: "1px solid #1a2840",
+                  background: "transparent",
+                  color: "#7a95b0",
+                  cursor: "pointer",
+                  fontSize: "0.875rem",
                 }}
+                className="btn-ghost"
               >
                 Load more ({totalJobs - jobs.length} remaining)
               </button>
@@ -549,76 +491,66 @@ export default function JobsView({ refreshKey }: Props) {
         </>
       )}
 
+      {/* Keyboard shortcuts modal */}
       {showShortcuts && (
         <div
           onClick={() => setShowShortcuts(false)}
           style={{
-            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            zIndex: 300,
+            position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            zIndex: 300, backdropFilter: "blur(2px)",
           }}
         >
           <div
             onClick={e => e.stopPropagation()}
             style={{
-              background: '#1e293b', border: '1px solid #334155',
-              borderRadius: '0.75rem', padding: '1.5rem',
-              minWidth: '280px', color: '#f1f5f9',
+              background: "#0b1628", border: "1px solid #1a2840",
+              borderRadius: "var(--radius)", padding: "1.5rem",
+              minWidth: "280px", color: "#dde6f0",
+              boxShadow: "0 24px 48px rgba(0,0,0,0.6)",
             }}
           >
-            <h3 style={{ margin: '0 0 1rem', fontSize: '1rem', fontWeight: 600 }}>Keyboard Shortcuts</h3>
+            <h3 style={{ margin: "0 0 1rem", fontSize: "0.9375rem", fontWeight: 600 }}>Keyboard Shortcuts</h3>
             {[
-              ['j / ↓', 'Next job'],
-              ['k / ↑', 'Previous job'],
-              ['Enter', 'Expand/collapse'],
-              ['s', 'Save job'],
-              ['n', 'Un-save job'],
-              ['r', 'Reject job'],
-              ['a', 'Mark applied'],
-              ['u', 'Open URL'],
-              ['?', 'Show/hide this help'],
+              ["j / ↓", "Next job"],
+              ["k / ↑", "Previous job"],
+              ["Enter", "Expand/collapse"],
+              ["s", "Save job"],
+              ["n", "Un-save job"],
+              ["r", "Reject job"],
+              ["a", "Mark applied"],
+              ["u", "Open URL"],
+              ["?", "This help"],
             ].map(([key, desc]) => (
-              <div key={key} style={{ display: 'flex', justifyContent: 'space-between', gap: '2rem', marginBottom: '0.5rem', fontSize: '0.875rem' }}>
-                <kbd style={{ background: '#0f172a', border: '1px solid #475569', borderRadius: '0.25rem', padding: '0.125rem 0.5rem', fontFamily: 'monospace', color: '#94a3b8' }}>{key}</kbd>
-                <span style={{ color: '#94a3b8' }}>{desc}</span>
+              <div key={key} style={{ display: "flex", justifyContent: "space-between", gap: "2rem", marginBottom: "0.5rem", fontSize: "0.875rem" }}>
+                <kbd style={{ background: "#030b17", border: "1px solid #243653", borderRadius: "var(--radius-sm)", padding: "0.125rem 0.5rem", fontFamily: "monospace", color: "#7a95b0", fontSize: "0.8125rem" }}>{key}</kbd>
+                <span style={{ color: "#7a95b0" }}>{desc}</span>
               </div>
             ))}
-            <p style={{ margin: '1rem 0 0', fontSize: '0.75rem', color: '#475569' }}>Click anywhere to close</p>
+            <p style={{ margin: "1rem 0 0", fontSize: "0.75rem", color: "#405a74" }}>Click outside to close</p>
           </div>
         </div>
       )}
 
+      {/* Bulk action bar */}
       {selectedIds.size > 0 && (
         <div style={{
-          position: 'fixed',
-          bottom: '1.5rem',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          background: '#1e293b',
-          border: '1px solid #334155',
-          borderRadius: '0.75rem',
-          padding: '0.75rem 1.25rem',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.75rem',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
-          zIndex: 100,
+          position: "fixed", bottom: "1.5rem", left: "50%", transform: "translateX(-50%)",
+          background: "#0b1628", border: "1px solid #1a2840", borderRadius: "var(--radius)",
+          padding: "0.625rem 1rem",
+          display: "flex", alignItems: "center", gap: "0.625rem",
+          boxShadow: "0 8px 32px rgba(0,0,0,0.5)", zIndex: 100,
         }}>
-          <span style={{ color: '#94a3b8', fontSize: '0.875rem', fontWeight: 500 }}>
+          <span style={{ color: "#7a95b0", fontSize: "0.875rem", fontWeight: 500 }}>
             {selectedIds.size} selected
           </span>
           <button
             onClick={() => bulkSetStatus('saved')}
             disabled={bulkLoading}
             style={{
-              padding: '0.375rem 0.875rem',
-              borderRadius: '0.375rem',
-              border: '1px solid #1d4ed8',
-              background: 'transparent',
-              color: '#60a5fa',
-              cursor: 'pointer',
-              fontSize: '0.875rem',
-              fontWeight: 500,
+              padding: "0.3125rem 0.75rem", borderRadius: "var(--radius-sm)",
+              border: "1px solid #1a3060", background: "transparent",
+              color: "#3b82f6", cursor: "pointer", fontSize: "0.8125rem", fontWeight: 500,
             }}
           >
             Save all
@@ -627,14 +559,9 @@ export default function JobsView({ refreshKey }: Props) {
             onClick={() => bulkSetStatus('rejected')}
             disabled={bulkLoading}
             style={{
-              padding: '0.375rem 0.875rem',
-              borderRadius: '0.375rem',
-              border: '1px solid #7f1d1d',
-              background: 'transparent',
-              color: '#f87171',
-              cursor: 'pointer',
-              fontSize: '0.875rem',
-              fontWeight: 500,
+              padding: "0.3125rem 0.75rem", borderRadius: "var(--radius-sm)",
+              border: "1px solid #3a0808", background: "transparent",
+              color: "#ef4444", cursor: "pointer", fontSize: "0.8125rem", fontWeight: 500,
             }}
           >
             Reject all
@@ -642,13 +569,9 @@ export default function JobsView({ refreshKey }: Props) {
           <button
             onClick={() => setSelectedIds(new Set())}
             style={{
-              padding: '0.375rem 0.5rem',
-              borderRadius: '0.375rem',
-              border: 'none',
-              background: 'transparent',
-              color: '#64748b',
-              cursor: 'pointer',
-              fontSize: '0.875rem',
+              padding: "0.3125rem 0.4rem", borderRadius: "var(--radius-sm)",
+              border: "none", background: "transparent",
+              color: "#405a74", cursor: "pointer", fontSize: "0.875rem",
             }}
           >
             ✕

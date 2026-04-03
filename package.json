@@ -11,7 +11,8 @@
     "dev:client": "bun run --cwd src/client dev",
     "dev:server": "bun --watch run src/server/index.ts",
     "dev": "concurrently -n server,client -c blue,green \"bun run dev:server\" \"bun run dev:client\"",
-    "start": "bun run src/server/index.ts"
+    "start": "bun run src/server/index.ts",
+    "db:reset": "rm -f db/jobs.db && echo 'Database reset.'"
   },
   "devDependencies": {
     "concurrently": "^9.2.1"
