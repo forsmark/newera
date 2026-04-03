@@ -10,7 +10,10 @@
     "build": "bun run --cwd src/client build",
     "dev:client": "bun run --cwd src/client dev",
     "dev:server": "bun --watch run src/server/index.ts",
-    "dev": "bun run --cwd src/client dev",
+    "dev": "concurrently -n server,client -c blue,green \"bun run dev:server\" \"bun run dev:client\"",
     "start": "bun run src/server/index.ts"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
   }
 }
