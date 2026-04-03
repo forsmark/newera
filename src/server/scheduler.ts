@@ -117,11 +117,11 @@ export async function analyzeUnscoredJobs(): Promise<void> {
   }
 }
 
-const INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
+// 12h interval = 2 fetches/day. With up to 5 JSearch queries that's ~150 req/month,
+// comfortably within the 200 req/month budget on openwebninja.com's free tier.
+const INTERVAL_MS = 12 * 60 * 60 * 1000;
 
 export function startScheduler(): void {
-  // Run immediately on start
   fetchJobs().catch(console.error);
-  // Then every 6 hours
   setInterval(() => fetchJobs().catch(console.error), INTERVAL_MS);
 }

@@ -109,6 +109,7 @@ export async function analyzeJob(job: Job): Promise<AnalysisResult | null> {
         model: MODEL,
         prompt,
         stream: false,
+        think: false,   // disable extended thinking — reduces latency from 60s+ to <5s
       }),
       signal: controller.signal,
     });

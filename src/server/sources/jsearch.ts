@@ -3,7 +3,7 @@ import type { Job } from '../types';
 import { DATA_DIR } from '../config';
 
 const JSEARCH_API_KEY = process.env.JSEARCH_API_KEY ?? '';
-const JSEARCH_BASE = 'https://jsearch.p.rapidapi.com/search';
+const JSEARCH_BASE = 'https://api.openwebninja.com/jsearch/search';
 
 type JSearchItem = {
   job_id: string;
@@ -26,18 +26,23 @@ async function fetchQuery(query: string): Promise<JSearchItem[]> {
   const url = new URL(JSEARCH_BASE);
   url.searchParams.set('query', query);
   url.searchParams.set('page', '1');
-  url.searchParams.set('num_pages', '1');
-  url.searchParams.set('country', 'dk');
+  url.searchParams.set('num_pages', '2');  // 20 results per query; 2 fetches/day × 5 queries ≈ 150 req/month
+  url.searchParams.set('country', 'DK');
 
   const response = await fetch(url.toString(), {
     headers: {
-      'X-RapidAPI-Key': JSEARCH_API_KEY,
-      'X-RapidAPI-Host': 'jsearch.p.rapidapi.com',
+      'x-api-key': JSEARCH_API_KEY,
     },
     signal: AbortSignal.timeout(15_000),
   });
 
   if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      throw new Error(`JSearch API: ${response.status} — check JSEARCH_API_KEY in .env`);
+    }
+    if (response.status === 429) {
+      throw new Error(`JSearch API: 429 Too Many Requests — quota may be exhausted`);
+    }
     throw new Error(`JSearch API returned ${response.status} for query "${query}"`);
   }
 

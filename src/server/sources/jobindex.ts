@@ -1,58 +1,16 @@
-import { parse } from 'node-html-parser';
 import { join } from 'path';
 import type { Job } from '../types';
 import { DATA_DIR } from '../config';
 
 type JobPartial = Omit<Job, 'id' | 'match_score' | 'match_reasoning' | 'status' | 'seen_at'>;
 
-// Tried in order — first selector that returns at least one element wins
-const LISTING_SELECTORS = [
-  '.PaidJob',
-  '.jix_robotjob',
-  'article.job-listing',
-  'article[class*="job"]',
-  'li[class*="job"]',
-  'li[class*="Job"]',
-  '.job-list-item',
-  '[class*="JobAd"]',
-  '[class*="jobad"]',
-];
-
-const TITLE_SELECTORS = [
-  'h4 a',
-  'h3 a',
-  'h2 a',
-  '.jix-toolbar__title a',
-  '[class*="title"] a',
-  'a[href*="jobannonce"]',
-];
-
-const COMPANY_SELECTORS = [
-  '.jix-toolbar__company-name',
-  '.jix-toolbar__company',
-  '.company-name',
-  '.company',
-  '[class*="company"]',
-  '[class*="Company"]',
-  'em', // jobindex sometimes uses <em> for company
-];
-
-const DEFAULT_SEARCH_URLS = [
-  'https://www.jobindex.dk/jobsoegning?q=frontend+udvikler&superjob=1&area=storkoebenhavn',
-  'https://www.jobindex.dk/jobsoegning?q=webudvikler&superjob=1&area=storkoebenhavn',
-];
-
-function extractExternalId(href: string): string {
-  // Jobindex URLs look like /jobannonce/12345678/... — grab the numeric segment
-  const match = href.match(/\/jobannonce\/(\d+)/);
-  if (match) return match[1];
-  // Fallback: use the full href as a stable identifier
-  return href;
-}
-
-function resolveUrl(href: string): string {
-  if (href.startsWith('http')) return href;
-  return `https://www.jobindex.dk${href}`;
+interface StashResult {
+  tid: string;
+  headline: string | null;
+  companytext: string | null;
+  area: string | null;
+  share_url: string;
+  firstdate: string | null;
 }
 
 const AREA_MAP: [RegExp, string][] = [
@@ -95,15 +53,46 @@ async function loadJobindexSearchUrls(): Promise<string[]> {
   } catch {
     // preferences.md not found — fall through to defaults
   }
-  return DEFAULT_SEARCH_URLS.map(url => url.replace('storkoebenhavn', area));
+
+  const defaults = [
+    `https://www.jobindex.dk/jobsoegning?q=${encodeURIComponent('frontend udvikler')}&superjob=1&area=${area}`,
+    `https://www.jobindex.dk/jobsoegning?q=${encodeURIComponent('webudvikler')}&superjob=1&area=${area}`,
+  ];
+  return defaults;
+}
+
+/** Extract the Stash JSON object from page HTML using brace balancing. */
+function extractStash(html: string): Record<string, unknown> {
+  const marker = 'var Stash = ';
+  const start = html.indexOf(marker);
+  if (start === -1) throw new Error('[jobindex] Stash variable not found in page HTML');
+
+  let depth = 0;
+  let end = -1;
+  for (let i = start + marker.length; i < html.length; i++) {
+    if (html[i] === '{') depth++;
+    else if (html[i] === '}') {
+      if (--depth === 0) { end = i; break; }
+    }
+  }
+  if (end === -1) throw new Error('[jobindex] Could not find end of Stash object');
+
+  return JSON.parse(html.slice(start + marker.length, end + 1)) as Record<string, unknown>;
+}
+
+function extractResults(stash: Record<string, unknown>): StashResult[] {
+  const resultApp = stash['jobsearch/result_app'] as Record<string, unknown> | undefined;
+  const storeData = resultApp?.['storeData'] as Record<string, unknown> | undefined;
+  const searchResponse = storeData?.['searchResponse'] as Record<string, unknown> | undefined;
+  const results = searchResponse?.['results'] as StashResult[] | undefined;
+  if (!results) throw new Error('[jobindex] searchResponse.results not found in Stash');
+  return results;
 }
 
 async function fetchPage(url: string): Promise<JobPartial[]> {
   const response = await fetch(url, {
     headers: {
-      // Mimic a real browser so the server doesn't return a bot-check page
-      'User-Agent':
-        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+      'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
       Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       'Accept-Language': 'da,en;q=0.9',
     },
@@ -111,98 +100,34 @@ async function fetchPage(url: string): Promise<JobPartial[]> {
   });
 
   if (!response.ok) {
-    throw new Error(`jobindex returned ${response.status} for ${url}`);
+    throw new Error(`[jobindex] HTTP ${response.status} for ${url}`);
   }
 
   const html = await response.text();
-  const root = parse(html);
+  const stash = extractStash(html);
+  const results = extractResults(stash);
 
-  // Try each listing selector in order — stop at the first one that yields results
-  let listings: ReturnType<typeof root.querySelectorAll> = [];
-  let matchedSelector = '';
-  for (const sel of LISTING_SELECTORS) {
-    const found = root.querySelectorAll(sel);
-    if (found.length > 0) {
-      listings = found;
-      matchedSelector = sel;
-      break;
-    }
-  }
+  console.log(`[jobindex] Found ${results.length} listings on ${url}`);
 
-  if (listings.length === 0) {
-    console.warn(
-      `[jobindex] No job listings found on ${url} — page structure may have changed. Tried: ${LISTING_SELECTORS.join(', ')}`,
-    );
-    // Dump the first 5000 chars of the HTML for debugging
-    try {
-      await Bun.write('/tmp/jobindex-debug.html', html.slice(0, 5000));
-      console.warn('[jobindex] Saved first 5000 chars to /tmp/jobindex-debug.html for debugging');
-    } catch {}
-    return [];
-  }
-
-  console.log(`[jobindex] Found ${listings.length} listings on ${url} (selector: "${matchedSelector}")`);
-
-  const jobs: JobPartial[] = [];
   const fetched_at = new Date().toISOString();
 
-  for (const listing of listings) {
-    try {
-      // Try each title selector in order
-      let anchor: ReturnType<typeof listing.querySelector> = null;
-      for (const sel of TITLE_SELECTORS) {
-        anchor = listing.querySelector(sel);
-        if (anchor) break;
-      }
-      // Last-resort: any anchor in the listing
-      if (!anchor) anchor = listing.querySelector('a');
-      if (!anchor) continue;
-
-      const title = anchor.text.trim();
-      const href = anchor.getAttribute('href') ?? '';
-      if (!href || !title) continue;
-
-      const jobUrl = resolveUrl(href);
-      const external_id = extractExternalId(href);
-
-      // Try each company selector in order
-      let companyEl: ReturnType<typeof listing.querySelector> = null;
-      for (const sel of COMPANY_SELECTORS) {
-        companyEl = listing.querySelector(sel);
-        if (companyEl) break;
-      }
-      const company = companyEl ? companyEl.text.trim() : '';
-
-      // Location info (best-effort)
-      const topinfoEl =
-        listing.querySelector('.jix_robotjob--topinfo') ??
-        listing.querySelector('.topinfo') ??
-        listing.querySelector('[class*="topinfo"]');
-      const location = topinfoEl ? topinfoEl.text.trim().split('\n')[0].trim() : null;
-
-      jobs.push({
-        source: 'jobindex',
-        external_id,
-        title,
-        company: company || 'Unknown',
-        location: location || null,
-        url: jobUrl,
-        description: null,
-        posted_at: null,
-        fetched_at,
-      });
-    } catch (itemErr) {
-      // Skip malformed individual listings without aborting the whole page
-      console.warn('[jobindex] Failed to parse a listing — skipping:', itemErr);
-    }
-  }
-
-  return jobs;
+  return results
+    .filter(r => r.tid && r.headline)
+    .map(r => ({
+      source: 'jobindex' as const,
+      external_id: r.tid,
+      title: r.headline!,
+      company: r.companytext || 'Unknown',
+      location: r.area || null,
+      url: r.share_url,
+      description: null,
+      posted_at: r.firstdate ? new Date(r.firstdate).toISOString() : null,
+      fetched_at,
+    }));
 }
 
 export async function fetchJobindex(): Promise<JobPartial[]> {
   const searchUrls = await loadJobindexSearchUrls();
-
   let allJobs: JobPartial[] = [];
 
   for (const url of searchUrls) {
@@ -210,7 +135,7 @@ export async function fetchJobindex(): Promise<JobPartial[]> {
       const jobs = await fetchPage(url);
       allJobs = allJobs.concat(jobs);
     } catch (err) {
-      console.error(`[jobindex] Failed to fetch ${url}:`, err);
+      console.error(`[jobindex] Failed to fetch ${url}:`, (err as Error).message);
     }
   }
 
@@ -225,6 +150,5 @@ export async function fetchJobindex(): Promise<JobPartial[]> {
   }
 
   console.log(`[jobindex] Fetch complete — ${unique.length} unique jobs from ${searchUrls.length} URL(s)`);
-
   return unique;
 }
