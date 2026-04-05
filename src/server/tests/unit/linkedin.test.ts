@@ -1,67 +1,65 @@
 import { describe, it, expect } from 'bun:test';
-import { parseRssItems, extractJobId, stripHtml } from '../../sources/linkedin';
+import { parseJobCards, extractJobId, stripHtml } from '../../sources/linkedin';
 
-const SAMPLE_RSS = `<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0">
-  <channel>
-    <title>LinkedIn Jobs</title>
-    <item>
-      <title><![CDATA[Acme Corp is hiring Senior Frontend Developer in Copenhagen]]></title>
-      <link>https://www.linkedin.com/jobs/view/1234567890/?trk=abc&currentJobId=1234567890</link>
-      <description><![CDATA[<p>We are looking for a <strong>Senior Frontend Developer</strong> to join our team.</p>]]></description>
-      <pubDate>Sat, 05 Apr 2026 10:00:00 +0000</pubDate>
-      <guid>https://www.linkedin.com/jobs/view/1234567890/</guid>
-    </item>
-    <item>
-      <title>Junior Developer at Beta Ltd</title>
-      <link>https://www.linkedin.com/jobs/view/9876543210/</link>
-      <description>Plain text description here.</description>
-      <pubDate>Fri, 04 Apr 2026 09:00:00 +0000</pubDate>
-      <guid>https://www.linkedin.com/jobs/view/9876543210/</guid>
-    </item>
-  </channel>
-</rss>`;
+// Minimal LinkedIn guest-API HTML card (matches the cardPattern regex in linkedin.ts)
+const SAMPLE_HTML = `
+<li>
+<div data-entity-urn="urn:li:jobPosting:1234567890" class="base-card">
+<h3 class="base-search-card__title">Senior Frontend Developer</h3>
+<a class="hidden-nested-link" href="#">Acme Corp</a>
+<span class="job-search-card__location">Copenhagen, Denmark</span>
+<time class="job-search-card__listdate" datetime="2026-04-05T10:00:00.000Z">1 day ago</time>
+<a class="base-card__full-link" href="https://dk.linkedin.com/jobs/view/1234567890/?trk=abc">View</a>
+</div>
+</li>
+<li>
+<div data-entity-urn="urn:li:jobPosting:9876543210" class="base-card">
+<h3 class="base-search-card__title">Backend Engineer</h3>
+<a class="hidden-nested-link" href="#">Beta Ltd</a>
+<span class="job-search-card__location">Remote</span>
+<a class="base-card__full-link" href="https://dk.linkedin.com/jobs/view/9876543210/">View</a>
+</div>
+</li>
+`;
 
-describe('parseRssItems', () => {
-  it('returns one item per <item> block', () => {
-    const items = parseRssItems(SAMPLE_RSS);
-    expect(items).toHaveLength(2);
+describe('parseJobCards', () => {
+  it('returns one result per job card', () => {
+    expect(parseJobCards(SAMPLE_HTML)).toHaveLength(2);
   });
 
-  it('extracts company from "Acme Corp is hiring …" title', () => {
-    const items = parseRssItems(SAMPLE_RSS);
-    expect(items[0].company).toBe('Acme Corp');
+  it('extracts job title', () => {
+    const jobs = parseJobCards(SAMPLE_HTML);
+    expect(jobs[0].title).toBe('Senior Frontend Developer');
   });
 
-  it('strips the "is hiring" prefix from the title', () => {
-    const items = parseRssItems(SAMPLE_RSS);
-    expect(items[0].title).toBe('Senior Frontend Developer in Copenhagen');
+  it('extracts company from hidden-nested-link', () => {
+    const jobs = parseJobCards(SAMPLE_HTML);
+    expect(jobs[0].company).toBe('Acme Corp');
   });
 
-  it('extracts company from "… at Beta Ltd" title', () => {
-    const items = parseRssItems(SAMPLE_RSS);
-    expect(items[1].company).toBe('Beta Ltd');
+  it('extracts location', () => {
+    const jobs = parseJobCards(SAMPLE_HTML);
+    expect(jobs[0].location).toBe('Copenhagen, Denmark');
   });
 
-  it('strips HTML from CDATA description', () => {
-    const items = parseRssItems(SAMPLE_RSS);
-    expect(items[0].description).not.toContain('<p>');
-    expect(items[0].description).toContain('Senior Frontend Developer');
+  it('extracts LinkedIn URL', () => {
+    const jobs = parseJobCards(SAMPLE_HTML);
+    expect(jobs[0].url).toContain('linkedin.com/jobs/view/1234567890');
   });
 
-  it('preserves plain text description', () => {
-    const items = parseRssItems(SAMPLE_RSS);
-    expect(items[1].description).toBe('Plain text description here.');
+  it('extracts postedAt from datetime attribute', () => {
+    const jobs = parseJobCards(SAMPLE_HTML);
+    expect(jobs[0].postedAt).toBe('2026-04-05T10:00:00.000Z');
   });
 
-  it('parses pubDate', () => {
-    const items = parseRssItems(SAMPLE_RSS);
-    expect(items[0].pubDate).toBe('Sat, 05 Apr 2026 10:00:00 +0000');
+  it('returns null postedAt when no time element', () => {
+    const jobs = parseJobCards(SAMPLE_HTML);
+    expect(jobs[1].postedAt).toBeNull();
   });
 
-  it('skips items with no link', () => {
-    const rss = `<rss><channel><item><title>No Link Job</title></item></channel></rss>`;
-    expect(parseRssItems(rss)).toHaveLength(0);
+  it('ignores cards without a URL', () => {
+    const html = `<div data-entity-urn="urn:li:jobPosting:111"><h3 class="base-search-card__title">No URL Job</h3></div>`;
+    expect(parseJobCards(html)).toHaveLength(0);
   });
 });
 
