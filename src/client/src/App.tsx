@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, NavLink, useLocation } from "re
 import { AnimatePresence, motion } from "framer-motion";
 import JobsView from "./views/JobsView";
 import KanbanView from "./views/KanbanView";
+import SettingsView from "./views/SettingsView";
 import { AppStatus } from "./types";
 import ToastContainer from "./components/Toast";
 import Logo from "./components/Logo";
@@ -48,6 +49,7 @@ function Nav({ status, onFetchNow, fetching }: NavProps) {
 
       <NavLink to="/jobs" className="nav-link shrink-0" style={navLinkStyle}>Jobs</NavLink>
       <NavLink to="/kanban" className="nav-link shrink-0" style={navLinkStyle}>Applications</NavLink>
+      <NavLink to="/settings" className="nav-link shrink-0" style={navLinkStyle}>Settings</NavLink>
 
       <div className="flex-1" />
 
@@ -127,6 +129,7 @@ function AnimatedRoutes({ jobsRefreshKey }: { jobsRefreshKey: number }) {
           <Route path="/" element={<Navigate to="/jobs" replace />} />
           <Route path="/jobs" element={<JobsView refreshKey={jobsRefreshKey} />} />
           <Route path="/kanban" element={<KanbanView refreshKey={jobsRefreshKey} />} />
+          <Route path="/settings" element={<SettingsView />} />
         </Routes>
       </motion.div>
     </AnimatePresence>

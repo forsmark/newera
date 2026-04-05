@@ -6,6 +6,7 @@ import { join } from 'path';
 import jobsRoute from './routes/jobs';
 import kanbanRoute from './routes/kanban';
 import fetchRoute from './routes/fetch';
+import settingsRoute from './routes/settings';
 import { startScheduler, getLastFetchAt, getIsFetching } from './scheduler';
 import { checkOllamaHealth, getOllamaAvailable } from './llm';
 import { DATA_DIR } from './config';
@@ -17,6 +18,7 @@ const app = new Hono();
 app.route('/api/jobs', jobsRoute);
 app.route('/api/kanban', kanbanRoute);
 app.route('/api/fetch', fetchRoute);
+app.route('/api/settings', settingsRoute);
 
 // GET /api/status
 app.get('/api/status', (c) => {

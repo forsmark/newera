@@ -1,4 +1,6 @@
-// Runs before every test file. Makes db.ts open an in-memory SQLite database
-// instead of writing to disk. Each test file gets a fresh module registry
-// (bun test isolates files), so each file gets its own clean in-memory DB.
+import { mkdtempSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
+
 process.env.DB_PATH = ':memory:';
+process.env.DATA_DIR = mkdtempSync(join(tmpdir(), 'new-era-test-'));
