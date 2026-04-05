@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import db from '../db';
 import type { Job } from '../types';
-import { analyzeJob } from '../llm';
+import { analyzeJob, extractJobDescription } from '../llm';
 import { analyzeUnscoredJobs } from '../scheduler';
 import { fetchPageText } from '../utils/fetchPageText';
 
@@ -180,15 +180,27 @@ app.post('/:id/analyze', async (c) => {
   // Reset scores so frontend polling picks it up as pending
   db.run('UPDATE jobs SET match_score = NULL, match_reasoning = NULL, match_summary = NULL, tags = NULL WHERE id = ?', [id]);
 
-  // Fire-and-forget re-analysis
-  const freshJob = db.query('SELECT * FROM jobs WHERE id = ?').get(id) as Job;
-  analyzeJob(freshJob).then((result) => {
+  // Fire-and-forget: re-fetch description if missing, then re-analyse
+  (async () => {
+    let freshJob = db.query('SELECT * FROM jobs WHERE id = ?').get(id) as Job;
+
+    if (!freshJob.description && freshJob.url) {
+      console.log(`[jobs] Re-fetching description for job ${id} (was null)`);
+      const pageText = await fetchPageText(freshJob.url);
+      if (pageText) {
+        const description = await extractJobDescription(pageText) ?? pageText.slice(0, 8000);
+        db.run('UPDATE jobs SET description = ? WHERE id = ?', [description, id]);
+        freshJob = db.query('SELECT * FROM jobs WHERE id = ?').get(id) as Job;
+      }
+    }
+
+    const result = await analyzeJob(freshJob);
     if (result) {
       db.run('UPDATE jobs SET match_score = ?, match_reasoning = ?, match_summary = ?, tags = ? WHERE id = ?', [
         result.match_score, result.match_reasoning, result.match_summary, JSON.stringify(result.tags), id,
       ]);
     }
-  }).catch(console.error);
+  })().catch(console.error);
 
   return c.json({ message: 'Re-analysis queued' }, 202);
 });
