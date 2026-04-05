@@ -1,7 +1,6 @@
-import { join } from 'path';
 import { parse } from 'node-html-parser';
 import type { Job } from '../types';
-import { DATA_DIR } from '../config';
+import { getPreferences } from '../routes/settings';
 
 type JobPartial = Omit<Job, 'id' | 'match_score' | 'match_reasoning' | 'match_summary' | 'tags' | 'status' | 'seen_at'>;
 
@@ -139,21 +138,14 @@ const DEFAULT_KEYWORDS = ['frontend developer', 'web developer'];
 const PAGE_SIZE = 25;
 const MAX_PAGES = 4; // up to 100 jobs per keyword
 
-async function loadKeywords(): Promise<string[]> {
-  try {
-    const text = await Bun.file(join(DATA_DIR, 'preferences.md')).text();
-    const match = text.match(/##\s+Search(?:\s+[Tt]erms|\s+[Qq]ueries)?\s*\n((?:\s*[-*]\s*.+\n?)+)/);
-    if (!match) return DEFAULT_KEYWORDS;
-    const lines = match[1]
-      .split('\n')
-      .map(l => l.replace(/^\s*[-*]\s*/, '').trim())
-      // Strip any trailing location suffix — geo filter handles location
-      .map(l => l.replace(/\s+(Copenhagen|København|Denmark|Danmark).*$/i, '').trim())
-      .filter(l => l.length > 0);
-    return lines.length > 0 ? lines : DEFAULT_KEYWORDS;
-  } catch {
-    return DEFAULT_KEYWORDS;
-  }
+function loadKeywords(): string[] {
+  const prefs = getPreferences();
+  if (!prefs.linkedinSearchTerms) return DEFAULT_KEYWORDS;
+  const lines = prefs.linkedinSearchTerms
+    .split('\n')
+    .map(l => l.trim())
+    .filter(l => l.length > 0);
+  return lines.length > 0 ? lines : DEFAULT_KEYWORDS;
 }
 
 async function fetchOnePage(keywords: string, start: number): Promise<ParsedJob[]> {
@@ -204,7 +196,7 @@ async function fetchJobs(keywords: string): Promise<JobPartial[]> {
 }
 
 export async function fetchLinkedIn(): Promise<JobPartial[]> {
-  const keywords = await loadKeywords();
+  const keywords = loadKeywords();
   let allJobs: JobPartial[] = [];
 
   for (const kw of keywords) {

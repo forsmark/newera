@@ -1,9 +1,18 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "../components/Toast";
 
-interface SettingsData {
-  resume: string;
-  preferences: string;
+interface Preferences {
+  location: string;
+  commutableLocations: string;
+  remote: 'any' | 'onsite' | 'hybrid' | 'remote';
+  seniority: 'any' | 'junior' | 'mid' | 'senior' | 'lead';
+  minSalaryDkk: number | null;
+  techInterests: string;
+  techAvoid: string;
+  companyBlacklist: string;
+  linkedinSearchTerms: string;
+  jobindexSearchTerms: string;
+  notes: string;
 }
 
 interface SystemInfo {
@@ -11,90 +20,147 @@ interface SystemInfo {
   unscored_jobs: number;
 }
 
-interface EditorProps {
-  label: string;
-  filename: string;
-  value: string;
-  onChange: (v: string) => void;
-  onSave: () => void;
-  saving: boolean;
-  dirty: boolean;
-  height: string;
+const EMPTY_PREFS: Preferences = {
+  location: '',
+  commutableLocations: '',
+  remote: 'any',
+  seniority: 'any',
+  minSalaryDkk: null,
+  techInterests: '',
+  techAvoid: '',
+  companyBlacklist: '',
+  linkedinSearchTerms: '',
+  jobindexSearchTerms: '',
+  notes: '',
+};
+
+const inputClass = "w-full bg-surface-deep text-text text-sm border border-border rounded-sm px-3 py-2 outline-none focus:border-accent";
+const labelClass = "text-[0.75rem] font-medium text-text-3 block mb-1";
+const sectionHeadingClass = "text-text font-semibold text-sm mb-3";
+
+function SectionCard({ children, title }: { children: React.ReactNode; title: string }) {
+  return (
+    <div className="bg-surface rounded border border-border p-4 flex flex-col gap-4">
+      <h2 className={sectionHeadingClass}>{title}</h2>
+      {children}
+    </div>
+  );
 }
 
-function FileEditor({ label, filename, value, onChange, onSave, saving, dirty, height }: EditorProps) {
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="bg-surface rounded border border-border p-4 flex flex-col gap-3">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-text font-semibold text-sm">{label}</h2>
-          <p className="text-text-3 text-xs mt-0.5">{filename}</p>
-        </div>
-        <button
-          onClick={onSave}
-          disabled={!dirty || saving}
-          className={[
-            "px-4 py-1.5 text-[0.8125rem] font-medium rounded-sm border border-border",
-            dirty && !saving
-              ? "bg-surface-raised text-text-2 cursor-pointer btn-ghost"
-              : "bg-transparent text-text-3 cursor-not-allowed",
-          ].join(" ")}
-        >
-          {saving ? "Saving…" : "Save"}
-        </button>
-      </div>
-      <textarea
-        aria-label={label}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        style={{ height, resize: "vertical" }}
-        className="w-full bg-surface-deep text-text text-xs font-mono border border-border rounded-sm p-3 outline-none focus:border-accent"
-      />
+    <div>
+      <label className={labelClass}>{label}</label>
+      {children}
     </div>
   );
 }
 
 export default function SettingsView() {
-  const [original, setOriginal] = useState<SettingsData>({ resume: "", preferences: "" });
-  const [current, setCurrent] = useState<SettingsData>({ resume: "", preferences: "" });
-  const [saving, setSaving] = useState({ resume: false, preferences: false });
+  const [prefs, setPrefs] = useState<Preferences>(EMPTY_PREFS);
+  const [savedPrefs, setSavedPrefs] = useState<Preferences>(EMPTY_PREFS);
+  const [savingPrefs, setSavingPrefs] = useState(false);
+
+  const [resume, setResume] = useState('');
+  const [savedResume, setSavedResume] = useState('');
+  const [savingResume, setSavingResume] = useState(false);
+
+  const [ingestText, setIngestText] = useState('');
+  const [ingestResult, setIngestResult] = useState('');
+  const [ingesting, setIngesting] = useState(false);
+
   const [system, setSystem] = useState<SystemInfo | null>(null);
   const [rescoring, setRescoring] = useState(false);
 
+  const prefsDirty = JSON.stringify(prefs) !== JSON.stringify(savedPrefs);
+  const resumeDirty = resume !== savedResume;
+
   useEffect(() => {
     fetch("/api/settings")
-      .then((r) => r.json())
-      .then((data: SettingsData) => {
-        setOriginal(data);
-        setCurrent(data);
+      .then(r => r.json())
+      .then((data: { preferences: Preferences; resume: string }) => {
+        const p = { ...EMPTY_PREFS, ...data.preferences };
+        setPrefs(p);
+        setSavedPrefs(p);
+        setResume(data.resume ?? '');
+        setSavedResume(data.resume ?? '');
       })
       .catch(() => toast("Failed to load settings"));
 
     fetch("/api/status")
-      .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
-      .then((data) => setSystem({
-        ollama_available: data.ollama_available ?? null,
-        unscored_jobs: data.unscored_jobs ?? 0,
-      }))
+      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+      .then(d => setSystem({ ollama_available: d.ollama_available ?? null, unscored_jobs: d.unscored_jobs ?? 0 }))
       .catch(() => {});
   }, []);
 
-  async function save(key: "resume" | "preferences") {
-    setSaving((s) => ({ ...s, [key]: true }));
+  function updatePref<K extends keyof Preferences>(key: K, value: Preferences[K]) {
+    setPrefs(p => ({ ...p, [key]: value }));
+  }
+
+  async function savePrefs() {
+    setSavingPrefs(true);
     try {
-      const res = await fetch(`/api/settings/${key}`, {
+      const res = await fetch("/api/settings/preferences", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: current[key] }),
+        body: JSON.stringify(prefs),
       });
       if (!res.ok) throw new Error();
-      setOriginal((o) => ({ ...o, [key]: current[key] }));
-      toast(key === "resume" ? "Resume saved" : "Preferences saved", "info");
+      setSavedPrefs({ ...prefs });
+      toast("Preferences saved", "info");
     } catch {
-      toast(`Failed to save ${key}`);
+      toast("Failed to save preferences");
     } finally {
-      setSaving((s) => ({ ...s, [key]: false }));
+      setSavingPrefs(false);
     }
+  }
+
+  async function saveResume() {
+    setSavingResume(true);
+    try {
+      const res = await fetch("/api/settings/resume", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: resume }),
+      });
+      if (!res.ok) throw new Error();
+      setSavedResume(resume);
+      toast("Resume saved", "info");
+    } catch {
+      toast("Failed to save resume");
+    } finally {
+      setSavingResume(false);
+    }
+  }
+
+  async function ingestResume() {
+    if (ingestText.trim().length < 50) {
+      toast("Paste at least 50 characters of CV text");
+      return;
+    }
+    setIngesting(true);
+    setIngestResult('');
+    try {
+      const res = await fetch("/api/settings/resume/ingest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rawText: ingestText }),
+      });
+      if (!res.ok) throw new Error((await res.json() as { error?: string }).error ?? 'Failed');
+      const data = await res.json() as { parsed: string };
+      setIngestResult(data.parsed);
+    } catch (err) {
+      toast((err as Error).message || "Ingest failed — is Ollama running?");
+    } finally {
+      setIngesting(false);
+    }
+  }
+
+  function useIngestResult() {
+    setResume(ingestResult);
+    setIngestText('');
+    setIngestResult('');
+    toast("Parsed resume loaded — review and save", "info");
   }
 
   async function rescore() {
@@ -111,41 +177,194 @@ export default function SettingsView() {
     }
   }
 
+  const saveBtn = (dirty: boolean, saving: boolean, onClick: () => void) => (
+    <button
+      onClick={onClick}
+      disabled={!dirty || saving}
+      className={[
+        "px-4 py-1.5 text-[0.8125rem] font-medium rounded-sm border border-border",
+        dirty && !saving
+          ? "bg-surface-raised text-text-2 cursor-pointer btn-ghost"
+          : "bg-transparent text-text-3 cursor-not-allowed",
+      ].join(" ")}
+    >
+      {saving ? "Saving…" : "Save"}
+    </button>
+  );
+
   return (
     <div className="max-w-[800px] mx-auto px-4 py-6 flex flex-col gap-6">
       <h1 className="text-text font-semibold text-base">Settings</h1>
 
-      <FileEditor
-        label="Resume"
-        filename="data/resume.md"
-        value={current.resume}
-        onChange={(v) => setCurrent((c) => ({ ...c, resume: v }))}
-        onSave={() => save("resume")}
-        saving={saving.resume}
-        dirty={current.resume !== original.resume}
-        height="400px"
-      />
+      {/* Preferences */}
+      <div className="bg-surface rounded border border-border p-4 flex flex-col gap-5">
+        <div className="flex items-center justify-between">
+          <h2 className={sectionHeadingClass} style={{ marginBottom: 0 }}>Preferences</h2>
+          {saveBtn(prefsDirty, savingPrefs, savePrefs)}
+        </div>
 
-      <FileEditor
-        label="Preferences"
-        filename="data/preferences.md"
-        value={current.preferences}
-        onChange={(v) => setCurrent((c) => ({ ...c, preferences: v }))}
-        onSave={() => save("preferences")}
-        saving={saving.preferences}
-        dirty={current.preferences !== original.preferences}
-        height="300px"
-      />
+        {/* Location */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field label="Preferred location">
+            <input className={inputClass} value={prefs.location}
+              onChange={e => updatePref('location', e.target.value)}
+              placeholder="Copenhagen / Greater Copenhagen" />
+          </Field>
+          <Field label="Also commutable to">
+            <input className={inputClass} value={prefs.commutableLocations}
+              onChange={e => updatePref('commutableLocations', e.target.value)}
+              placeholder="Malmö, Sweden" />
+          </Field>
+        </div>
 
+        {/* Role */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <Field label="Work style">
+            <select className={inputClass} value={prefs.remote}
+              onChange={e => updatePref('remote', e.target.value as Preferences['remote'])}>
+              <option value="any">Any</option>
+              <option value="onsite">On-site</option>
+              <option value="hybrid">Hybrid</option>
+              <option value="remote">Remote</option>
+            </select>
+          </Field>
+          <Field label="Seniority">
+            <select className={inputClass} value={prefs.seniority}
+              onChange={e => updatePref('seniority', e.target.value as Preferences['seniority'])}>
+              <option value="any">Any</option>
+              <option value="junior">Junior</option>
+              <option value="mid">Mid-level</option>
+              <option value="senior">Senior</option>
+              <option value="lead">Lead / Principal</option>
+            </select>
+          </Field>
+          <Field label="Min salary (DKK/month)">
+            <input type="number" className={inputClass}
+              value={prefs.minSalaryDkk ?? ''}
+              onChange={e => updatePref('minSalaryDkk', e.target.value ? Number(e.target.value) : null)}
+              placeholder="e.g. 55000" min={0} step={1000} />
+          </Field>
+        </div>
+
+        {/* Tech stack */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field label="Tech interests (comma-separated)">
+            <input className={inputClass} value={prefs.techInterests}
+              onChange={e => updatePref('techInterests', e.target.value)}
+              placeholder="React, TypeScript, Node.js" />
+          </Field>
+          <Field label="Tech to avoid (comma-separated)">
+            <input className={inputClass} value={prefs.techAvoid}
+              onChange={e => updatePref('techAvoid', e.target.value)}
+              placeholder="PHP, WordPress, Salesforce" />
+          </Field>
+        </div>
+
+        {/* Search terms */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field label="LinkedIn search terms (one per line)">
+            <textarea className={inputClass} style={{ height: '80px', resize: 'vertical' }}
+              value={prefs.linkedinSearchTerms}
+              onChange={e => updatePref('linkedinSearchTerms', e.target.value)}
+              placeholder={"frontend developer\nweb developer"} />
+          </Field>
+          <Field label="Jobindex search terms (one per line)">
+            <textarea className={inputClass} style={{ height: '80px', resize: 'vertical' }}
+              value={prefs.jobindexSearchTerms}
+              onChange={e => updatePref('jobindexSearchTerms', e.target.value)}
+              placeholder={"frontend udvikler\nwebudvikler"} />
+          </Field>
+        </div>
+
+        {/* Blacklist + notes */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field label="Company blacklist (one per line)">
+            <textarea className={inputClass} style={{ height: '80px', resize: 'vertical' }}
+              value={prefs.companyBlacklist}
+              onChange={e => updatePref('companyBlacklist', e.target.value)}
+              placeholder={"Company A\nCompany B"} />
+          </Field>
+          <Field label="Additional notes">
+            <textarea className={inputClass} style={{ height: '80px', resize: 'vertical' }}
+              value={prefs.notes}
+              onChange={e => updatePref('notes', e.target.value)}
+              placeholder="Looking for product companies, not consulting" />
+          </Field>
+        </div>
+      </div>
+
+      {/* Resume */}
+      <div className="bg-surface rounded border border-border p-4 flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <h2 className={sectionHeadingClass} style={{ marginBottom: 0 }}>Resume</h2>
+          {saveBtn(resumeDirty, savingResume, saveResume)}
+        </div>
+        <textarea
+          aria-label="Resume"
+          value={resume}
+          onChange={e => setResume(e.target.value)}
+          style={{ height: '260px', resize: 'vertical' }}
+          className={inputClass + " font-mono text-xs"}
+          placeholder="Paste your resume in markdown, or use 'Ingest resume' below to parse it from raw text…"
+        />
+
+        {/* Ingest section */}
+        <div className="border-t border-border pt-4 flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <p className="text-[0.8125rem] text-text-2 font-medium">Ingest resume</p>
+            <p className="text-[0.75rem] text-text-3">Paste raw CV text — AI will clean and structure it</p>
+          </div>
+          <textarea
+            value={ingestText}
+            onChange={e => setIngestText(e.target.value)}
+            style={{ height: '120px', resize: 'vertical' }}
+            className={inputClass + " text-xs"}
+            placeholder="Paste raw CV text here (copied from PDF, Word, LinkedIn, etc.)…"
+          />
+          <button
+            onClick={ingestResume}
+            disabled={ingesting || ingestText.trim().length < 50}
+            className={[
+              "w-fit px-4 py-1.5 text-[0.8125rem] font-medium rounded-sm border",
+              ingesting || ingestText.trim().length < 50
+                ? "bg-transparent text-text-3 border-border cursor-not-allowed"
+                : "bg-surface-raised text-text-2 border-border cursor-pointer btn-ghost",
+            ].join(" ")}
+          >
+            {ingesting ? "Parsing…" : "Parse with AI"}
+          </button>
+
+          {ingestResult && (
+            <div className="flex flex-col gap-2">
+              <p className="text-[0.75rem] text-text-3">Preview — looks right?</p>
+              <pre className="bg-surface-deep border border-border rounded-sm p-3 text-xs text-text-2 overflow-auto max-h-[200px] whitespace-pre-wrap">{ingestResult}</pre>
+              <div className="flex gap-2">
+                <button
+                  onClick={useIngestResult}
+                  className="px-4 py-1.5 text-[0.8125rem] font-medium rounded-sm border border-border-accent bg-accent-bg text-accent cursor-pointer"
+                >
+                  Use this
+                </button>
+                <button
+                  onClick={() => setIngestResult('')}
+                  className="px-4 py-1.5 text-[0.8125rem] font-medium rounded-sm border border-border text-text-3 bg-transparent cursor-pointer btn-ghost"
+                >
+                  Discard
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* System */}
       <div className="bg-surface rounded border border-border p-4 flex flex-col gap-3">
-        <h2 className="text-text font-semibold text-sm">System</h2>
+        <h2 className={sectionHeadingClass}>System</h2>
         {system && (
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-2 text-xs">
               <span className={`w-2 h-2 rounded-full shrink-0 ${system.ollama_available ? "bg-green" : "bg-red"}`} />
-              <span className="text-text-2">
-                Ollama {system.ollama_available ? "Connected" : "Unavailable"}
-              </span>
+              <span className="text-text-2">Ollama {system.ollama_available ? "Connected" : "Unavailable"}</span>
             </div>
             <p className="text-xs text-text-3">
               {system.unscored_jobs > 0

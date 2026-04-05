@@ -1,0 +1,41 @@
+- generic [ref=e2]:
+  - navigation [ref=e3]:
+    - generic [ref=e5]:
+      - img [ref=e6]
+      - generic [ref=e10]: New Era
+    - link "Jobs" [ref=e11] [cursor=pointer]:
+      - /url: /jobs
+    - link "Kanban" [ref=e12] [cursor=pointer]:
+      - /url: /kanban
+    - generic [ref=e13]:
+      - generic "29 strong matches" [ref=e14]: 29●
+      - generic "4 partial matches" [ref=e15]: 4●
+      - generic "32 weak matches" [ref=e16]: 32●
+    - generic [ref=e17]: never
+    - button "Fetching…" [disabled] [ref=e19]
+  - generic [ref=e21]:
+    - generic [ref=e22]:
+      - generic [ref=e23]:
+        - textbox "Search jobs…" [ref=e24]
+        - generic [ref=e25]:
+          - combobox [ref=e26] [cursor=pointer]:
+            - option "Any time" [selected]
+            - option "7 days"
+            - option "30 days"
+          - combobox [ref=e27] [cursor=pointer]:
+            - option "↓ Score" [selected]
+            - option "↓ Posted"
+            - option "↓ Fetched"
+          - button "⊞" [ref=e28] [cursor=pointer]
+          - button "?" [ref=e29] [cursor=pointer]
+      - generic [ref=e30]:
+        - generic [ref=e31]:
+          - button "All" [ref=e32] [cursor=pointer]
+          - button "Unread" [ref=e33] [cursor=pointer]
+          - button "New" [ref=e34] [cursor=pointer]
+          - button "Saved" [ref=e35] [cursor=pointer]
+          - button "Applied" [ref=e36] [cursor=pointer]
+        - generic [ref=e37] [cursor=pointer]:
+          - checkbox "Show rejected" [ref=e38]
+          - text: Show rejected
+    - generic [ref=e39]: Loading…

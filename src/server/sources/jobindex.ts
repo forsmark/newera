@@ -1,8 +1,7 @@
-import { join } from 'path';
 import { parse } from 'node-html-parser';
 import type { Job } from '../types';
-import { DATA_DIR } from '../config';
 import { fetchPageText } from '../utils/fetchPageText';
+import { getPreferences } from '../routes/settings';
 
 type JobPartial = Omit<Job, 'id' | 'match_score' | 'match_reasoning' | 'match_summary' | 'tags' | 'status' | 'seen_at'>;
 
@@ -26,44 +25,33 @@ const AREA_MAP: [RegExp, string][] = [
 ];
 const DEFAULT_AREA = 'storkoebenhavn';
 
-async function loadJobindexSearch(): Promise<{ urls: string[]; area: string }> {
+function loadJobindexSearch(): { urls: string[]; area: string } {
+  const prefs = getPreferences();
   let area = DEFAULT_AREA;
-  try {
-    const text = await Bun.file(join(DATA_DIR, 'preferences.md')).text();
 
-    // Resolve area from ## Location section
-    const areaMatch = text.match(/##\s+Location\s*\n((?:.+\n?){1,5})/i);
-    if (areaMatch) {
-      for (const [pattern, code] of AREA_MAP) {
-        if (pattern.test(areaMatch[1])) { area = code; break; }
-      }
+  // Resolve area from location preference
+  if (prefs.location) {
+    for (const [pattern, code] of AREA_MAP) {
+      if (pattern.test(prefs.location)) { area = code; break; }
     }
-
-    // Resolve search terms from ## Jobindex Search Terms section
-    const termsMatch = text.match(/##\s+Jobindex\s+Search\s+Terms\s*\n((?:\s*[-*]\s*.+\n?)+)/i);
-    if (termsMatch) {
-      const terms = termsMatch[1]
-        .split('\n')
-        .map(l => l.replace(/^\s*[-*]\s*/, '').trim())
-        .filter(l => l.length > 0);
-      if (terms.length > 0) {
-        return {
-          urls: terms.map(
-            term => `https://www.jobindex.dk/jobsoegning?q=${encodeURIComponent(term)}&superjob=1&area=${area}`,
-          ),
-          area,
-        };
-      }
-    }
-  } catch {
-    // preferences.md not found — fall through to defaults
   }
 
+  const DEFAULT_URLS = [
+    `https://www.jobindex.dk/jobsoegning?q=${encodeURIComponent('frontend udvikler')}&superjob=1&area=${area}`,
+    `https://www.jobindex.dk/jobsoegning?q=${encodeURIComponent('webudvikler')}&superjob=1&area=${area}`,
+  ];
+
+  if (!prefs.jobindexSearchTerms) return { urls: DEFAULT_URLS, area };
+
+  const terms = prefs.jobindexSearchTerms
+    .split('\n')
+    .map(l => l.trim())
+    .filter(l => l.length > 0);
+
   return {
-    urls: [
-      `https://www.jobindex.dk/jobsoegning?q=${encodeURIComponent('frontend udvikler')}&superjob=1&area=${area}`,
-      `https://www.jobindex.dk/jobsoegning?q=${encodeURIComponent('webudvikler')}&superjob=1&area=${area}`,
-    ],
+    urls: terms.length > 0
+      ? terms.map(term => `https://www.jobindex.dk/jobsoegning?q=${encodeURIComponent(term)}&superjob=1&area=${area}`)
+      : DEFAULT_URLS,
     area,
   };
 }
@@ -243,7 +231,7 @@ async function fetchPage(url: string, targetArea: string): Promise<JobPartial[]>
 }
 
 export async function fetchJobindex(): Promise<JobPartial[]> {
-  const { urls, area } = await loadJobindexSearch();
+  const { urls, area } = loadJobindexSearch();
   let allJobs: JobPartial[] = [];
 
   for (const url of urls) {

@@ -1,15 +1,12 @@
 import { Hono } from 'hono';
 import { serveStatic } from 'hono/bun';
 import { resolve } from 'path';
-import { existsSync } from 'fs';
-import { join } from 'path';
 import jobsRoute from './routes/jobs';
 import kanbanRoute from './routes/kanban';
 import fetchRoute from './routes/fetch';
-import settingsRoute from './routes/settings';
+import settingsRoute, { getResume, getPreferences } from './routes/settings';
 import { startScheduler, getLastFetchAt, getIsFetching } from './scheduler';
 import { checkOllamaHealth, getOllamaAvailable } from './llm';
-import { DATA_DIR } from './config';
 import db from './db';
 
 const app = new Hono();
@@ -41,8 +38,8 @@ app.get('/api/status', (c) => {
     score_distribution: scoreDist,
     ollama_available: getOllamaAvailable(),
     data_files: {
-      resume: existsSync(join(DATA_DIR, 'resume.md')),
-      preferences: existsSync(join(DATA_DIR, 'preferences.md')),
+      resume: getResume().length > 0,
+      preferences: Object.values(getPreferences()).some(v => v !== '' && v !== null && v !== 'any'),
     },
   });
 });

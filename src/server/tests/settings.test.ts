@@ -1,66 +1,79 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
-import { writeFileSync, readFileSync, rmSync } from 'fs';
-import { join } from 'path';
 import app from '../routes/settings';
 import db from '../db';
 
-const dataDir = process.env.DATA_DIR!;
-
-function cleanFiles() {
-  try { rmSync(join(dataDir, 'resume.md')); } catch { /* ignore if absent */ }
-  try { rmSync(join(dataDir, 'preferences.md')); } catch { /* ignore if absent */ }
+function clearSettings() {
+  db.run('DELETE FROM settings');
 }
 
 describe('GET /', () => {
-  beforeEach(cleanFiles);
+  beforeEach(clearSettings);
 
-  it('returns empty strings when files do not exist', async () => {
+  it('returns default preferences and empty resume when nothing set', async () => {
     const res = await app.request('/');
     expect(res.status).toBe(200);
-    const data = await res.json() as { resume: string; preferences: string };
+    const data = await res.json() as { resume: string; preferences: Record<string, unknown> };
     expect(data.resume).toBe('');
-    expect(data.preferences).toBe('');
-  });
-
-  it('returns file contents when files exist', async () => {
-    writeFileSync(join(dataDir, 'resume.md'), '# My Resume');
-    writeFileSync(join(dataDir, 'preferences.md'), '## Preferences');
-    const res = await app.request('/');
-    const data = await res.json() as { resume: string; preferences: string };
-    expect(data.resume).toBe('# My Resume');
-    expect(data.preferences).toBe('## Preferences');
+    expect(data.preferences.remote).toBe('any');
+    expect(data.preferences.seniority).toBe('any');
   });
 });
 
 describe('PUT /resume', () => {
-  beforeEach(cleanFiles);
+  beforeEach(clearSettings);
 
-  it('writes content to resume.md and returns ok', async () => {
+  it('stores resume in DB and returns ok', async () => {
     const res = await app.request('/resume', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: '# New Resume' }),
+      body: JSON.stringify({ content: '# My Resume' }),
     });
     expect(res.status).toBe(200);
-    const data = await res.json() as { ok: boolean };
-    expect(data.ok).toBe(true);
-    expect(readFileSync(join(dataDir, 'resume.md'), 'utf8')).toBe('# New Resume');
+    expect((await res.json() as { ok: boolean }).ok).toBe(true);
+
+    // Verify via GET
+    const get = await app.request('/');
+    const data = await get.json() as { resume: string };
+    expect(data.resume).toBe('# My Resume');
+  });
+
+  it('returns 400 when content is missing', async () => {
+    const res = await app.request('/resume', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(400);
   });
 });
 
 describe('PUT /preferences', () => {
-  beforeEach(cleanFiles);
+  beforeEach(clearSettings);
 
-  it('writes content to preferences.md and returns ok', async () => {
+  it('merges preferences into DB', async () => {
     const res = await app.request('/preferences', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: '## New Prefs' }),
+      body: JSON.stringify({ location: 'Copenhagen', remote: 'hybrid', seniority: 'senior' }),
     });
     expect(res.status).toBe(200);
-    const data = await res.json() as { ok: boolean };
-    expect(data.ok).toBe(true);
-    expect(readFileSync(join(dataDir, 'preferences.md'), 'utf8')).toBe('## New Prefs');
+
+    const get = await app.request('/');
+    const data = await get.json() as { preferences: Record<string, unknown> };
+    expect(data.preferences.location).toBe('Copenhagen');
+    expect(data.preferences.remote).toBe('hybrid');
+    expect(data.preferences.seniority).toBe('senior');
+    // Other fields should still have defaults
+    expect(data.preferences.techInterests).toBe('');
+  });
+
+  it('returns 400 for invalid body', async () => {
+    const res = await app.request('/preferences', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: 'not json',
+    });
+    expect(res.status).toBe(400);
   });
 });
 
@@ -78,12 +91,11 @@ describe('POST /rescore', () => {
     const res = await app.request('/rescore', { method: 'POST' });
     expect(res.status).toBe(200);
     const data = await res.json() as { queued: number };
-    expect(data.queued).toBe(1); // only non-rejected
+    expect(data.queued).toBe(1);
 
     const j1 = db.query('SELECT match_score FROM jobs WHERE id = ?').get('j1') as { match_score: number | null };
     expect(j1.match_score).toBeNull();
-
     const j2 = db.query('SELECT match_score FROM jobs WHERE id = ?').get('j2') as { match_score: number | null };
-    expect(j2.match_score).toBe(70); // rejected job unchanged
+    expect(j2.match_score).toBe(70);
   });
 });

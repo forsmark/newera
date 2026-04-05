@@ -38,6 +38,7 @@ export default function JobsView({ refreshKey, isFetching }: Props) {
   const [totalJobs, setTotalJobs] = useState(0);
   const [offset, setOffset] = useState(0);
   const [showRejected, setShowRejected] = useState(false);
+  const [hideWeakMatches, setHideWeakMatches] = useState(true);
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [postedWithin, setPostedWithin] = useState<PostedWithin>(() =>
@@ -194,6 +195,7 @@ export default function JobsView({ refreshKey, isFetching }: Props) {
   const filtered = jobs
     .filter(j => {
       if (!showRejected && j.status === "rejected") return false;
+      if (hideWeakMatches && j.match_score !== null && j.match_score < 20) return false;
       if (filterStatus === "unread" && j.seen_at !== null) return false;
       if (filterStatus === "new" && j.status !== "new") return false;
       if (filterStatus === "saved" && j.status !== "saved") return false;
@@ -396,16 +398,28 @@ export default function JobsView({ refreshKey, isFetching }: Props) {
               </div>
             )}
 
-            {/* Show rejected */}
-            <label className="flex items-center gap-[0.375rem] text-[0.8125rem] text-text-3 cursor-pointer select-none sm:ml-auto">
-              <input
-                type="checkbox"
-                checked={showRejected}
-                onChange={e => setShowRejected(e.target.checked)}
-                className="checkbox-styled"
-              />
-              Show rejected
-            </label>
+            <div className="flex items-center gap-3 sm:ml-auto">
+              {/* Hide weak matches */}
+              <label className="flex items-center gap-[0.375rem] text-[0.8125rem] text-text-3 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={hideWeakMatches}
+                  onChange={e => setHideWeakMatches(e.target.checked)}
+                  className="checkbox-styled"
+                />
+                Hide &lt;20
+              </label>
+              {/* Show rejected */}
+              <label className="flex items-center gap-[0.375rem] text-[0.8125rem] text-text-3 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={showRejected}
+                  onChange={e => setShowRejected(e.target.checked)}
+                  className="checkbox-styled"
+                />
+                Show rejected
+              </label>
+            </div>
           </div>
         </div>
       </div>

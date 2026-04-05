@@ -1,7 +1,5 @@
-import { readFile } from 'fs/promises';
-import { join } from 'path';
-import type { Job } from './types';
-import { DATA_DIR, OLLAMA_BASE_URL } from './config';
+import type { Job, Preferences } from './types';
+import { OLLAMA_BASE_URL } from './config';
 
 const OLLAMA_URL = `${OLLAMA_BASE_URL}/api/generate`;
 const OLLAMA_HEALTH_URL = `${OLLAMA_BASE_URL}/api/tags`;
@@ -29,9 +27,6 @@ export async function checkOllamaHealth(): Promise<boolean> {
   return ollamaAvailable;
 }
 
-const RESUME_PATH = join(DATA_DIR, 'resume.md');
-const PREFERENCES_PATH = join(DATA_DIR, 'preferences.md');
-
 export interface AnalysisResult {
   match_score: number;      // 0–100
   match_reasoning: string;  // 1-2 sentence explanation of fit
@@ -39,14 +34,39 @@ export interface AnalysisResult {
   tags: string[];           // tech stack tags extracted from the job posting
 }
 
-function buildPrompt(resume: string, preferences: string, job: Job): string {
+function formatPreferences(p: Preferences): string {
+  const lines: string[] = [];
+  if (p.location) lines.push(`Preferred location: ${p.location}`);
+  if (p.commutableLocations) lines.push(`Also commutable to: ${p.commutableLocations}`);
+  if (p.remote && p.remote !== 'any') lines.push(`Work style: ${p.remote}`);
+  if (p.seniority && p.seniority !== 'any') lines.push(`Target seniority: ${p.seniority}`);
+  if (p.minSalaryDkk) lines.push(`Min salary: ${p.minSalaryDkk.toLocaleString('da-DK')} DKK/month`);
+  if (p.techInterests) lines.push(`Tech interests: ${p.techInterests}`);
+  if (p.techAvoid) lines.push(`Tech to avoid: ${p.techAvoid}`);
+  if (p.companyBlacklist) {
+    const list = p.companyBlacklist.split('\n').map(s => s.trim()).filter(Boolean).join(', ');
+    if (list) lines.push(`Blacklisted companies: ${list}`);
+  }
+  if (p.notes) lines.push(`Additional notes: ${p.notes}`);
+  return lines.length > 0 ? lines.join('\n') : 'No specific preferences set.';
+}
+
+function buildLocationRules(p: Preferences): string {
+  const primary = p.location || 'Copenhagen / Greater Copenhagen';
+  const commutable = p.commutableLocations
+    ? `${p.commutableLocations} = minor penalty (5–10 pts — commutable).`
+    : 'Malmö, Sweden = minor penalty (5–10 pts — short train commute).';
+  return `- ${primary} = no penalty.\n- ${commutable}\n- Elsewhere in Denmark (Jutland, Funen, Aarhus, Odense, etc.) = subtract 25–35 points.\n- Outside Denmark = subtract 40+ points unless fully remote.`;
+}
+
+function buildPrompt(resume: string, preferences: Preferences, job: Job): string {
   return `You are evaluating a job posting for a job seeker. Score how well this job matches the candidate's profile.
 
 ## Candidate Resume
-${resume}
+${resume || 'Not provided'}
 
 ## Candidate Preferences
-${preferences}
+${formatPreferences(preferences)}
 
 ## Job Posting
 Title: ${job.title}
@@ -55,15 +75,17 @@ Location: ${job.location ?? 'Not specified'}
 Description: ${job.description ?? 'Not provided'}
 
 ## Scoring rules
-- Location is a hard constraint. Copenhagen / Greater Copenhagen = no penalty. Anywhere else in Denmark (Jutland, Funen, Aarhus, Odense, etc.) = subtract 25–35 points. Outside Denmark = subtract 40+ points unless fully remote.
+- Location is a hard constraint:
+${buildLocationRules(preferences)}
 - Apply the location penalty first, then score skills and experience fit on the remainder.
+${preferences.companyBlacklist && preferences.companyBlacklist.includes(job.company) ? '- This company is on the candidate\'s blacklist — score must be 0.' : ''}
 
 ## Task
 Return ONLY a JSON object with this exact format (no markdown, no explanation):
 {"match_score": <0-100>, "match_reasoning": "<1-2 sentences on why this candidate is or isn't a fit>", "summary": "<2-3 sentence factual overview of what the role involves and who it's for>", "tags": ["<tech1>", "<tech2>"]}
 
 summary: factual description of the role — what the job is about, not an opinion on the candidate.
-match_reasoning: personalised assessment of fit for this specific candidate. If location is outside Copenhagen, say so explicitly.
+match_reasoning: personalised assessment of fit for this specific candidate. If location is outside the preferred area, say so explicitly.
 tags: up to 8 specific technologies, languages, frameworks, or tools mentioned in the job (e.g. "React", "TypeScript", "Node.js", "AWS"). Empty array if none identifiable.`;
 }
 
@@ -179,17 +201,46 @@ ${truncated}
   }
 }
 
-export async function analyzeJob(job: Job): Promise<AnalysisResult | null> {
-  let resume: string;
-  let preferences: string;
+/** Parse raw CV text into structured markdown. Returns null if LLM unavailable. */
+export async function parseResume(rawText: string): Promise<string | null> {
+  const truncated = rawText.length > 15_000 ? rawText.slice(0, 15_000) + '\n[truncated]' : rawText;
+  const prompt = `You are processing a CV/resume for a job matching system.
+Reformat the following CV into clean, structured markdown with clear sections (Summary, Work Experience, Skills, Education, etc.).
+Preserve all relevant professional information. Remove personal contact details (phone, email, home address).
+Return only the formatted markdown — no commentary, no preamble.
 
+CV text:
+${truncated}`;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
-    [resume, preferences] = await Promise.all([
-      readFile(RESUME_PATH, 'utf-8'),
-      readFile(PREFERENCES_PATH, 'utf-8'),
-    ]);
+    const response = await fetch(OLLAMA_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: MODEL, prompt, stream: false, think: false }),
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(`Ollama returned HTTP ${response.status}`);
+    const json = (await response.json()) as { response?: string };
+    const text = json.response?.trim();
+    return text && text.length > 50 ? text : null;
   } catch (err) {
-    console.warn('[llm] Could not read data files (resume.md / preferences.md):', err);
+    console.warn('[llm] parseResume failed:', (err as Error).message);
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function analyzeJob(job: Job): Promise<AnalysisResult | null> {
+  // Import here to avoid circular dependency (settings route → llm → settings route)
+  const { getResume, getPreferences } = await import('./routes/settings');
+  const resume = getResume();
+  const preferences = getPreferences();
+
+  if (!resume) {
+    console.warn('[llm] No resume set — skipping analysis for job', job.id);
     return null;
   }
 
