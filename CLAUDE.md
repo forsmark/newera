@@ -8,8 +8,7 @@ scores them with a local LLM, and tracks applications via a kanban board.
 - Backend: Hono (API + static file serving)
 - Frontend: React (Vite for dev, built assets served by Hono in prod)
 - Database: SQLite (Bun built-in)
-- Container: Single Docker container
-- LLM: Ollama — gemma4:26b (http://host.docker.internal:11434)
+- LLM: Ollama — gemma4:26b (http://localhost:11434)
 
 ## Project Structure
 ```
@@ -21,17 +20,16 @@ docs/         — design specs
 
 ## Running Locally
 ```
-docker compose up
+bun run dev
 ```
-App available at http://localhost:3000
+Server at http://localhost:3000, Vite dev server at http://localhost:5173
 
 ## Key Decisions
-- Single container, monolith architecture with SQLite
+- Monolith architecture with SQLite
 - Jobs deduplicated by source + external_id
 - LLM analysis is async — jobs appear immediately with a pending score, scores fill in after
-- data/ folder mounted as read-only volume into the container
 - JSearch API key in .env (JSEARCH_API_KEY)
-- Ollama runs on the host, accessed via host.docker.internal
+- Ollama runs locally at http://localhost:11434
 
 ## Data Files (user-provided, not committed)
 - `data/resume.md` — CV in markdown
