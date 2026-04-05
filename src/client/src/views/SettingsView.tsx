@@ -44,6 +44,7 @@ function FileEditor({ label, filename, value, onChange, onSave, saving, dirty, h
         </button>
       </div>
       <textarea
+        aria-label={label}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         style={{ height, resize: "vertical" }}
@@ -70,7 +71,7 @@ export default function SettingsView() {
       .catch(() => toast("Failed to load settings"));
 
     fetch("/api/status")
-      .then((r) => r.json())
+      .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
       .then((data) => setSystem({
         ollama_available: data.ollama_available ?? null,
         unscored_jobs: data.unscored_jobs ?? 0,
@@ -102,7 +103,7 @@ export default function SettingsView() {
       const res = await fetch("/api/settings/rescore", { method: "POST" });
       if (!res.ok) throw new Error();
       const data = await res.json() as { queued: number };
-      toast(`Re-scoring ${data.queued} jobs`, "info");
+      toast(`Re-scoring ${data.queued} job${data.queued === 1 ? "" : "s"}`, "info");
     } catch {
       toast("Failed to start re-score");
     } finally {

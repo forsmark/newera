@@ -99,6 +99,10 @@ describe('SettingsView', () => {
       const body = JSON.parse((putCall![1] as RequestInit).body as string);
       expect(body.content).toBe('# New Resume');
     });
+    // After the PUT call resolves, the save should reset dirty state → button disabled
+    await waitFor(() => {
+      expect(screen.getAllByRole('button', { name: 'Save' })[0]).toBeDisabled();
+    });
   });
 
   it('calls POST /api/settings/rescore when Re-score button clicked', async () => {
