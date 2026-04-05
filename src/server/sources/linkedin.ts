@@ -6,16 +6,13 @@ import { DATA_DIR } from '../config';
 type JobPartial = Omit<Job, 'id' | 'match_score' | 'match_reasoning' | 'match_summary' | 'tags' | 'status' | 'seen_at'>;
 
 // LinkedIn guest jobs API — no auth required, returns HTML job cards.
-// Filters sourced from: https://www.linkedin.com/jobs/search/?f_E=4&f_PP=102194656&f_WT=1%2C3&sortBy=R
 // geoId=102194656: Greater Copenhagen area
-// f_E=4:       Senior level
-// f_WT=1,3:    On-site + Hybrid
-// f_TPR=r86400: posted in last 24h
+// f_TPR=r604800: posted in last 7 days (was 24h — too few results)
+// No experience level filter (f_E removed) — LLM scoring handles seniority
+// No work type filter (f_WT removed) — LLM scoring handles remote/hybrid preference
 const LINKEDIN_GUEST_API = 'https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search';
 const LINKEDIN_JOB_API = 'https://www.linkedin.com/jobs-guest/jobs/api/jobPosting';
 const GEO_ID = '102194656'; // Greater Copenhagen
-const EXPERIENCE_LEVEL = '4';   // Senior
-const WORK_TYPES = '1,3';       // On-site + Hybrid
 
 const HEADERS = {
   'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
@@ -27,10 +24,8 @@ function buildSearchUrl(keywords: string, start = 0): string {
   const url = new URL(LINKEDIN_GUEST_API);
   url.searchParams.set('keywords', keywords);
   url.searchParams.set('geoId', GEO_ID);
-  url.searchParams.set('f_E', EXPERIENCE_LEVEL);
-  url.searchParams.set('f_WT', WORK_TYPES);
-  url.searchParams.set('f_TPR', 'r86400'); // last 24h
-  url.searchParams.set('sortBy', 'R');      // most recent
+  url.searchParams.set('f_TPR', 'r604800'); // last 7 days
+  url.searchParams.set('sortBy', 'R');       // most recent
   url.searchParams.set('start', String(start));
   return url.toString();
 }

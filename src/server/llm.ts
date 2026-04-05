@@ -54,12 +54,16 @@ Company: ${job.company}
 Location: ${job.location ?? 'Not specified'}
 Description: ${job.description ?? 'Not provided'}
 
+## Scoring rules
+- Location is a hard constraint. Copenhagen / Greater Copenhagen = no penalty. Anywhere else in Denmark (Jutland, Funen, Aarhus, Odense, etc.) = subtract 25–35 points. Outside Denmark = subtract 40+ points unless fully remote.
+- Apply the location penalty first, then score skills and experience fit on the remainder.
+
 ## Task
 Return ONLY a JSON object with this exact format (no markdown, no explanation):
 {"match_score": <0-100>, "match_reasoning": "<1-2 sentences on why this candidate is or isn't a fit>", "summary": "<2-3 sentence factual overview of what the role involves and who it's for>", "tags": ["<tech1>", "<tech2>"]}
 
 summary: factual description of the role — what the job is about, not an opinion on the candidate.
-match_reasoning: personalised assessment of fit for this specific candidate.
+match_reasoning: personalised assessment of fit for this specific candidate. If location is outside Copenhagen, say so explicitly.
 tags: up to 8 specific technologies, languages, frameworks, or tools mentioned in the job (e.g. "React", "TypeScript", "Node.js", "AWS"). Empty array if none identifiable.`;
 }
 
