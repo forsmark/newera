@@ -49,7 +49,12 @@ function Nav({ status, onFetchNow, fetching }: NavProps) {
 
       <NavLink to="/jobs" className="nav-link shrink-0" style={navLinkStyle}>Jobs</NavLink>
       <NavLink to="/kanban" className="nav-link shrink-0" style={navLinkStyle}>Applications</NavLink>
-      <NavLink to="/settings" className="nav-link shrink-0" style={navLinkStyle}>Settings</NavLink>
+      <NavLink to="/settings" title="Settings" style={({ isActive }) => ({
+        ...navLinkStyle({ isActive }),
+        padding: "0.375rem 0.5rem",
+        fontSize: "1rem",
+        lineHeight: 1,
+      })}>⚙</NavLink>
 
       <div className="flex-1" />
 

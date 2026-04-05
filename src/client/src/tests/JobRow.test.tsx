@@ -74,9 +74,16 @@ describe('JobRow', () => {
     expect(screen.getByRole('button', { name: 'Reject' })).toBeInTheDocument();
   });
 
-  it('shows Unsave button for saved jobs', () => {
+  it('shows Saved toggle button for saved jobs', () => {
     render(<JobRow job={makeJob({ status: 'saved' })} onStatusChange={vi.fn()} />);
-    expect(screen.getByRole('button', { name: 'Unsave' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Saved' })).toBeInTheDocument();
+  });
+
+  it('calls onStatusChange with new when Saved is clicked (unsave)', async () => {
+    const onStatusChange = vi.fn();
+    render(<JobRow job={makeJob({ status: 'saved' })} onStatusChange={onStatusChange} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Saved' }));
+    await vi.waitFor(() => expect(onStatusChange).toHaveBeenCalledWith('job-1', 'new'));
   });
 
   it('calls onStatusChange when Save is clicked', async () => {

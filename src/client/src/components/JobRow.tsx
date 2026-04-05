@@ -133,13 +133,6 @@ export default function JobRow({ job, onStatusChange, onSeen, compact, selected,
         ↗
       </a>
 
-      {job.status === "new" && (
-        <button onClick={() => patchStatus("saved")} disabled={loading}
-          className="px-3 py-1.5 text-[0.75rem] rounded-sm border border-border-accent text-accent font-medium leading-none bg-transparent cursor-pointer">
-          Save
-        </button>
-      )}
-
       {(job.status === "new" || job.status === "saved") && (
         <>
           <button onClick={() => patchStatus("applied")} disabled={loading}
@@ -153,16 +146,17 @@ export default function JobRow({ job, onStatusChange, onSeen, compact, selected,
         </>
       )}
 
-      {job.status === "saved" && (
-        <>
-          <span className="text-[0.75rem] text-accent font-semibold px-2 py-1.5 leading-none">
-            Saved
-          </span>
-          <button onClick={() => patchStatus("new")} disabled={loading}
-            className="px-3 py-1.5 text-[0.6875rem] rounded-sm border border-border text-text-3 font-medium leading-none bg-transparent cursor-pointer btn-ghost">
-            Unsave
-          </button>
-        </>
+      {(job.status === "new" || job.status === "saved") && (
+        <button
+          onClick={() => patchStatus(job.status === "new" ? "saved" : "new")}
+          disabled={loading}
+          className={job.status === "saved"
+            ? "px-3 py-1.5 text-[0.75rem] rounded-sm border border-accent bg-accent-bg text-accent font-medium leading-none cursor-pointer"
+            : "px-3 py-1.5 text-[0.75rem] rounded-sm border border-border-accent text-accent font-medium leading-none bg-transparent cursor-pointer"
+          }
+        >
+          {job.status === "saved" ? "Saved" : "Save"}
+        </button>
       )}
     </div>
   );
