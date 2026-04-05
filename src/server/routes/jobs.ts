@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import db from '../db';
 import type { Job } from '../types';
-import { analyzeJob, extractJobDescription } from '../llm';
+import { analyzeJob } from '../llm';
 import { analyzeUnscoredJobs } from '../scheduler';
 import { fetchPageText } from '../utils/fetchPageText';
 
@@ -188,7 +188,7 @@ app.post('/:id/analyze', async (c) => {
       console.log(`[jobs] Re-fetching description for job ${id} (was null)`);
       const pageText = await fetchPageText(freshJob.url);
       if (pageText) {
-        const description = await extractJobDescription(pageText) ?? pageText.slice(0, 8000);
+        const description = pageText.length > 6_000 ? pageText.slice(0, 6_000) + '\n[truncated]' : pageText;
         db.run('UPDATE jobs SET description = ? WHERE id = ?', [description, id]);
         freshJob = db.query('SELECT * FROM jobs WHERE id = ?').get(id) as Job;
       }

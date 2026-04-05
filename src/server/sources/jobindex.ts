@@ -3,7 +3,6 @@ import { parse } from 'node-html-parser';
 import type { Job } from '../types';
 import { DATA_DIR } from '../config';
 import { fetchPageText } from '../utils/fetchPageText';
-import { extractJobDescription } from '../llm';
 
 type JobPartial = Omit<Job, 'id' | 'match_score' | 'match_reasoning' | 'match_summary' | 'tags' | 'status' | 'seen_at'>;
 
@@ -221,7 +220,8 @@ async function fetchPage(url: string, targetArea: string): Promise<JobPartial[]>
       let description: string | null = null;
       const pageText = await fetchPageText(descriptionUrl);
       if (pageText) {
-        description = await extractJobDescription(pageText);
+        // Truncate to keep the scoring LLM prompt manageable
+        description = pageText.length > 6_000 ? pageText.slice(0, 6_000) + '\n[truncated]' : pageText;
       }
 
       return {
