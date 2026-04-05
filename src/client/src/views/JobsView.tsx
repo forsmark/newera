@@ -6,6 +6,7 @@ import { toast } from "../components/Toast";
 
 interface Props {
   refreshKey?: number;
+  isFetching?: boolean;
 }
 
 type FilterStatus = "all" | "unread" | "new" | "saved" | "applied";
@@ -31,7 +32,7 @@ const itemVariants = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.2, ease: "easeOut" } },
 };
 
-export default function JobsView({ refreshKey }: Props) {
+export default function JobsView({ refreshKey, isFetching }: Props) {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalJobs, setTotalJobs] = useState(0);
@@ -467,6 +468,7 @@ export default function JobsView({ refreshKey }: Props) {
                 selected={selectedIds.has(job.id)}
                 onToggleSelect={toggleSelect}
                 onRescore={handleRescore}
+                isFetching={isFetching}
                 onTagClick={tag => setActiveTag(prev => prev === tag ? null : tag)}
                 activeTag={activeTag ?? undefined}
               />

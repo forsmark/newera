@@ -15,6 +15,7 @@ interface Props {
   onFocusRequest?: () => void;
   onTagClick?: (tag: string) => void;
   activeTag?: string;
+  isFetching?: boolean;
 }
 
 function scoreAccentColor(score: number | null): string {
@@ -34,7 +35,7 @@ function formatDate(dateStr: string | null): string {
   return date.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
-export default function JobRow({ job, onStatusChange, onSeen, compact, selected, onToggleSelect, onRescore, focused, onFocusRequest, onTagClick, activeTag }: Props) {
+export default function JobRow({ job, onStatusChange, onSeen, compact, selected, onToggleSelect, onRescore, focused, onFocusRequest, onTagClick, activeTag, isFetching }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [scope, animate] = useAnimate();
@@ -262,7 +263,7 @@ export default function JobRow({ job, onStatusChange, onSeen, compact, selected,
             transition={{ duration: 0.22, ease: "easeInOut" }}
             style={{ overflow: "hidden" }}
           >
-            <JobDetail job={job} onRescore={onRescore} />
+            <JobDetail job={job} onRescore={onRescore} isFetching={isFetching} />
           </motion.div>
         )}
       </AnimatePresence>

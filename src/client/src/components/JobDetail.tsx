@@ -4,11 +4,12 @@ import { Job } from "../types";
 interface Props {
   job: Job;
   onRescore?: (id: string) => void;
+  isFetching?: boolean;
 }
 
 const DESC_LIMIT = 500;
 
-export default function JobDetail({ job, onRescore }: Props) {
+export default function JobDetail({ job, onRescore, isFetching }: Props) {
   const [copied, setCopied] = useState(false);
   const [descExpanded, setDescExpanded] = useState(false);
 
@@ -114,11 +115,12 @@ export default function JobDetail({ job, onRescore }: Props) {
       {/* Actions */}
       <div className="px-4 py-3 border-t border-border flex gap-2">
         <button
+          disabled={isFetching}
           onClick={async () => {
             const res = await fetch(`/api/jobs/${job.id}/analyze`, { method: 'POST' });
             if (res.ok) onRescore?.(job.id);
           }}
-          className="px-3 py-1.5 text-[0.75rem] rounded-sm border border-border bg-transparent text-text-3 cursor-pointer btn-ghost"
+          className="px-3 py-1.5 text-[0.75rem] rounded-sm border border-border bg-transparent text-text-3 btn-ghost disabled:opacity-40 disabled:cursor-not-allowed"
         >
           Re-score ↺
         </button>
