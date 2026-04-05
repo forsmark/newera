@@ -93,6 +93,48 @@ export function extractJson(raw: string): AnalysisResult {
   return { match_score, match_reasoning, match_summary, tags };
 }
 
+/** Focused second-pass tag extraction when the main analysis returned no tags. */
+async function extractTagsFromDescription(description: string): Promise<string[]> {
+  const truncated = description.length > 6_000 ? description.slice(0, 6_000) + '\n[truncated]' : description;
+
+  const prompt = `Extract all specific technologies, programming languages, frameworks, tools, and platforms explicitly mentioned in the job description below.
+Return ONLY a JSON array of tag strings, nothing else. Maximum 8 tags. Empty array if none found.
+Example output: ["Java", ".NET", "Spring Boot", "Azure"]
+
+Job Description:
+${truncated}`;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+  try {
+    const response = await fetch(OLLAMA_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: MODEL, prompt, stream: false, think: false }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) throw new Error(`Ollama returned HTTP ${response.status}`);
+
+    const json = (await response.json()) as { response?: string };
+    const raw = json.response?.trim() ?? '';
+
+    // Strip markdown fences and find the array
+    const stripped = raw.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim();
+    const match = stripped.match(/\[[\s\S]*\]/);
+    if (!match) return [];
+
+    const parsed = JSON.parse(match[0]);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((t: unknown) => String(t).trim()).filter(t => t.length > 0).slice(0, 8);
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** Ask the LLM to pull out the job description text from a raw webpage dump. */
 export async function extractJobDescription(pageText: string): Promise<string | null> {
   // Truncate to avoid overloading context — 12 000 chars is plenty for most postings
@@ -176,7 +218,18 @@ export async function analyzeJob(job: Job): Promise<AnalysisResult | null> {
       throw new Error('Ollama response missing "response" field');
     }
 
-    return extractJson(raw);
+    const result = extractJson(raw);
+
+    // Second pass: if no tags were extracted but description exists, try a focused extraction
+    if (result.tags.length === 0 && job.description && job.description.length > 50) {
+      console.log(`[llm] No tags from main pass for job ${job.id}, running tag extraction pass`);
+      result.tags = await extractTagsFromDescription(job.description);
+      if (result.tags.length > 0) {
+        console.log(`[llm] Tag pass found: ${result.tags.join(', ')}`);
+      }
+    }
+
+    return result;
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') {
       console.error(`[llm] analyzeJob timed out after ${TIMEOUT_MS}ms for job ${job.id}`);
