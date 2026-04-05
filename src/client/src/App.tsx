@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
-import { BrowserRouter, Routes, Route, Navigate, NavLink } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, NavLink, useLocation } from "react-router-dom";
+import { AnimatePresence, motion } from "framer-motion";
 import JobsView from "./views/JobsView";
 import KanbanView from "./views/KanbanView";
 import { AppStatus } from "./types";
 import ToastContainer from "./components/Toast";
+import Logo from "./components/Logo";
 
 function formatLastFetch(dateStr: string | null): string {
   if (!dateStr) return "never";
@@ -24,96 +26,53 @@ interface NavProps {
   fetching: boolean;
 }
 
+const navLinkStyle = ({ isActive }: { isActive: boolean }): React.CSSProperties => ({
+  padding: "0.375rem 0.75rem",
+  borderRadius: "var(--radius-sm)",
+  textDecoration: "none",
+  fontSize: "0.875rem",
+  fontWeight: 500,
+  color: isActive ? "var(--color-text)" : "var(--color-text-3)",
+  background: isActive ? "var(--color-border)" : "transparent",
+  whiteSpace: "nowrap",
+});
+
 function Nav({ status, onFetchNow, fetching }: NavProps) {
   const isBusy = fetching || (status?.is_fetching ?? false);
 
   return (
-    <nav style={{
-      display: "flex",
-      alignItems: "center",
-      gap: "0.25rem",
-      padding: "0 1.25rem",
-      height: "48px",
-      borderBottom: "1px solid #1a2840",
-      background: "#060f1e",
-      position: "sticky",
-      top: 0,
-      zIndex: 50,
-    }}>
-      {/* Logo */}
-      <span style={{ color: "#dde6f0", fontWeight: 700, fontSize: "0.9375rem", letterSpacing: "-0.02em", marginRight: "0.75rem" }}>
-        New Era
-      </span>
+    <nav className="flex items-center gap-1 px-4 h-14 border-b border-border bg-nav sticky top-0 z-50 overflow-hidden">
+      <div className="mr-2 shrink-0">
+        <Logo size="sm" />
+      </div>
 
-      {/* Nav links */}
-      <NavLink to="/jobs" className="nav-link" style={({ isActive }) => ({
-        padding: "0.25rem 0.625rem",
-        borderRadius: "var(--radius-sm)",
-        textDecoration: "none",
-        fontSize: "0.875rem",
-        fontWeight: 500,
-        color: isActive ? "#dde6f0" : "#405a74",
-        background: isActive ? "#1a2840" : "transparent",
-      })}>
-        Jobs
-      </NavLink>
-      <NavLink to="/kanban" className="nav-link" style={({ isActive }) => ({
-        padding: "0.25rem 0.625rem",
-        borderRadius: "var(--radius-sm)",
-        textDecoration: "none",
-        fontSize: "0.875rem",
-        fontWeight: 500,
-        color: isActive ? "#dde6f0" : "#405a74",
-        background: isActive ? "#1a2840" : "transparent",
-      })}>
-        Kanban
-      </NavLink>
+      <NavLink to="/jobs" className="nav-link shrink-0" style={navLinkStyle}>Jobs</NavLink>
+      <NavLink to="/kanban" className="nav-link shrink-0" style={navLinkStyle}>Applications</NavLink>
 
-      {/* Spacer */}
-      <div style={{ flex: 1 }} />
+      <div className="flex-1" />
 
-      {/* Score distribution — compact dots */}
+      {/* Score distribution — hidden on mobile */}
       {status?.score_distribution && (() => {
         const { green, amber, grey } = status.score_distribution;
         const total = green + amber + grey;
         if (total === 0) return null;
         return (
-          <div style={{ display: "flex", gap: "0.625rem", alignItems: "center", fontSize: "0.75rem", marginRight: "0.25rem" }}>
-            {green > 0 && (
-              <span title={`${green} strong matches`} style={{ color: "#22c55e", fontWeight: 600 }}>
-                {green}<span style={{ opacity: 0.5 }}>●</span>
-              </span>
-            )}
-            {amber > 0 && (
-              <span title={`${amber} partial matches`} style={{ color: "#f59e0b", fontWeight: 600 }}>
-                {amber}<span style={{ opacity: 0.5 }}>●</span>
-              </span>
-            )}
-            {grey > 0 && (
-              <span title={`${grey} weak matches`} style={{ color: "#405a74", fontWeight: 600 }}>
-                {grey}<span style={{ opacity: 0.5 }}>●</span>
-              </span>
-            )}
+          <div className="hidden sm:flex gap-[0.625rem] items-center text-[0.75rem] mr-1 shrink-0">
+            {green > 0 && <span title={`${green} strong matches`} className="text-green font-semibold">{green}<span className="opacity-50">●</span></span>}
+            {amber > 0 && <span title={`${amber} partial matches`} className="text-amber font-semibold">{amber}<span className="opacity-50">●</span></span>}
+            {grey > 0 && <span title={`${grey} weak matches`} className="text-text-3 font-semibold">{grey}<span className="opacity-50">●</span></span>}
           </div>
         );
       })()}
 
-      {/* Warning badges */}
+      {/* Warning badges — hidden on mobile */}
       {status?.data_files && (!status.data_files.resume || !status.data_files.preferences) && (
         <span
           title={[
             !status.data_files.resume && "data/resume.md is missing",
             !status.data_files.preferences && "data/preferences.md is missing",
           ].filter(Boolean).join(" · ")}
-          style={{
-            fontSize: "0.75rem",
-            color: "#f59e0b",
-            border: "1px solid #3a2200",
-            borderRadius: "var(--radius-sm)",
-            padding: "0.125rem 0.4rem",
-            fontWeight: 500,
-            cursor: "help",
-          }}
+          className="hidden sm:inline text-[0.75rem] text-amber border border-[#3a2200] rounded-sm px-[0.4rem] py-[0.125rem] font-medium cursor-help shrink-0"
         >
           data ⚠
         </span>
@@ -121,51 +80,56 @@ function Nav({ status, onFetchNow, fetching }: NavProps) {
       {status?.ollama_available === false && (
         <span
           title="Ollama is not reachable — job scoring is disabled"
-          style={{
-            fontSize: "0.75rem",
-            color: "#ef4444",
-            border: "1px solid #3a0808",
-            borderRadius: "var(--radius-sm)",
-            padding: "0.125rem 0.4rem",
-            fontWeight: 500,
-          }}
+          className="hidden sm:inline text-[0.75rem] text-red border border-[#3a0808] rounded-sm px-[0.4rem] py-[0.125rem] font-medium shrink-0"
         >
           ollama ✗
         </span>
       )}
 
-      {/* Last fetch */}
-      <span style={{ color: "#405a74", fontSize: "0.75rem", marginLeft: "0.25rem" }}>
+      {/* Last fetch — hidden on mobile */}
+      <span className="hidden sm:inline text-text-3 text-[0.75rem] ml-1 shrink-0">
         {formatLastFetch(status?.last_fetch_at ?? null)}
       </span>
       {status?.is_fetching && (
-        <span style={{
-          width: "6px", height: "6px", borderRadius: "50%",
-          background: "#3b82f6", animation: "pulse 1s ease-in-out infinite",
-          display: "inline-block", flexShrink: 0,
-        }} />
+        <span className="w-[6px] h-[6px] rounded-full bg-accent shrink-0 inline-block" style={{ animation: "pulse 1s ease-in-out infinite" }} />
       )}
 
       {/* Fetch button */}
       <button
         onClick={onFetchNow}
         disabled={isBusy}
-        style={{
-          marginLeft: "0.375rem",
-          padding: "0.3125rem 0.75rem",
-          fontSize: "0.8125rem",
-          fontWeight: 500,
-          borderRadius: "var(--radius-sm)",
-          border: "1px solid #1a2840",
-          background: isBusy ? "transparent" : "#0f1e34",
-          color: isBusy ? "#405a74" : "#7a95b0",
-          cursor: isBusy ? "not-allowed" : "pointer",
-        }}
-        className={isBusy ? "" : "btn-ghost"}
+        className={[
+          "ml-1 shrink-0 px-4 py-2 text-[0.8125rem] font-medium rounded-sm border border-border",
+          isBusy
+            ? "bg-transparent text-text-3 cursor-not-allowed"
+            : "bg-surface-raised text-text-2 cursor-pointer btn-ghost",
+        ].join(" ")}
       >
         {isBusy ? "Fetching…" : "Fetch now"}
       </button>
     </nav>
+  );
+}
+
+function AnimatedRoutes({ jobsRefreshKey }: { jobsRefreshKey: number }) {
+  const location = useLocation();
+  return (
+    <AnimatePresence mode="wait">
+      <motion.div
+        key={location.pathname}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.15 }}
+        className="bg-bg min-h-[calc(100vh_-_56px)] text-text"
+      >
+        <Routes location={location}>
+          <Route path="/" element={<Navigate to="/jobs" replace />} />
+          <Route path="/jobs" element={<JobsView refreshKey={jobsRefreshKey} />} />
+          <Route path="/kanban" element={<KanbanView refreshKey={jobsRefreshKey} />} />
+        </Routes>
+      </motion.div>
+    </AnimatePresence>
   );
 }
 
@@ -207,42 +171,24 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <style>{`
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
-        @keyframes fadeSlideIn { from { opacity: 0; transform: translateX(-50%) translateY(-6px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
-      `}</style>
       <ToastContainer />
       <Nav status={status} onFetchNow={handleFetchNow} fetching={fetching} />
 
-      {fetchNotification && (
-        <div style={{
-          position: "fixed",
-          top: "3.25rem",
-          left: "50%",
-          transform: "translateX(-50%)",
-          background: "#0b1628",
-          border: "1px solid #1a2840",
-          borderRadius: "var(--radius)",
-          padding: "0.5rem 1.25rem",
-          color: "#dde6f0",
-          fontSize: "0.875rem",
-          fontWeight: 500,
-          zIndex: 200,
-          boxShadow: "0 4px 20px rgba(0,0,0,0.5)",
-          animation: "fadeSlideIn 0.18s ease",
-          whiteSpace: "nowrap",
-        }}>
-          {fetchNotification}
-        </div>
-      )}
+      <AnimatePresence>
+        {fetchNotification && (
+          <motion.div
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.18 }}
+            className="fixed top-[3.25rem] left-1/2 -translate-x-1/2 bg-surface border border-border rounded px-5 py-2 text-text text-sm font-medium z-[200] shadow-[0_4px_20px_rgba(0,0,0,0.5)] whitespace-nowrap"
+          >
+            {fetchNotification}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      <div style={{ background: "var(--bg)", minHeight: "calc(100vh - 48px)", color: "var(--text)" }}>
-        <Routes>
-          <Route path="/" element={<Navigate to="/jobs" replace />} />
-          <Route path="/jobs" element={<JobsView refreshKey={jobsRefreshKey} />} />
-          <Route path="/kanban" element={<KanbanView refreshKey={jobsRefreshKey} />} />
-        </Routes>
-      </div>
+      <AnimatedRoutes jobsRefreshKey={jobsRefreshKey} />
     </BrowserRouter>
   );
 }

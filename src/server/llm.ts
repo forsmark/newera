@@ -5,7 +5,7 @@ import { DATA_DIR, OLLAMA_BASE_URL } from './config';
 
 const OLLAMA_URL = `${OLLAMA_BASE_URL}/api/generate`;
 const OLLAMA_HEALTH_URL = `${OLLAMA_BASE_URL}/api/tags`;
-const MODEL = 'qwen3.5:9b';
+const MODEL = 'gemma4:26b';
 const TIMEOUT_MS = 60_000;
 
 let ollamaAvailable: boolean | null = null; // null = not yet checked
@@ -63,7 +63,7 @@ match_reasoning: personalised assessment of fit for this specific candidate.
 tags: up to 8 specific technologies, languages, frameworks, or tools mentioned in the job (e.g. "React", "TypeScript", "Node.js", "AWS"). Empty array if none identifiable.`;
 }
 
-function extractJson(raw: string): AnalysisResult {
+export function extractJson(raw: string): AnalysisResult {
   // Strip markdown code fences if the model wrapped its response
   const stripped = raw.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim();
 
@@ -91,6 +91,46 @@ function extractJson(raw: string): AnalysisResult {
   }
 
   return { match_score, match_reasoning, match_summary, tags };
+}
+
+/** Ask the LLM to pull out the job description text from a raw webpage dump. */
+export async function extractJobDescription(pageText: string): Promise<string | null> {
+  // Truncate to avoid overloading context — 12 000 chars is plenty for most postings
+  const truncated = pageText.length > 12_000 ? pageText.slice(0, 12_000) + '\n[truncated]' : pageText;
+
+  const prompt = `Below is the raw text content scraped from a job posting webpage.
+Extract ONLY the actual job description / posting content — including role summary, responsibilities, requirements, and any salary/benefits info.
+Remove all navigation, cookie notices, ads, boilerplate footer text, and unrelated content.
+Return the extracted text only, no commentary.
+
+---
+${truncated}
+---`;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+  try {
+    const response = await fetch(OLLAMA_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: MODEL, prompt, stream: false, think: false }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) throw new Error(`Ollama returned HTTP ${response.status}`);
+
+    const json = (await response.json()) as { response?: string };
+    const text = json.response?.trim();
+    return text && text.length > 0 ? text : null;
+  } catch (err) {
+    if (err instanceof Error && err.name !== 'AbortError') {
+      console.warn('[llm] extractJobDescription failed:', (err as Error).message);
+    }
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export async function analyzeJob(job: Job): Promise<AnalysisResult | null> {

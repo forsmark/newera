@@ -1,5 +1,5 @@
-import { fetchJSearch } from './sources/jsearch';
 import { fetchJobindex } from './sources/jobindex';
+import { fetchLinkedIn } from './sources/linkedin';
 import { analyzeJob } from './llm';
 import db from './db';
 import { randomUUID } from 'crypto';
@@ -23,27 +23,35 @@ export async function fetchJobs(): Promise<number> {
   try {
     console.log('[scheduler] Fetching jobs...');
 
-    // 1. Fetch from both sources
-    const [jsearchResult, jobindexResult] = await Promise.allSettled([fetchJSearch(), fetchJobindex()]);
-    const jsearchJobs = jsearchResult.status === 'fulfilled' ? jsearchResult.value : [];
+    // 1. Fetch from all sources in parallel
+    const [jobindexResult, linkedinResult] = await Promise.allSettled([
+      fetchJobindex(),
+      fetchLinkedIn(),
+    ]);
     const jobindexJobs = jobindexResult.status === 'fulfilled' ? jobindexResult.value : [];
-    if (jsearchResult.status === 'rejected') console.error('[scheduler] JSearch failed:', jsearchResult.reason);
+    const linkedinJobs = linkedinResult.status === 'fulfilled' ? linkedinResult.value : [];
     if (jobindexResult.status === 'rejected') console.error('[scheduler] Jobindex failed:', jobindexResult.reason);
+    if (linkedinResult.status === 'rejected') console.error('[scheduler] LinkedIn failed:', linkedinResult.reason);
 
-    const allJobs = [...jsearchJobs, ...jobindexJobs];
+    const allJobs = [...jobindexJobs, ...linkedinJobs];
     console.log(`[scheduler] Fetched ${allJobs.length} jobs`);
 
-    // 2. Insert new jobs into DB (INSERT OR IGNORE respects UNIQUE(source, external_id))
-    const insertStmt = db.prepare(`
-      INSERT OR IGNORE INTO jobs (id, source, external_id, title, company, location, url, description, posted_at, fetched_at)
+    // 2. Insert new jobs; backfill description/url for existing rows that were stored without them
+    const existsStmt = db.prepare('SELECT id FROM jobs WHERE source = ? AND external_id = ?');
+    const upsertStmt = db.prepare(`
+      INSERT INTO jobs (id, source, external_id, title, company, location, url, description, posted_at, fetched_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(source, external_id) DO UPDATE SET
+        description = CASE WHEN jobs.description IS NULL AND excluded.description IS NOT NULL THEN excluded.description ELSE jobs.description END,
+        url         = CASE WHEN jobs.url LIKE '%/vis-job/%' AND excluded.url NOT LIKE '%/vis-job/%' THEN excluded.url ELSE jobs.url END
     `);
 
     const newJobIds: string[] = [];
 
     for (const job of allJobs) {
-      const id = randomUUID();
-      const result = insertStmt.run(
+      const existing = existsStmt.get(job.source, job.external_id) as { id: string } | null;
+      const id = existing?.id ?? randomUUID();
+      upsertStmt.run(
         id,
         job.source,
         job.external_id,
@@ -55,7 +63,7 @@ export async function fetchJobs(): Promise<number> {
         job.posted_at,
         job.fetched_at,
       );
-      if (result.changes > 0) {
+      if (!existing) {
         newJobIds.push(id);
       }
     }
@@ -121,8 +129,6 @@ export async function analyzeUnscoredJobs(): Promise<void> {
   }
 }
 
-// 12h interval = 2 fetches/day. With up to 5 JSearch queries that's ~150 req/month,
-// comfortably within the 200 req/month budget on openwebninja.com's free tier.
 const INTERVAL_MS = 12 * 60 * 60 * 1000;
 
 export function startScheduler(): void {

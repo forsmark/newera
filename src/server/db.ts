@@ -44,5 +44,6 @@ db.run(`
 // Migrate existing DBs — ignore error if column already exists
 try { db.run('ALTER TABLE jobs ADD COLUMN tags TEXT'); } catch { /* already exists */ }
 try { db.run('ALTER TABLE jobs ADD COLUMN match_summary TEXT'); } catch { /* already exists */ }
+try { db.run('ALTER TABLE applications ADD COLUMN archived_description TEXT'); } catch { /* already exists */ }
 
 export default db;

@@ -39,5 +39,6 @@ export interface Application {
   interview_at: string | null;
   applied_at: string;
   updated_at: string;
+  archived_description: string | null;
   job: Job;
 }

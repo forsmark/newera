@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import { motion, AnimatePresence, useAnimate, useReducedMotion } from "framer-motion";
 import { Job } from "../types";
 import JobDetail from "./JobDetail";
 
@@ -23,13 +24,6 @@ function scoreAccentColor(score: number | null): string {
   return "#1a2840";
 }
 
-function scoreBadgeStyle(score: number | null): React.CSSProperties {
-  if (score === null) return { background: "#0f1e34", color: "#405a74" };
-  if (score >= 80) return { background: "#081a10", color: "#22c55e" };
-  if (score >= 50) return { background: "#1a1000", color: "#f59e0b" };
-  return { background: "#0b1628", color: "#405a74" };
-}
-
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return "";
   const date = new Date(dateStr);
@@ -40,27 +34,19 @@ function formatDate(dateStr: string | null): string {
   return date.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
-const actionBtn: React.CSSProperties = {
-  padding: "0.1875rem 0.5rem",
-  fontSize: "0.75rem",
-  borderRadius: "var(--radius-sm)",
-  border: "1px solid",
-  cursor: "pointer",
-  fontWeight: 500,
-  lineHeight: 1.4,
-  background: "transparent",
-};
-
 export default function JobRow({ job, onStatusChange, onSeen, compact, selected, onToggleSelect, onRescore, focused, onFocusRequest, onTagClick, activeTag }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(false);
-  const rowRef = useRef<HTMLDivElement>(null);
+  const [scope, animate] = useAnimate();
+  const prefersReducedMotion = useReducedMotion();
 
   const isLowScore = job.match_score !== null && job.match_score < 50;
   const accent = scoreAccentColor(job.match_score);
 
   useEffect(() => {
-    if (focused) rowRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    if (focused && scope.current) {
+      scope.current.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
   }, [focused]);
 
   useEffect(() => {
@@ -101,7 +87,12 @@ export default function JobRow({ job, onStatusChange, onSeen, compact, selected,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status }),
       });
-      if (res.ok) onStatusChange(job.id, status);
+      if (res.ok) {
+        onStatusChange(job.id, status);
+        if (!prefersReducedMotion && scope.current) {
+          animate(scope.current, { scale: [1, 1.015, 1] }, { duration: 0.15 });
+        }
+      }
     } finally {
       setLoading(false);
     }
@@ -114,54 +105,49 @@ export default function JobRow({ job, onStatusChange, onSeen, compact, selected,
     setExpanded(v => !v);
   }
 
-  const badgeStyle = scoreBadgeStyle(job.match_score);
+  const scoreBadgeClass = job.match_score === null
+    ? "bg-surface-raised text-text-3"
+    : job.match_score >= 80
+      ? "bg-green-bg text-green"
+      : job.match_score >= 50
+        ? "bg-amber-bg text-amber"
+        : "bg-surface text-text-3";
 
   const scoreBadge = (
-    <div style={{ position: "relative", flexShrink: 0 }}>
-      <div style={{
-        ...badgeStyle,
-        minWidth: "2.5rem",
-        textAlign: "center",
-        padding: "0.1875rem 0.375rem",
-        borderRadius: "var(--radius-sm)",
-        fontWeight: 700,
-        fontSize: "0.8125rem",
-        fontVariantNumeric: "tabular-nums",
-      }}>
+    <div className="relative shrink-0">
+      <div className={`${scoreBadgeClass} min-w-[2.75rem] text-center px-2 py-1.5 rounded-sm font-bold text-[0.875rem] tabular-nums`}>
         {job.match_score === null
           ? <span style={{ animation: "pulse 1.5s ease-in-out infinite", display: "inline-block" }}>···</span>
           : job.match_score}
       </div>
       {job.seen_at === null && (
-        <span style={{
-          position: "absolute", top: "-3px", right: "-3px",
-          width: "7px", height: "7px", borderRadius: "50%",
-          background: "#f59e0b", border: "2px solid #030b17",
-        }} />
+        <span className="absolute -top-[4px] -right-[4px] w-[10px] h-[10px] rounded-full bg-amber border-2 border-bg" />
       )}
     </div>
   );
 
   const actionButtons = (
-    <div style={{ display: "flex", gap: "0.25rem", flexShrink: 0, alignItems: "center" }} onClick={e => e.stopPropagation()}>
-      <a href={job.url} target="_blank" rel="noopener noreferrer" style={{
-        ...actionBtn, borderColor: "#1a2840", color: "#405a74", textDecoration: "none",
-      }}>↗</a>
+    <div className="flex gap-1.5 shrink-0 items-center" onClick={e => e.stopPropagation()}>
+      <a href={job.url} target="_blank" rel="noopener noreferrer"
+        className="px-2.5 py-1.5 text-[0.75rem] rounded-sm border border-border text-text-3 no-underline font-medium leading-none">
+        ↗
+      </a>
 
       {job.status === "new" && (
-        <button onClick={() => patchStatus("saved")} disabled={loading} style={{ ...actionBtn, borderColor: "#1a3060", color: "#3b82f6" }}>
+        <button onClick={() => patchStatus("saved")} disabled={loading}
+          className="px-3 py-1.5 text-[0.75rem] rounded-sm border border-border-accent text-accent font-medium leading-none bg-transparent cursor-pointer">
           Save
         </button>
       )}
 
       {(job.status === "new" || job.status === "saved") && (
         <>
-          <button onClick={() => patchStatus("applied")} disabled={loading} style={{
-            ...actionBtn, borderColor: "#1a3060", background: "#0d1e38", color: "#3b82f6",
-          }}>
+          <button onClick={() => patchStatus("applied")} disabled={loading}
+            className="px-3 py-1.5 text-[0.75rem] rounded-sm border border-border-accent bg-accent-bg text-accent font-medium leading-none cursor-pointer">
             Applied →
           </button>
-          <button onClick={() => patchStatus("rejected")} disabled={loading} style={{ ...actionBtn, borderColor: "#3a0808", color: "#ef4444" }}>
+          <button onClick={() => patchStatus("rejected")} disabled={loading}
+            className="px-3 py-1.5 text-[0.75rem] rounded-sm border border-border-red text-red font-medium leading-none bg-transparent cursor-pointer">
             Reject
           </button>
         </>
@@ -169,10 +155,11 @@ export default function JobRow({ job, onStatusChange, onSeen, compact, selected,
 
       {job.status === "saved" && (
         <>
-          <span style={{ fontSize: "0.75rem", color: "#3b82f6", fontWeight: 600, padding: "0.1875rem 0.375rem" }}>
+          <span className="text-[0.75rem] text-accent font-semibold px-2 py-1.5 leading-none">
             Saved
           </span>
-          <button onClick={() => patchStatus("new")} disabled={loading} style={{ ...actionBtn, borderColor: "#1a2840", color: "#405a74", fontSize: "0.6875rem" }}>
+          <button onClick={() => patchStatus("new")} disabled={loading}
+            className="px-3 py-1.5 text-[0.6875rem] rounded-sm border border-border text-text-3 font-medium leading-none bg-transparent cursor-pointer btn-ghost">
             Unsave
           </button>
         </>
@@ -180,129 +167,111 @@ export default function JobRow({ job, onStatusChange, onSeen, compact, selected,
     </div>
   );
 
-  const borderStyle = `1px solid ${selected ? '#243653' : '#1a2840'}`;
-  const bgStyle = selected ? '#0b1830' : '#0b1628';
+  const rowContent = compact ? (
+    <div
+      onClick={handleRowClick}
+      className="row-hover flex items-center gap-[0.625rem] px-3 py-2.5 cursor-pointer"
+    >
+      {onToggleSelect && (
+        <div onClick={e => e.stopPropagation()} className="shrink-0 flex items-center self-stretch px-2 -mx-1">
+          <input type="checkbox" checked={selected ?? false} onChange={() => onToggleSelect(job.id)}
+            className="checkbox-styled" />
+        </div>
+      )}
+      {scoreBadge}
+      <div className="flex-1 min-w-0 flex items-center gap-[0.375rem] overflow-hidden">
+        <span className="font-semibold text-text text-sm whitespace-nowrap overflow-hidden text-ellipsis">{job.title}</span>
+        <span className="text-border shrink-0">·</span>
+        <span className="text-text-2 text-[0.8125rem] whitespace-nowrap overflow-hidden text-ellipsis">{job.company}</span>
+        {job.location && (
+          <>
+            <span className="text-border shrink-0">·</span>
+            <span className="text-text-3 text-[0.75rem] whitespace-nowrap overflow-hidden text-ellipsis">{job.location}</span>
+          </>
+        )}
+      </div>
+      {actionButtons}
+    </div>
+  ) : (
+    <div
+      onClick={handleRowClick}
+      className="row-hover flex items-start gap-3 px-3 sm:px-4 py-4 cursor-pointer"
+    >
+      {onToggleSelect && (
+        <div onClick={e => e.stopPropagation()} className="shrink-0 flex items-center self-stretch px-2 -mx-1">
+          <input type="checkbox" checked={selected ?? false} onChange={() => onToggleSelect(job.id)}
+            className="checkbox-styled" />
+        </div>
+      )}
+      {scoreBadge}
 
-  if (compact) {
-    return (
-      <div
-        ref={rowRef}
-        style={{
-          borderLeft: `3px solid ${selected ? '#3b82f6' : accent}`,
-          border: borderStyle,
-          borderLeftWidth: "3px",
-          borderLeftColor: selected ? '#3b82f6' : accent,
-          borderRadius: "var(--radius-sm)",
-          marginBottom: "6px",
-          background: bgStyle,
-          opacity: isLowScore ? 0.6 : 1,
-          overflow: "hidden",
-        }}
-      >
-        <div
-          onClick={handleRowClick}
-          className="row-hover"
-          style={{ display: "flex", alignItems: "center", gap: "0.625rem", padding: "0.4375rem 0.75rem", cursor: "pointer" }}
-        >
-          {onToggleSelect && (
-            <div onClick={e => e.stopPropagation()} style={{ flexShrink: 0, display: "flex", alignItems: "center" }}>
-              <input type="checkbox" checked={selected ?? false} onChange={() => onToggleSelect(job.id)} style={{ accentColor: "#3b82f6", width: "13px", height: "13px", cursor: "pointer" }} />
+      <div className="flex-1 min-w-0">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+          <div className="min-w-0">
+            <div className="flex items-baseline gap-2 flex-wrap">
+              <span className="font-semibold text-text text-[0.9375rem]">{job.title}</span>
+              <span className="text-text-2 text-sm">{job.company}</span>
+              {job.location && <span className="text-text-3 text-[0.8125rem]">{job.location}</span>}
             </div>
-          )}
-          {scoreBadge}
-          <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: "0.375rem", overflow: "hidden" }}>
-            <span style={{ fontWeight: 600, color: "#dde6f0", fontSize: "0.875rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              {job.title}
-            </span>
-            <span style={{ color: "#1a2840", flexShrink: 0 }}>·</span>
-            <span style={{ color: "#7a95b0", fontSize: "0.8125rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              {job.company}
-            </span>
-            {job.location && (
-              <>
-                <span style={{ color: "#1a2840", flexShrink: 0 }}>·</span>
-                <span style={{ color: "#405a74", fontSize: "0.75rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                  {job.location}
+            <div className="flex gap-2 mt-1 flex-wrap items-center">
+              <span className="bg-bg border border-border rounded-sm px-2 py-1 uppercase tracking-[0.05em] font-semibold text-[0.625rem] text-text-3">
+                {job.source}
+              </span>
+              {job.posted_at && <span className="text-text-3 text-[0.75rem]">{formatDate(job.posted_at)}</span>}
+              {job.tags && job.tags.length > 0 && job.tags.map(tag => (
+                <span
+                  key={tag}
+                  onClick={e => { e.stopPropagation(); onTagClick?.(tag); }}
+                  className={onTagClick ? "tag-btn" : ""}
+                  style={{
+                    background: activeTag === tag ? '#0d1e38' : '#030b17',
+                    border: `1px solid ${activeTag === tag ? '#243653' : '#1a2840'}`,
+                    color: activeTag === tag ? '#3b82f6' : '#6b8aa3',
+                    borderRadius: "var(--radius-sm)",
+                    padding: "0.1875rem 0.4375rem",
+                    fontSize: "0.6875rem",
+                    fontWeight: 500,
+                    whiteSpace: "nowrap",
+                    cursor: onTagClick ? "pointer" : "default",
+                  }}
+                >
+                  {tag}
                 </span>
-              </>
-            )}
+              ))}
+            </div>
           </div>
           {actionButtons}
         </div>
-        {expanded && <JobDetail job={job} onRescore={onRescore} />}
       </div>
-    );
-  }
+    </div>
+  );
 
   return (
     <div
-      ref={rowRef}
+      ref={scope}
+      className={`border-l-[3px] rounded mb-4 overflow-hidden ${selected ? 'bg-selected' : 'bg-surface'}`}
       style={{
-        borderLeft: `3px solid ${selected ? '#3b82f6' : accent}`,
-        border: borderStyle,
-        borderLeftWidth: "3px",
         borderLeftColor: selected ? '#3b82f6' : accent,
-        borderRadius: "var(--radius-sm)",
-        marginBottom: "6px",
-        background: bgStyle,
+        borderTop: `1px solid ${selected ? '#243653' : '#1a2840'}`,
+        borderRight: `1px solid ${selected ? '#243653' : '#1a2840'}`,
+        borderBottom: `1px solid ${selected ? '#243653' : '#1a2840'}`,
         opacity: isLowScore ? 0.6 : 1,
-        overflow: "hidden",
       }}
     >
-      <div
-        onClick={handleRowClick}
-        className="row-hover"
-        style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem", padding: "0.625rem 0.875rem", cursor: "pointer" }}
-      >
-        {onToggleSelect && (
-          <div onClick={e => e.stopPropagation()} style={{ flexShrink: 0, display: "flex", alignItems: "center", paddingTop: "2px" }}>
-            <input type="checkbox" checked={selected ?? false} onChange={() => onToggleSelect(job.id)} style={{ accentColor: "#3b82f6", width: "13px", height: "13px", cursor: "pointer" }} />
-          </div>
+      {rowContent}
+      <AnimatePresence>
+        {expanded && (
+          <motion.div
+            initial={prefersReducedMotion ? false : { height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={prefersReducedMotion ? {} : { height: 0, opacity: 0 }}
+            transition={{ duration: 0.22, ease: "easeInOut" }}
+            style={{ overflow: "hidden" }}
+          >
+            <JobDetail job={job} onRescore={onRescore} />
+          </motion.div>
         )}
-        {scoreBadge}
-
-        {/* Main content */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "baseline", gap: "0.5rem", flexWrap: "wrap" }}>
-            <span style={{ fontWeight: 600, color: "#dde6f0", fontSize: "0.9375rem" }}>{job.title}</span>
-            <span style={{ color: "#7a95b0", fontSize: "0.875rem" }}>{job.company}</span>
-            {job.location && <span style={{ color: "#405a74", fontSize: "0.8125rem" }}>{job.location}</span>}
-          </div>
-          <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.25rem", flexWrap: "wrap", alignItems: "center" }}>
-            <span style={{
-              background: "#030b17", border: "1px solid #1a2840", borderRadius: "var(--radius-sm)",
-              padding: "0.0625rem 0.3125rem", textTransform: "uppercase",
-              letterSpacing: "0.05em", fontWeight: 600, fontSize: "0.625rem", color: "#405a74",
-            }}>
-              {job.source}
-            </span>
-            {job.posted_at && <span style={{ color: "#405a74", fontSize: "0.75rem" }}>{formatDate(job.posted_at)}</span>}
-            {job.tags && job.tags.length > 0 && job.tags.map(tag => (
-              <span
-                key={tag}
-                onClick={e => { e.stopPropagation(); onTagClick?.(tag); }}
-                className={onTagClick ? "tag-btn" : ""}
-                style={{
-                  background: activeTag === tag ? '#0d1e38' : '#030b17',
-                  border: `1px solid ${activeTag === tag ? '#243653' : '#1a2840'}`,
-                  color: activeTag === tag ? '#3b82f6' : '#405a74',
-                  borderRadius: "var(--radius-sm)",
-                  padding: "0.0625rem 0.3125rem",
-                  fontSize: "0.6875rem",
-                  fontWeight: 500,
-                  whiteSpace: "nowrap",
-                  cursor: onTagClick ? "pointer" : "default",
-                }}
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
-        </div>
-
-        {actionButtons}
-      </div>
-      {expanded && <JobDetail job={job} onRescore={onRescore} />}
+      </AnimatePresence>
     </div>
   );
 }

@@ -1,72 +1,133 @@
-*, *::before, *::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #030b17;
+  --color-nav: #060f1e;
+  --color-surface: #0b1628;
+  --color-surface-raised: #0f1e34;
+  --color-surface-deep: #060f1e;
+  --color-selected: #0b1830;
+  --color-border: #1a2840;
+  --color-border-2: #243653;
+  --color-border-accent: #1a3060;
+  --color-border-red: #3a0808;
+  --color-text: #dde6f0;
+  --color-text-2: #7a95b0;
+  --color-text-3: #6b8aa3;
+  --color-accent: #3b82f6;
+  --color-accent-bg: #0d1e38;
+  --color-green: #22c55e;
+  --color-green-bg: #081a10;
+  --color-green-border: #0d2e1a;
+  --color-amber: #f59e0b;
+  --color-amber-bg: #1a1000;
+  --color-red: #ef4444;
+  --color-red-bg: #1a0606;
+
+  --font-family-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+
+  --radius: 8px;
+  --radius-sm: 5px;
 }
 
-:root {
-  --bg: #030b17;
-  --surface: #0b1628;
-  --surface-raised: #0f1e34;
-  --border: #1a2840;
-  --border-2: #243653;
-  --text: #dde6f0;
-  --text-2: #7a95b0;
-  --text-3: #405a74;
-  --accent: #3b82f6;
-  --accent-bg: #0d1e38;
-  --green: #22c55e;
-  --green-bg: #081a10;
-  --amber: #f59e0b;
-  --amber-bg: #1a1000;
-  --red: #ef4444;
-  --red-bg: #1a0606;
-  --radius: 6px;
-  --radius-sm: 4px;
-}
+@layer base {
+  *, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
 
-html, body {
-  height: 100%;
-}
+  html, body {
+    height: 100%;
+  }
 
-body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  background: var(--bg);
-  color: var(--text);
-  font-size: 14px;
-  line-height: 1.5;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
+  body {
+    font-family: var(--font-family-sans);
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
 
-:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-  border-radius: 2px;
-}
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
 
-/* Remove default button/input resets */
-button {
-  font-family: inherit;
-  font-size: inherit;
-}
-
-input, select, textarea {
-  font-family: inherit;
-  font-size: inherit;
+  button, input, select, textarea {
+    font-family: inherit;
+    font-size: inherit;
+  }
 }
 
 /* Scrollbar */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--text-3); }
+::-webkit-scrollbar-thumb { background: var(--color-border-2); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-text-3); }
 
-/* Transitions */
-button, a[href] { transition: color 0.12s, background 0.12s, border-color 0.12s, opacity 0.12s; }
+/* Transition defaults */
+@layer base {
+  button, a[href] { transition: color 0.12s, background 0.12s, border-color 0.12s, opacity 0.12s; }
+}
 
-/* Hover effects via class (inline styles can't do :hover) */
+/* Custom checkbox */
+@layer components {
+  .checkbox-styled {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 1.125rem;
+    height: 1.125rem;
+    border-radius: 4px;
+    border: 1.5px solid var(--color-border-2);
+    background: var(--color-surface-raised);
+    cursor: pointer;
+    position: relative;
+    flex-shrink: 0;
+    transition: border-color 0.12s, background 0.12s;
+  }
+  .checkbox-styled:hover {
+    border-color: var(--color-accent);
+  }
+  .checkbox-styled:checked,
+  .checkbox-styled:indeterminate {
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+  }
+  .checkbox-styled:checked::after {
+    content: '';
+    position: absolute;
+    left: 5px;
+    top: 2px;
+    width: 5px;
+    height: 9px;
+    border: 1.5px solid #fff;
+    border-top: none;
+    border-left: none;
+    transform: rotate(45deg);
+  }
+  .checkbox-styled:indeterminate::after {
+    content: '';
+    position: absolute;
+    left: 3px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 10px;
+    height: 1.5px;
+    background: #fff;
+    border-radius: 1px;
+  }
+}
+
+/* Hover helpers */
 .row-hover:hover { background: #0d1e32 !important; }
-.btn-ghost:hover { color: var(--text) !important; border-color: var(--border-2) !important; }
-.tag-btn:hover { border-color: var(--accent) !important; color: var(--accent) !important; cursor: pointer; }
-.nav-link:hover { color: var(--text) !important; }
+.btn-ghost:hover { color: var(--color-text) !important; border-color: var(--color-border-2) !important; }
+.tag-btn:hover { border-color: var(--color-accent) !important; color: var(--color-accent) !important; cursor: pointer; }
+.nav-link:hover { color: var(--color-text) !important; }
+
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+@keyframes fadeSlideIn { from { opacity: 0; transform: translateX(-50%) translateY(-6px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }

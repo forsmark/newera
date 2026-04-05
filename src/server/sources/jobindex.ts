@@ -1,8 +1,11 @@
 import { join } from 'path';
+import { parse } from 'node-html-parser';
 import type { Job } from '../types';
 import { DATA_DIR } from '../config';
+import { fetchPageText } from '../utils/fetchPageText';
+import { extractJobDescription } from '../llm';
 
-type JobPartial = Omit<Job, 'id' | 'match_score' | 'match_reasoning' | 'status' | 'seen_at'>;
+type JobPartial = Omit<Job, 'id' | 'match_score' | 'match_reasoning' | 'match_summary' | 'tags' | 'status' | 'seen_at'>;
 
 interface StashResult {
   tid: string;
@@ -103,6 +106,73 @@ function isWrongRegion(location: string | null, targetArea: string): boolean {
   return false;
 }
 
+/** Fetch a jobindex detail page and extract the external "se jobbet" employer URL. */
+async function resolveExternalUrl(shareUrl: string): Promise<string | null> {
+  try {
+    const res = await fetch(shareUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+        Accept: 'text/html,application/xhtml+xml',
+        'Accept-Language': 'da,en;q=0.9',
+      },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) return null;
+
+    const html = await res.text();
+
+    // Try Stash JSON first — look for apply_url or similar
+    try {
+      const stash = extractStash(html);
+      const jobApp = stash['job_app'] as Record<string, unknown> | undefined;
+      const storeData = jobApp?.['storeData'] as Record<string, unknown> | undefined;
+      if (storeData) {
+        for (const key of Object.keys(storeData)) {
+          const entry = storeData[key] as Record<string, unknown> | undefined;
+          const applyUrl = entry?.['apply_url'] ?? entry?.['applyUrl'] ?? entry?.['application_url'];
+          if (typeof applyUrl === 'string' && applyUrl.startsWith('http') && !applyUrl.includes('jobindex.dk')) {
+            return applyUrl;
+          }
+        }
+      }
+    } catch {
+      // Stash not present or has different structure — fall through to HTML
+    }
+
+    // HTML fallback: find anchor with "se jobbet" / "ansøg" text pointing off-site
+    const root = parse(html);
+    const candidateTexts = /se jobbet|vis job|show job|se job|ansøg nu|ansøg her|apply now|go to job|apply here/i;
+    for (const a of root.querySelectorAll('a[href]')) {
+      const href = a.getAttribute('href') ?? '';
+      const text = a.innerText.trim();
+      if (
+        href.startsWith('http') &&
+        !href.includes('jobindex.dk') &&
+        (candidateTexts.test(text) || candidateTexts.test(a.getAttribute('aria-label') ?? ''))
+      ) {
+        return href;
+      }
+    }
+  } catch (err) {
+    console.warn(`[jobindex] resolveExternalUrl failed for ${shareUrl}:`, (err as Error).message);
+  }
+  return null;
+}
+
+/** Run promises with at most `limit` in parallel. */
+async function pLimit<T>(tasks: (() => Promise<T>)[], limit: number): Promise<T[]> {
+  const results: T[] = new Array(tasks.length);
+  let idx = 0;
+  async function worker() {
+    while (idx < tasks.length) {
+      const i = idx++;
+      results[i] = await tasks[i]();
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, tasks.length) }, worker));
+  return results;
+}
+
 async function fetchPage(url: string, targetArea: string): Promise<JobPartial[]> {
   const response = await fetch(url, {
     headers: {
@@ -125,26 +195,51 @@ async function fetchPage(url: string, targetArea: string): Promise<JobPartial[]>
 
   const fetched_at = new Date().toISOString();
 
-  return results
-    .filter(r => {
-      if (!r.tid || !r.headline) return false;
-      if (isWrongRegion(r.area, targetArea)) {
-        console.log(`[jobindex] Skipping out-of-area job: "${r.headline}" (${r.area})`);
-        return false;
+  const filtered = results.filter(r => {
+    if (!r.tid || !r.headline) return false;
+    if (isWrongRegion(r.area, targetArea)) {
+      console.log(`[jobindex] Skipping out-of-area job: "${r.headline}" (${r.area})`);
+      return false;
+    }
+    return true;
+  });
+
+  // Enrich each job with external URL + full description (5 concurrent)
+  const enriched = await pLimit(
+    filtered.map(r => async () => {
+      const externalUrl = await resolveExternalUrl(r.share_url);
+      // Jobindex-hosted listings have no external URL — fall back to /jobannonce/ page
+      const joannonceUrl = `https://www.jobindex.dk/jobannonce/${r.tid}/`;
+      const descriptionUrl = externalUrl ?? joannonceUrl;
+
+      if (externalUrl) {
+        console.log(`[jobindex] Resolved external URL for "${r.headline}": ${externalUrl}`);
+      } else {
+        console.log(`[jobindex] No external URL for "${r.headline}", using jobannonce page`);
       }
-      return true;
-    })
-    .map(r => ({
-      source: 'jobindex' as const,
-      external_id: r.tid,
-      title: r.headline!,
-      company: r.companytext || 'Unknown',
-      location: r.area || null,
-      url: r.share_url,
-      description: null,
-      posted_at: r.firstdate ? new Date(r.firstdate).toISOString() : null,
-      fetched_at,
-    }));
+
+      let description: string | null = null;
+      const pageText = await fetchPageText(descriptionUrl);
+      if (pageText) {
+        description = await extractJobDescription(pageText);
+      }
+
+      return {
+        source: 'jobindex' as const,
+        external_id: r.tid,
+        title: r.headline!,
+        company: r.companytext || 'Unknown',
+        location: r.area || null,
+        url: externalUrl ?? joannonceUrl,
+        description,
+        posted_at: r.firstdate ? new Date(r.firstdate).toISOString() : null,
+        fetched_at,
+      } satisfies JobPartial;
+    }),
+    5,
+  );
+
+  return enriched;
 }
 
 export async function fetchJobindex(): Promise<JobPartial[]> {

@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "scripts": {
+    "test": "bun test"
+  },
   "dependencies": {
     "hono": "^4.7.4",
     "node-html-parser": "^7.0.1"

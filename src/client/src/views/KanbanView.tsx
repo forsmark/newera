@@ -59,36 +59,32 @@ export default function KanbanView({ refreshKey }: Props) {
     : applications;
 
   if (loading) {
-    return <div style={{ color: "#405a74", textAlign: "center", padding: "4rem 0", fontSize: "0.875rem" }}>Loading…</div>;
+    return <div className="text-text-3 text-center py-16 text-sm">Loading…</div>;
   }
 
   if (applications.length === 0) {
     return (
-      <div style={{ color: "#405a74", textAlign: "center", padding: "5rem 1rem" }}>
-        <div style={{ fontSize: "1rem", fontWeight: 600, color: "#7a95b0", marginBottom: "0.5rem" }}>No applications yet</div>
-        <div style={{ fontSize: "0.875rem" }}>
-          Mark a job as <strong style={{ color: "#7a95b0", fontWeight: 600 }}>Applied →</strong> in the Jobs view to track it here.
+      <div className="text-text-3 text-center py-20 px-4">
+        <div className="text-base font-semibold text-text-2 mb-2">No applications yet</div>
+        <div className="text-sm">
+          Mark a job as <strong className="text-text-2 font-semibold">Applied →</strong> in the Jobs view to track it here.
         </div>
       </div>
     );
   }
 
   return (
-    <div style={{ padding: "1.25rem 1rem" }}>
-      <div style={{ maxWidth: "320px", marginBottom: "1rem" }}>
+    <div className="px-3 sm:px-4 py-4 sm:py-6">
+      <div className="max-w-full sm:max-w-[320px] mb-4">
         <input
           type="text"
           placeholder="Search applications…"
           value={searchQuery}
           onChange={e => setSearchQuery(e.target.value)}
-          style={{
-            width: "100%", padding: "0.375rem 0.75rem",
-            borderRadius: "var(--radius-sm)", border: "1px solid #1a2840",
-            background: "#0b1628", color: "#dde6f0", fontSize: "0.875rem", outline: "none", boxSizing: "border-box",
-          }}
+          className="w-full px-3 py-[0.375rem] rounded-sm border border-border bg-surface text-text text-sm outline-none"
         />
       </div>
-      <div style={{ display: "flex", gap: "0.75rem", overflowX: "auto", alignItems: "flex-start", minHeight: "calc(100vh - 120px)" }}>
+      <div className="flex gap-4 overflow-x-auto items-start min-h-[calc(100vh_-_130px)]">
         {COLUMNS.map(col => (
           <KanbanColumn
             key={col.key}
@@ -102,7 +98,7 @@ export default function KanbanView({ refreshKey }: Props) {
         ))}
       </div>
       {searchQuery && filtered.length === 0 && (
-        <div style={{ color: "#405a74", textAlign: "center", padding: "2rem", fontSize: "0.875rem" }}>
+        <div className="text-text-3 text-center p-8 text-sm">
           No applications match "{searchQuery}"
         </div>
       )}

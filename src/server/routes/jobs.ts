@@ -2,6 +2,8 @@ import { Hono } from 'hono';
 import db from '../db';
 import type { Job } from '../types';
 import { analyzeJob } from '../llm';
+import { analyzeUnscoredJobs } from '../scheduler';
+import { fetchPageText } from '../utils/fetchPageText';
 
 const app = new Hono();
 
@@ -86,6 +88,14 @@ app.patch('/:id', async (c) => {
          VALUES (?, 'applied', ?, ?)`,
         [id, now, now],
       );
+      // Fire-and-forget: fetch and archive the full job posting
+      (async () => {
+        const text = await fetchPageText(job.url);
+        const archived = text ?? job.description;
+        if (archived) {
+          db.run('UPDATE applications SET archived_description = ? WHERE job_id = ?', [archived, id]);
+        }
+      })().catch(err => console.error('[jobs] Failed to archive posting for job', id, ':', err));
     }
   }
 
@@ -135,6 +145,27 @@ app.post('/bulk-status', async (c) => {
 
   const updated = updateMany(ids as string[]);
   return c.json({ updated });
+});
+
+// POST /api/jobs/rescore-all
+// Resets match scores for all non-rejected jobs and re-queues analysis via the scheduler
+app.post('/rescore-all', (c) => {
+  const result = db.run(
+    "UPDATE jobs SET match_score = NULL, match_reasoning = NULL, match_summary = NULL, tags = NULL WHERE status != 'rejected'"
+  );
+  const queued = result.changes;
+
+  // Fire-and-forget: loop until all jobs are scored (analyzeUnscoredJobs processes 20 at a time)
+  (async () => {
+    for (let i = 0; i < 100; i++) {
+      const row = db.query('SELECT COUNT(*) as c FROM jobs WHERE match_score IS NULL').get() as { c: number };
+      if (row.c === 0) break;
+      await analyzeUnscoredJobs();
+    }
+    console.log('[jobs] rescore-all complete');
+  })().catch(console.error);
+
+  return c.json({ queued }, 202);
 });
 
 // POST /api/jobs/:id/analyze

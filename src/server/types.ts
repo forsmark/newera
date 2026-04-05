@@ -1,6 +1,6 @@
 export interface Job {
   id: string;
-  source: 'jsearch' | 'jobindex';
+  source: 'jobindex' | 'linkedin';
   external_id: string;
   title: string;
   company: string;

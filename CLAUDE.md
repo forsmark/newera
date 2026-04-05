@@ -9,7 +9,7 @@ scores them with a local LLM, and tracks applications via a kanban board.
 - Frontend: React (Vite for dev, built assets served by Hono in prod)
 - Database: SQLite (Bun built-in)
 - Container: Single Docker container
-- LLM: Ollama — qwen3.5:9b (http://host.docker.internal:11434)
+- LLM: Ollama — gemma4:26b (http://host.docker.internal:11434)
 
 ## Project Structure
 ```

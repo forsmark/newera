@@ -34,6 +34,7 @@ app.get('/', (c) => {
       a.interview_at,
       a.applied_at,
       a.updated_at,
+      a.archived_description,
       j.id           AS job__id,
       j.source       AS job__source,
       j.external_id  AS job__external_id,
@@ -112,6 +113,7 @@ app.patch('/:id', async (c) => {
   const updated = db.query(`
     SELECT
       a.job_id, a.kanban_column, a.notes, a.interview_at, a.applied_at, a.updated_at,
+      a.archived_description,
       j.id AS job__id, j.source AS job__source, j.external_id AS job__external_id,
       j.title AS job__title, j.company AS job__company, j.location AS job__location,
       j.url AS job__url, j.description AS job__description, j.posted_at AS job__posted_at,

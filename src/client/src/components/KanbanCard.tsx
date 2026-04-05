@@ -7,11 +7,11 @@ interface Props {
   columnColor?: string;
 }
 
-function scoreBadgeStyle(score: number | null): React.CSSProperties {
-  if (score === null) return { background: "#0f1e34", color: "#405a74" };
-  if (score >= 80) return { background: "#081a10", color: "#22c55e" };
-  if (score >= 50) return { background: "#1a1000", color: "#f59e0b" };
-  return { background: "#0b1628", color: "#405a74" };
+function scoreBadgeClass(score: number | null): string {
+  if (score === null) return "bg-surface-raised text-text-3";
+  if (score >= 80) return "bg-green-bg text-green";
+  if (score >= 50) return "bg-amber-bg text-amber";
+  return "bg-surface text-text-3";
 }
 
 function daysAgo(dateStr: string): string {
@@ -25,16 +25,6 @@ function formatInterviewDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 
-const btnBase: React.CSSProperties = {
-  padding: "0.25rem 0.5625rem",
-  fontSize: "0.75rem",
-  borderRadius: "var(--radius-sm)",
-  border: "1px solid",
-  cursor: "pointer",
-  fontWeight: 500,
-  lineHeight: 1.4,
-};
-
 export default function KanbanCard({ application, onUpdate, columnColor = "#243653" }: Props) {
   const [editing, setEditing] = useState(false);
   const [notes, setNotes] = useState(application.notes ?? "");
@@ -42,6 +32,7 @@ export default function KanbanCard({ application, onUpdate, columnColor = "#2436
     application.interview_at ? application.interview_at.slice(0, 10) : ""
   );
   const [saving, setSaving] = useState(false);
+  const [archiveExpanded, setArchiveExpanded] = useState(false);
 
   useEffect(() => {
     if (!editing) {
@@ -79,67 +70,42 @@ export default function KanbanCard({ application, onUpdate, columnColor = "#2436
   }
 
   const { job } = application;
-  const badgeStyle = scoreBadgeStyle(job.match_score);
 
   return (
     <div
       draggable={!saving}
       onDragStart={handleDragStart}
-      style={{
-        background: "#0b1628",
-        border: "1px solid #1a2840",
-        borderLeft: `3px solid ${columnColor}40`,
-        borderRadius: "var(--radius-sm)",
-        padding: "0.6875rem 0.75rem",
-        cursor: "grab",
-        userSelect: "none",
-      }}
+      className="bg-surface border border-border rounded px-3.5 py-3.5 cursor-grab select-none"
+      style={{ borderLeftWidth: "3px", borderLeftColor: `${columnColor}40` }}
     >
       {/* Score + title */}
-      <div style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem", marginBottom: "0.25rem" }}>
-        <div style={{
-          ...badgeStyle,
-          padding: "0.125rem 0.3125rem",
-          borderRadius: "var(--radius-sm)",
-          fontWeight: 700,
-          fontSize: "0.6875rem",
-          flexShrink: 0,
-          marginTop: "2px",
-          fontVariantNumeric: "tabular-nums",
-        }}>
+      <div className="flex items-start gap-2 mb-1">
+        <div className={`${scoreBadgeClass(job.match_score)} px-2 py-1 rounded-sm font-bold text-[0.75rem] shrink-0 mt-[2px] tabular-nums`}>
           {job.match_score === null ? "…" : job.match_score}
         </div>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontWeight: 600, color: "#dde6f0", fontSize: "0.875rem", lineHeight: 1.35, wordBreak: "break-word" }}>
-            {job.title}
-          </div>
-          <div style={{ color: "#7a95b0", fontSize: "0.8125rem", marginTop: "0.0625rem" }}>
-            {job.company}
-          </div>
+        <div className="min-w-0">
+          <div className="font-semibold text-text text-sm leading-[1.35] break-words">{job.title}</div>
+          <div className="text-text-2 text-[0.8125rem] mt-[0.0625rem]">{job.company}</div>
         </div>
       </div>
 
       {/* Location */}
       {job.location && (
-        <div style={{ color: "#405a74", fontSize: "0.75rem", marginBottom: "0.25rem" }}>{job.location}</div>
+        <div className="text-text-3 text-[0.75rem] mb-1">{job.location}</div>
       )}
 
       {/* Meta row */}
-      <div style={{ display: "flex", alignItems: "center", gap: "0.375rem", marginBottom: "0.375rem" }}>
-        <span style={{
-          background: "#030b17", border: "1px solid #1a2840", borderRadius: "var(--radius-sm)",
-          padding: "0.0625rem 0.3125rem", fontSize: "0.6rem", color: "#405a74",
-          textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600, flexShrink: 0,
-        }}>
+      <div className="flex items-center gap-[0.375rem] mb-[0.375rem]">
+        <span className="bg-bg border border-border rounded-sm px-[0.3125rem] py-[0.0625rem] text-[0.6rem] text-text-3 uppercase tracking-[0.05em] font-semibold shrink-0">
           {job.source}
         </span>
-        <span style={{ color: "#405a74", fontSize: "0.75rem" }}>Applied {daysAgo(application.applied_at)}</span>
+        <span className="text-text-3 text-[0.75rem]">Applied {daysAgo(application.applied_at)}</span>
         <a
           href={job.url}
           target="_blank"
           rel="noopener noreferrer"
           onClick={e => e.stopPropagation()}
-          style={{ color: "#405a74", fontSize: "0.75rem", textDecoration: "none", marginLeft: "auto", flexShrink: 0 }}
+          className="text-text-3 text-[0.75rem] no-underline ml-auto shrink-0"
         >
           ↗
         </a>
@@ -147,62 +113,70 @@ export default function KanbanCard({ application, onUpdate, columnColor = "#2436
 
       {/* Interview date */}
       {application.interview_at && !editing && (
-        <div style={{ color: "#a855f7", fontSize: "0.75rem", fontWeight: 600, marginBottom: "0.25rem" }}>
+        <div className="text-[#a855f7] text-[0.75rem] font-semibold mb-1">
           Interview: {formatInterviewDate(application.interview_at)}
         </div>
       )}
 
-      {/* Summary (factual role overview — more useful for tracking than fit reasoning) */}
+      {/* Summary */}
       {job.match_summary && !editing && (
-        <div style={{
-          marginBottom: "0.375rem",
-          padding: "0.375rem 0.5rem",
-          background: "#060f1e",
-          borderRadius: "var(--radius-sm)",
-          color: "#405a74",
-          fontSize: "0.75rem",
-          lineHeight: 1.5,
-        }}>
+        <div className="mb-[0.375rem] px-2 py-[0.375rem] bg-surface-deep rounded-sm text-text-3 text-[0.75rem] leading-[1.5]">
           {job.match_summary.length > 120 ? job.match_summary.slice(0, 120) + '…' : job.match_summary}
         </div>
       )}
 
       {/* Notes preview */}
       {application.notes && !editing && (
-        <div style={{ color: "#7a95b0", fontSize: "0.75rem", marginBottom: "0.375rem", fontStyle: "italic", lineHeight: 1.4 }}>
+        <div className="text-text-2 text-[0.75rem] mb-[0.375rem] italic leading-[1.4]">
           {application.notes.slice(0, 100)}{application.notes.length > 100 ? "…" : ""}
+        </div>
+      )}
+
+      {/* Archived posting */}
+      {application.archived_description && !editing && (
+        <div className="mt-1 mb-[0.375rem]">
+          <button
+            onClick={e => { e.stopPropagation(); setArchiveExpanded(v => !v); }}
+            className="px-3 py-1.5 text-[0.75rem] rounded-sm border border-border bg-transparent text-text-3 font-medium cursor-pointer btn-ghost w-full text-left"
+          >
+            {archiveExpanded ? "Hide posting ↑" : "View archived posting ↓"}
+          </button>
+          {archiveExpanded && (
+            <div
+              className="mt-1.5 px-2.5 py-2 rounded-sm bg-bg border border-border text-text-3 text-[0.7rem] leading-[1.6] whitespace-pre-wrap overflow-y-auto"
+              style={{ maxHeight: "300px" }}
+              onClick={e => e.stopPropagation()}
+            >
+              {application.archived_description}
+            </div>
+          )}
         </div>
       )}
 
       {/* Edit mode */}
       {editing ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginTop: "0.5rem" }} onClick={e => e.stopPropagation()}>
+        <div className="flex flex-col gap-2 mt-2" onClick={e => e.stopPropagation()}>
           <textarea
             value={notes}
             onChange={e => setNotes(e.target.value)}
             placeholder="Notes…"
             rows={3}
-            style={{
-              width: "100%", padding: "0.375rem 0.5rem", borderRadius: "var(--radius-sm)",
-              border: "1px solid #1a2840", background: "#030b17",
-              color: "#dde6f0", fontSize: "0.75rem", resize: "vertical", outline: "none", boxSizing: "border-box",
-            }}
+            className="w-full px-2 py-[0.375rem] rounded-sm border border-border bg-bg text-text text-[0.75rem] resize-y outline-none"
           />
           <input
             type="date"
             value={interviewAt}
             onChange={e => setInterviewAt(e.target.value)}
-            style={{
-              width: "100%", padding: "0.3125rem 0.5rem", borderRadius: "var(--radius-sm)",
-              border: "1px solid #1a2840", background: "#030b17",
-              color: "#dde6f0", fontSize: "0.75rem", outline: "none", boxSizing: "border-box", colorScheme: "dark",
-            }}
+            className="w-full px-2 py-[0.3125rem] rounded-sm border border-border bg-bg text-text text-[0.75rem] outline-none"
+            style={{ colorScheme: "dark" }}
           />
-          <div style={{ display: "flex", gap: "0.375rem" }}>
-            <button onClick={handleSave} disabled={saving} style={{ ...btnBase, background: "#0d1e38", borderColor: "#1a3060", color: "#3b82f6" }}>
+          <div className="flex gap-[0.375rem]">
+            <button onClick={handleSave} disabled={saving}
+              className="px-3 py-1.5 text-[0.75rem] rounded-sm border border-border-accent bg-accent-bg text-accent font-medium cursor-pointer">
               {saving ? "Saving…" : "Save"}
             </button>
-            <button onClick={handleCancel} disabled={saving} style={{ ...btnBase, background: "transparent", borderColor: "#1a2840", color: "#7a95b0" }}>
+            <button onClick={handleCancel} disabled={saving}
+              className="px-3 py-1.5 text-[0.75rem] rounded-sm border border-border bg-transparent text-text-2 font-medium cursor-pointer">
               Cancel
             </button>
           </div>
@@ -210,8 +184,7 @@ export default function KanbanCard({ application, onUpdate, columnColor = "#2436
       ) : (
         <button
           onClick={e => { e.stopPropagation(); setEditing(true); }}
-          style={{ ...btnBase, marginTop: "0.25rem", background: "transparent", borderColor: "#1a2840", color: "#405a74" }}
-          className="btn-ghost"
+          className="mt-1.5 px-3 py-1.5 text-[0.75rem] rounded-sm border border-border bg-transparent text-text-3 font-medium cursor-pointer btn-ghost"
         >
           Edit
         </button>

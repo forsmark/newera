@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { Job } from "../types";
 import JobRow from "../components/JobRow";
 import { toast } from "../components/Toast";
@@ -12,15 +13,22 @@ type FilterSource = "all" | "jsearch" | "jobindex";
 type PostedWithin = 'any' | '7d' | '30d';
 type SortBy = 'score' | 'posted' | 'fetched';
 
-const selectStyle: React.CSSProperties = {
-  padding: "0.3125rem 0.5rem",
-  borderRadius: "var(--radius-sm)",
-  border: "1px solid #1a2840",
-  background: "#0b1628",
-  color: "#7a95b0",
-  fontSize: "0.8125rem",
-  cursor: "pointer",
-  outline: "none",
+const selectClass = "px-2.5 py-2 rounded-sm border border-border bg-surface text-text-2 text-[0.8125rem] cursor-pointer outline-none";
+
+// Stagger animation for list items
+const listVariants = {
+  hidden: {},
+  visible: {
+    transition: {
+      staggerChildren: 0.03,
+      delayChildren: 0.05,
+    },
+  },
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 10 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.2, ease: "easeOut" } },
 };
 
 export default function JobsView({ refreshKey }: Props) {
@@ -44,8 +52,14 @@ export default function JobsView({ refreshKey }: Props) {
   );
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
+  const [rescoring, setRescoring] = useState(false);
   const [focusedIndex, setFocusedIndex] = useState<number>(-1);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const prefersReducedMotion = useReducedMotion();
+
+  // Track filter identity to re-trigger list animation
+  const filterKey = `${filterStatus}|${filterSource}|${activeTag}|${searchQuery}|${postedWithin}|${sortBy}`;
+  const prevFilterKey = useRef(filterKey);
 
   const fetchJobs = useCallback(async (resetOffset?: number) => {
     const useOffset = resetOffset ?? offset;
@@ -151,6 +165,23 @@ export default function JobsView({ refreshKey }: Props) {
     }
   }
 
+  async function handleRescoreAll() {
+    if (rescoring) return;
+    setRescoring(true);
+    try {
+      const res = await fetch('/api/jobs/rescore-all', { method: 'POST' });
+      if (!res.ok) {
+        toast('Re-score failed — please try again');
+      } else {
+        setJobs(prev => prev.map(j =>
+          j.status !== 'rejected' ? { ...j, match_score: null, match_reasoning: null, match_summary: null } : j
+        ));
+      }
+    } finally {
+      setRescoring(false);
+    }
+  }
+
   function toggleCompact() {
     setCompact(v => {
       const next = !v;
@@ -230,86 +261,76 @@ export default function JobsView({ refreshKey }: Props) {
   const savedCount = jobs.filter(j => j.status === 'saved').length;
   const appliedCount = jobs.filter(j => j.status === 'applied').length;
 
-  return (
-    <div style={{ maxWidth: "940px", margin: "0 auto", padding: "1.25rem 1rem" }}>
+  // Determine whether to animate the list (filter changed)
+  const shouldAnimate = !prefersReducedMotion && filterKey !== prevFilterKey.current;
+  if (filterKey !== prevFilterKey.current) prevFilterKey.current = filterKey;
 
-      {/* ── Filter bar ── */}
-      <div style={{ marginBottom: "1rem", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+  // Cap stagger at 15 items
+  const animatedItems = Math.min(filtered.length, 15);
+
+  return (
+    <div className="max-w-[940px] mx-auto px-3 sm:px-4 py-4 sm:py-6">
+
+      {/* Filter bar */}
+      <div className="mb-4 sm:mb-5 flex flex-col gap-2 sm:gap-3">
 
         {/* Row 1: search + view controls */}
-        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+        <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
           <input
             type="text"
             placeholder="Search jobs…"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            style={{
-              flex: 1,
-              padding: "0.375rem 0.75rem",
-              borderRadius: "var(--radius-sm)",
-              border: "1px solid #1a2840",
-              background: "#0b1628",
-              color: "#dde6f0",
-              fontSize: "0.875rem",
-              outline: "none",
-            }}
+            className="w-full sm:flex-1 px-3 py-2 rounded-sm border border-border bg-surface text-text text-sm outline-none"
           />
-          <select
-            value={postedWithin}
-            onChange={e => { const v = e.target.value as PostedWithin; localStorage.setItem('jobs-posted-within', v); setPostedWithin(v); }}
-            style={{ ...selectStyle, color: postedWithin !== 'any' ? '#dde6f0' : '#7a95b0' }}
-          >
-            <option value="any">Any time</option>
-            <option value="7d">7 days</option>
-            <option value="30d">30 days</option>
-          </select>
-          <select
-            value={sortBy}
-            onChange={e => { const v = e.target.value as SortBy; localStorage.setItem('jobs-sort-by', v); setSortBy(v); }}
-            style={selectStyle}
-          >
-            <option value="score">↓ Score</option>
-            <option value="posted">↓ Posted</option>
-            <option value="fetched">↓ Fetched</option>
-          </select>
-          <button
-            onClick={toggleCompact}
-            title={compact ? "Switch to detailed view" : "Switch to compact view"}
-            style={{
-              padding: "0.3125rem 0.625rem",
-              borderRadius: "var(--radius-sm)",
-              border: "1px solid #1a2840",
-              background: compact ? "#1a2840" : "transparent",
-              color: compact ? "#dde6f0" : "#405a74",
-              cursor: "pointer",
-              fontSize: "0.8125rem",
-              fontWeight: 500,
-            }}
-          >
-            {compact ? "≡ Compact" : "⊞ Detail"}
-          </button>
-          <button
-            onClick={() => setShowShortcuts(true)}
-            title="Keyboard shortcuts"
-            style={{
-              padding: "0.3125rem 0.5rem",
-              borderRadius: "var(--radius-sm)",
-              border: "1px solid #1a2840",
-              background: "transparent",
-              color: "#405a74",
-              cursor: "pointer",
-              fontSize: "0.8125rem",
-              fontWeight: 600,
-            }}
-          >
-            ?
-          </button>
+          <div className="flex gap-2 items-center">
+            <select
+              value={postedWithin}
+              onChange={e => { const v = e.target.value as PostedWithin; localStorage.setItem('jobs-posted-within', v); setPostedWithin(v); }}
+              className={`${selectClass} flex-1 sm:flex-none ${postedWithin !== 'any' ? 'text-text' : 'text-text-2'}`}
+            >
+              <option value="any">Any time</option>
+              <option value="7d">7 days</option>
+              <option value="30d">30 days</option>
+            </select>
+            <select
+              value={sortBy}
+              onChange={e => { const v = e.target.value as SortBy; localStorage.setItem('jobs-sort-by', v); setSortBy(v); }}
+              className={`${selectClass} flex-1 sm:flex-none`}
+            >
+              <option value="score">↓ Score</option>
+              <option value="posted">↓ Posted</option>
+              <option value="fetched">↓ Fetched</option>
+            </select>
+            <button
+              onClick={toggleCompact}
+              title={compact ? "Switch to detailed view" : "Switch to compact view"}
+              className={`shrink-0 px-2.5 py-2 rounded-sm border border-border text-[0.8125rem] font-medium cursor-pointer ${compact ? 'bg-border text-text' : 'bg-transparent text-text-3'}`}
+            >
+              {compact ? "≡" : "⊞"}
+            </button>
+            <button
+              onClick={handleRescoreAll}
+              disabled={rescoring}
+              title="Re-score all jobs"
+              className="shrink-0 px-2.5 py-2 rounded-sm border border-border bg-transparent text-text-3 cursor-pointer text-[0.8125rem] disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {rescoring ? "…" : "↻"}
+            </button>
+            <button
+              onClick={() => setShowShortcuts(true)}
+              title="Keyboard shortcuts"
+              className="shrink-0 px-2.5 py-2 rounded-sm border border-border bg-transparent text-text-3 cursor-pointer text-[0.8125rem] font-semibold"
+            >
+              ?
+            </button>
+          </div>
         </div>
 
-        {/* Row 2: status tabs + source pills + show rejected */}
-        <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
+        {/* Row 2: status tabs + source/tag pills */}
+        <div className="flex gap-2 sm:gap-3 items-center flex-wrap">
           {/* Status tabs */}
-          <div style={{ display: "flex", gap: "0", borderBottom: "1px solid #1a2840" }}>
+          <div className="flex gap-0 border-b border-border overflow-x-auto shrink-0 w-full sm:w-auto">
             {(["all", "unread", "new", "saved", "applied"] as FilterStatus[]).map(s => {
               const count = s === "unread" ? unreadCount : s === "new" ? newCount : s === "saved" ? savedCount : s === "applied" ? appliedCount : null;
               const isActive = filterStatus === s;
@@ -317,30 +338,20 @@ export default function JobsView({ refreshKey }: Props) {
                 <button
                   key={s}
                   onClick={() => setFilterStatus(s)}
+                  className="px-3 py-2 border-none bg-transparent cursor-pointer text-[0.8125rem] whitespace-nowrap -mb-px"
                   style={{
-                    padding: "0.25rem 0.625rem",
-                    border: "none",
                     borderBottom: `2px solid ${isActive ? '#3b82f6' : 'transparent'}`,
-                    background: "transparent",
-                    color: isActive ? "#dde6f0" : "#405a74",
-                    cursor: "pointer",
-                    fontSize: "0.8125rem",
+                    color: isActive ? '#dde6f0' : '#6b8aa3',
                     fontWeight: isActive ? 600 : 400,
-                    marginBottom: "-1px",
-                    whiteSpace: "nowrap",
                   }}
                 >
                   {s.charAt(0).toUpperCase() + s.slice(1)}
                   {count !== null && count > 0 && (
-                    <span style={{
-                      marginLeft: "0.3rem",
-                      background: isActive ? "#1a2840" : "#0b1628",
-                      color: isActive ? "#7a95b0" : "#405a74",
-                      borderRadius: "9999px",
-                      padding: "0 0.3rem",
-                      fontSize: "0.6875rem",
-                      fontWeight: 600,
-                    }}>
+                    <span className="ml-[0.3rem] rounded-full px-[0.3rem] text-[0.6875rem] font-semibold"
+                      style={{
+                        background: isActive ? '#1a2840' : '#0b1628',
+                        color: isActive ? '#7a95b0' : '#6b8aa3',
+                      }}>
                       {count}
                     </span>
                   )}
@@ -349,140 +360,124 @@ export default function JobsView({ refreshKey }: Props) {
             })}
           </div>
 
-          {/* Source pills */}
-          {jsearchCount > 0 && jobindexCount > 0 && (
-            <div style={{ display: "flex", gap: "0.25rem" }}>
-              {(["all", "jsearch", "jobindex"] as FilterSource[]).map(key => (
-                <button
-                  key={key}
-                  onClick={() => setFilterSource(key)}
-                  style={{
-                    padding: "0.1875rem 0.5rem",
-                    borderRadius: "9999px",
-                    border: `1px solid ${filterSource === key ? '#243653' : '#1a2840'}`,
-                    background: filterSource === key ? '#1a2840' : 'transparent',
-                    color: filterSource === key ? '#7a95b0' : '#405a74',
-                    cursor: "pointer",
-                    fontSize: "0.75rem",
-                    fontWeight: 500,
-                  }}
-                >
-                  {key === 'all' ? 'All sources' : key === 'jsearch' ? 'JSearch' : 'Jobindex'}
+          {/* Source pills + active tag + show rejected — second line on mobile */}
+          <div className="flex gap-2 items-center flex-wrap w-full sm:w-auto sm:contents">
+            {/* Source pills */}
+            {jsearchCount > 0 && jobindexCount > 0 && (
+              <div className="flex gap-1">
+                {(["all", "jsearch", "jobindex"] as FilterSource[]).map(key => (
+                  <button
+                    key={key}
+                    onClick={() => setFilterSource(key)}
+                    className="px-3 py-1.5 rounded-full border cursor-pointer text-[0.75rem] font-medium"
+                    style={{
+                      borderColor: filterSource === key ? '#243653' : '#1a2840',
+                      background: filterSource === key ? '#1a2840' : 'transparent',
+                      color: filterSource === key ? '#7a95b0' : '#6b8aa3',
+                    }}
+                  >
+                    {key === 'all' ? 'All sources' : key === 'jsearch' ? 'JSearch' : 'Jobindex'}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Active tag chip */}
+            {activeTag && (
+              <div className="flex items-center gap-1">
+                <span className="bg-accent-bg border border-border-2 text-accent rounded-sm px-2 py-[0.125rem] text-[0.75rem] font-medium">
+                  {activeTag}
+                </span>
+                <button onClick={() => setActiveTag(null)}
+                  className="px-[0.375rem] py-[0.125rem] rounded-sm border border-border bg-transparent text-text-3 cursor-pointer text-[0.75rem]">
+                  ✕
                 </button>
-              ))}
-            </div>
-          )}
+              </div>
+            )}
 
-          {/* Active tag chip */}
-          {activeTag && (
-            <div style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
-              <span style={{
-                background: "#0d1e38", border: "1px solid #243653", color: "#3b82f6",
-                borderRadius: "var(--radius-sm)", padding: "0.125rem 0.5rem", fontSize: "0.75rem", fontWeight: 500,
-              }}>
-                {activeTag}
-              </span>
-              <button onClick={() => setActiveTag(null)} style={{
-                padding: "0.125rem 0.375rem", borderRadius: "var(--radius-sm)",
-                border: "1px solid #1a2840", background: "transparent",
-                color: "#405a74", cursor: "pointer", fontSize: "0.75rem",
-              }}>✕</button>
-            </div>
-          )}
-
-          {/* Show rejected */}
-          <label style={{
-            display: "flex", alignItems: "center", gap: "0.375rem",
-            fontSize: "0.8125rem", color: "#405a74", cursor: "pointer", userSelect: "none",
-            marginLeft: "auto",
-          }}>
-            <input
-              type="checkbox"
-              checked={showRejected}
-              onChange={e => setShowRejected(e.target.checked)}
-              style={{ accentColor: "#405a74", width: "13px", height: "13px" }}
-            />
-            Show rejected
-          </label>
+            {/* Show rejected */}
+            <label className="flex items-center gap-[0.375rem] text-[0.8125rem] text-text-3 cursor-pointer select-none sm:ml-auto">
+              <input
+                type="checkbox"
+                checked={showRejected}
+                onChange={e => setShowRejected(e.target.checked)}
+                className="checkbox-styled"
+              />
+              Show rejected
+            </label>
+          </div>
         </div>
       </div>
 
       {/* Scoring status */}
       {hasPendingScores && (
-        <div style={{ fontSize: "0.75rem", color: "#405a74", marginBottom: "0.75rem", display: "flex", alignItems: "center", gap: "0.375rem" }}>
-          <span style={{
-            display: "inline-block", width: "5px", height: "5px", borderRadius: "50%",
-            background: "#f59e0b", animation: "pulse 1.5s ease-in-out infinite",
-          }} />
+        <div className="text-[0.75rem] text-text-3 mb-3 flex items-center gap-[0.375rem]">
+          <span className="inline-block w-[5px] h-[5px] rounded-full bg-amber" style={{ animation: "pulse 1.5s ease-in-out infinite" }} />
           Scoring {jobs.filter(j => j.match_score === null).length} jobs…
         </div>
       )}
 
       {/* Job list */}
       {loading ? (
-        <div style={{ color: "#405a74", textAlign: "center", padding: "4rem 0", fontSize: "0.875rem" }}>
-          Loading…
-        </div>
+        <div className="text-text-3 text-center py-16 text-sm">Loading…</div>
       ) : filtered.length === 0 ? (
-        <div style={{ color: "#405a74", textAlign: "center", padding: "4rem 0" }}>
+        <div className="text-text-3 text-center py-16">
           {jobs.length === 0 ? (
             <>
-              <div style={{ fontSize: "1rem", fontWeight: 600, color: "#7a95b0", marginBottom: "0.5rem" }}>No jobs yet</div>
-              <div style={{ fontSize: "0.875rem" }}>
-                Click <strong style={{ color: "#7a95b0", fontWeight: 600 }}>Fetch now</strong> in the nav to pull from all sources.
+              <div className="text-base font-semibold text-text-2 mb-2">No jobs yet</div>
+              <div className="text-sm">
+                Click <strong className="text-text-2 font-semibold">Fetch now</strong> in the nav to pull from all sources.
               </div>
             </>
           ) : (
-            <span style={{ fontSize: "0.875rem" }}>No jobs match the current filters.</span>
+            <span className="text-sm">No jobs match the current filters.</span>
           )}
         </div>
       ) : (
         <>
           {/* Select all row */}
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.25rem 0", marginBottom: "0.25rem" }}>
+          <div className="flex items-center gap-2 py-1 mb-1">
             <input
               type="checkbox"
               checked={selectedIds.size > 0 && selectedIds.size === filtered.length}
               ref={el => { if (el) el.indeterminate = selectedIds.size > 0 && selectedIds.size < filtered.length; }}
               onChange={toggleSelectAll}
-              style={{ accentColor: "#3b82f6", width: "13px", height: "13px", cursor: "pointer" }}
+              className="checkbox-styled"
             />
-            <span style={{ fontSize: "0.75rem", color: "#405a74" }}>
+            <span className="text-[0.75rem] text-text-3">
               {selectedIds.size > 0 ? `${selectedIds.size} selected` : `${filtered.length} jobs`}
             </span>
           </div>
 
-          {filtered.map((job, index) => (
-            <JobRow
-              key={job.id}
-              job={job}
-              focused={index === focusedIndex}
-              onFocusRequest={() => setFocusedIndex(index)}
-              onStatusChange={handleStatusChange}
-              onSeen={handleSeen}
-              compact={compact}
-              selected={selectedIds.has(job.id)}
-              onToggleSelect={toggleSelect}
-              onRescore={handleRescore}
-              onTagClick={tag => setActiveTag(prev => prev === tag ? null : tag)}
-              activeTag={activeTag ?? undefined}
-            />
-          ))}
+          <motion.div
+            key={filterKey}
+            variants={shouldAnimate ? listVariants : undefined}
+            initial={shouldAnimate ? "hidden" : false}
+            animate={shouldAnimate ? "visible" : undefined}
+          >
+            {filtered.map((job, index) => (
+              <JobRow
+                key={job.id}
+                job={job}
+                focused={index === focusedIndex}
+                onFocusRequest={() => setFocusedIndex(index)}
+                onStatusChange={handleStatusChange}
+                onSeen={handleSeen}
+                compact={compact}
+                selected={selectedIds.has(job.id)}
+                onToggleSelect={toggleSelect}
+                onRescore={handleRescore}
+                onTagClick={tag => setActiveTag(prev => prev === tag ? null : tag)}
+                activeTag={activeTag ?? undefined}
+              />
+            ))}
+          </motion.div>
 
           {jobs.length < totalJobs && (
-            <div style={{ textAlign: "center", padding: "1.25rem 0" }}>
+            <div className="text-center py-5">
               <button
                 onClick={() => fetchJobs()}
-                style={{
-                  padding: "0.4375rem 1.25rem",
-                  borderRadius: "var(--radius)",
-                  border: "1px solid #1a2840",
-                  background: "transparent",
-                  color: "#7a95b0",
-                  cursor: "pointer",
-                  fontSize: "0.875rem",
-                }}
-                className="btn-ghost"
+                className="px-5 py-[0.4375rem] rounded border border-border bg-transparent text-text-2 cursor-pointer text-sm btn-ghost"
               >
                 Load more ({totalJobs - jobs.length} remaining)
               </button>
@@ -492,92 +487,81 @@ export default function JobsView({ refreshKey }: Props) {
       )}
 
       {/* Keyboard shortcuts modal */}
-      {showShortcuts && (
-        <div
-          onClick={() => setShowShortcuts(false)}
-          style={{
-            position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            zIndex: 300, backdropFilter: "blur(2px)",
-          }}
-        >
-          <div
-            onClick={e => e.stopPropagation()}
-            style={{
-              background: "#0b1628", border: "1px solid #1a2840",
-              borderRadius: "var(--radius)", padding: "1.5rem",
-              minWidth: "280px", color: "#dde6f0",
-              boxShadow: "0 24px 48px rgba(0,0,0,0.6)",
-            }}
+      <AnimatePresence>
+        {showShortcuts && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            onClick={() => setShowShortcuts(false)}
+            className="fixed inset-0 bg-black/70 flex items-center justify-center z-[300] backdrop-blur-sm"
           >
-            <h3 style={{ margin: "0 0 1rem", fontSize: "0.9375rem", fontWeight: 600 }}>Keyboard Shortcuts</h3>
-            {[
-              ["j / ↓", "Next job"],
-              ["k / ↑", "Previous job"],
-              ["Enter", "Expand/collapse"],
-              ["s", "Save job"],
-              ["n", "Un-save job"],
-              ["r", "Reject job"],
-              ["a", "Mark applied"],
-              ["u", "Open URL"],
-              ["?", "This help"],
-            ].map(([key, desc]) => (
-              <div key={key} style={{ display: "flex", justifyContent: "space-between", gap: "2rem", marginBottom: "0.5rem", fontSize: "0.875rem" }}>
-                <kbd style={{ background: "#030b17", border: "1px solid #243653", borderRadius: "var(--radius-sm)", padding: "0.125rem 0.5rem", fontFamily: "monospace", color: "#7a95b0", fontSize: "0.8125rem" }}>{key}</kbd>
-                <span style={{ color: "#7a95b0" }}>{desc}</span>
-              </div>
-            ))}
-            <p style={{ margin: "1rem 0 0", fontSize: "0.75rem", color: "#405a74" }}>Click outside to close</p>
-          </div>
-        </div>
-      )}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.96 }}
+              transition={{ duration: 0.15 }}
+              onClick={e => e.stopPropagation()}
+              className="bg-surface border border-border rounded p-6 min-w-[280px] text-text shadow-[0_24px_48px_rgba(0,0,0,0.6)]"
+            >
+              <h3 className="m-0 mb-4 text-[0.9375rem] font-semibold">Keyboard Shortcuts</h3>
+              {[
+                ["j / ↓", "Next job"],
+                ["k / ↑", "Previous job"],
+                ["Enter", "Expand/collapse"],
+                ["s", "Save job"],
+                ["n", "Un-save job"],
+                ["r", "Reject job"],
+                ["a", "Mark applied"],
+                ["u", "Open URL"],
+                ["?", "This help"],
+              ].map(([key, desc]) => (
+                <div key={key} className="flex justify-between gap-8 mb-2 text-sm">
+                  <kbd className="bg-bg border border-border-2 rounded-sm px-2 py-[0.125rem] font-mono text-text-2 text-[0.8125rem]">{key}</kbd>
+                  <span className="text-text-2">{desc}</span>
+                </div>
+              ))}
+              <p className="mt-4 mb-0 text-[0.75rem] text-text-3">Click outside to close</p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Bulk action bar */}
-      {selectedIds.size > 0 && (
-        <div style={{
-          position: "fixed", bottom: "1.5rem", left: "50%", transform: "translateX(-50%)",
-          background: "#0b1628", border: "1px solid #1a2840", borderRadius: "var(--radius)",
-          padding: "0.625rem 1rem",
-          display: "flex", alignItems: "center", gap: "0.625rem",
-          boxShadow: "0 8px 32px rgba(0,0,0,0.5)", zIndex: 100,
-        }}>
-          <span style={{ color: "#7a95b0", fontSize: "0.875rem", fontWeight: 500 }}>
-            {selectedIds.size} selected
-          </span>
-          <button
-            onClick={() => bulkSetStatus('saved')}
-            disabled={bulkLoading}
-            style={{
-              padding: "0.3125rem 0.75rem", borderRadius: "var(--radius-sm)",
-              border: "1px solid #1a3060", background: "transparent",
-              color: "#3b82f6", cursor: "pointer", fontSize: "0.8125rem", fontWeight: 500,
-            }}
+      <AnimatePresence>
+        {selectedIds.size > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 12 }}
+            transition={{ duration: 0.15 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-surface border border-border rounded px-4 py-[0.625rem] flex items-center gap-[0.625rem] shadow-[0_8px_32px_rgba(0,0,0,0.5)] z-[100]"
           >
-            Save all
-          </button>
-          <button
-            onClick={() => bulkSetStatus('rejected')}
-            disabled={bulkLoading}
-            style={{
-              padding: "0.3125rem 0.75rem", borderRadius: "var(--radius-sm)",
-              border: "1px solid #3a0808", background: "transparent",
-              color: "#ef4444", cursor: "pointer", fontSize: "0.8125rem", fontWeight: 500,
-            }}
-          >
-            Reject all
-          </button>
-          <button
-            onClick={() => setSelectedIds(new Set())}
-            style={{
-              padding: "0.3125rem 0.4rem", borderRadius: "var(--radius-sm)",
-              border: "none", background: "transparent",
-              color: "#405a74", cursor: "pointer", fontSize: "0.875rem",
-            }}
-          >
-            ✕
-          </button>
-        </div>
-      )}
+            <span className="text-text-2 text-sm font-medium">{selectedIds.size} selected</span>
+            <button
+              onClick={() => bulkSetStatus('saved')}
+              disabled={bulkLoading}
+              className="px-3.5 py-1.5 rounded-sm border border-border-accent bg-transparent text-accent cursor-pointer text-[0.8125rem] font-medium"
+            >
+              Save all
+            </button>
+            <button
+              onClick={() => bulkSetStatus('rejected')}
+              disabled={bulkLoading}
+              className="px-3.5 py-1.5 rounded-sm border border-border-red bg-transparent text-red cursor-pointer text-[0.8125rem] font-medium"
+            >
+              Reject all
+            </button>
+            <button
+              onClick={() => setSelectedIds(new Set())}
+              className="px-2 py-1.5 rounded-sm border-none bg-transparent text-text-3 cursor-pointer text-sm"
+            >
+              ✕
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
