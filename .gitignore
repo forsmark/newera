@@ -7,3 +7,7 @@ dist/
 .bun/
 .superpowers/
 .worktrees/
+.playwright-cli/
+**/.playwright-cli/
+*.png
+src/server/mobile-before.png
