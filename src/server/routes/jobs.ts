@@ -228,7 +228,7 @@ app.post('/bulk-unseen', async (c) => {
 // Resets match scores for all non-rejected jobs and re-queues analysis via the scheduler
 app.post('/rescore-all', (c) => {
   const result = db.run(
-    "UPDATE jobs SET match_score = NULL, match_reasoning = NULL, match_summary = NULL, tags = NULL WHERE status != 'rejected'"
+    "UPDATE jobs SET match_score = NULL, match_reasoning = NULL, match_summary = NULL, tags = NULL, work_type = NULL WHERE status != 'rejected'"
   );
   const queued = result.changes;
 

@@ -33,6 +33,7 @@ export interface AnalysisResult {
   match_reasoning: string;  // 1-2 sentence explanation of fit
   match_summary: string;    // 2-3 sentence factual overview of the role
   tags: string[];           // tech stack tags extracted from the job posting
+  work_type: 'remote' | 'hybrid' | 'onsite' | null;
 }
 
 function formatPreferences(p: Preferences): string {
@@ -83,11 +84,12 @@ ${preferences.companyBlacklist && preferences.companyBlacklist.includes(job.comp
 
 ## Task
 Return ONLY a JSON object with this exact format (no markdown, no explanation):
-{"match_score": <0-100>, "match_reasoning": "<1-2 sentences on why this candidate is or isn't a fit>", "summary": "<2-3 sentence factual overview of what the role involves and who it's for>", "tags": ["<tech1>", "<tech2>"]}
+{"match_score": <0-100>, "match_reasoning": "<1-2 sentences on why this candidate is or isn't a fit>", "summary": "<2-3 sentence factual overview of what the role involves and who it's for>", "tags": ["<tech1>", "<tech2>"], "work_type": "<remote|hybrid|onsite|null>"}
 
 summary: factual description of the role — what the job is about, not an opinion on the candidate.
 match_reasoning: personalised assessment of fit for this specific candidate. If location is outside the preferred area, say so explicitly.
-tags: up to 8 specific technologies, languages, frameworks, or tools mentioned in the job (e.g. "React", "TypeScript", "Node.js", "AWS"). Empty array if none identifiable.`;
+tags: up to 8 specific technologies, languages, frameworks, or tools mentioned in the job (e.g. "React", "TypeScript", "Node.js", "AWS"). Empty array if none identifiable.
+work_type: one of "remote", "hybrid", "onsite", or null if the posting does not clearly indicate the work arrangement.`;
 }
 
 export function extractJson(raw: string): AnalysisResult {
@@ -110,6 +112,12 @@ export function extractJson(raw: string): AnalysisResult {
     ? rawTags.map(t => String(t).trim()).filter(t => t.length > 0).slice(0, 8)
     : [];
 
+  const rawWorkType = parsed['work_type'];
+  const VALID_WORK_TYPES = new Set(['remote', 'hybrid', 'onsite']);
+  const work_type = typeof rawWorkType === 'string' && VALID_WORK_TYPES.has(rawWorkType)
+    ? rawWorkType as 'remote' | 'hybrid' | 'onsite'
+    : null;
+
   if (Number.isNaN(match_score) || match_score < 0 || match_score > 100) {
     throw new Error(`Invalid match_score: ${parsed['match_score']}`);
   }
@@ -117,7 +125,7 @@ export function extractJson(raw: string): AnalysisResult {
     throw new Error('Empty match_reasoning');
   }
 
-  return { match_score, match_reasoning, match_summary, tags };
+  return { match_score, match_reasoning, match_summary, tags, work_type };
 }
 
 /** Focused second-pass tag extraction when the main analysis returned no tags. */

@@ -12,6 +12,7 @@ export interface Job {
   match_reasoning: string | null;
   match_summary: string | null;
   tags: string[] | null;
+  work_type: 'remote' | 'hybrid' | 'onsite' | null;
   status: 'new' | 'saved' | 'applied' | 'rejected';
   seen_at: string | null;
   fetched_at: string;

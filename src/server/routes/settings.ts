@@ -87,7 +87,7 @@ app.post('/reject-low-score', (c) => {
 // POST /api/settings/rescore
 app.post('/rescore', (c) => {
   const result = db.run(
-    "UPDATE jobs SET match_score = NULL, match_reasoning = NULL, match_summary = NULL, tags = NULL WHERE status != 'rejected'"
+    "UPDATE jobs SET match_score = NULL, match_reasoning = NULL, match_summary = NULL, tags = NULL, work_type = NULL WHERE status != 'rejected'"
   );
   analyzeUnscoredJobs().catch((err) => console.error('[settings] rescore failed:', err));
   return c.json({ queued: result.changes });

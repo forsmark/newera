@@ -83,11 +83,12 @@ export async function fetchJobs(): Promise<number> {
 
         const result = await analyzeJob(job);
         if (result) {
-          db.run('UPDATE jobs SET match_score = ?, match_reasoning = ?, match_summary = ?, tags = ? WHERE id = ?', [
+          db.run('UPDATE jobs SET match_score = ?, match_reasoning = ?, match_summary = ?, tags = ?, work_type = ? WHERE id = ?', [
             result.match_score,
             result.match_reasoning,
             result.match_summary,
             JSON.stringify(result.tags),
+            result.work_type,
             jobId,
           ]);
           maybeAutoReject(jobId, result.match_score);

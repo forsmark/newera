@@ -12,6 +12,7 @@ export interface Job {
   match_reasoning: string | null;
   match_summary: string | null; // factual role overview, null until analyzed
   tags: string[] | null;        // tech stack tags, null until analyzed
+  work_type: 'remote' | 'hybrid' | 'onsite' | null; // work arrangement, null until analyzed
   status: 'new' | 'saved' | 'applied' | 'rejected';
   seen_at: string | null;
   fetched_at: string;

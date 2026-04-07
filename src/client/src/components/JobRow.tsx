@@ -18,6 +18,32 @@ interface Props {
   isFetching?: boolean;
 }
 
+const WORK_TYPE_STYLES: Record<string, { label: string; color: string; bg: string; border: string }> = {
+  remote:  { label: 'Remote',  color: '#34d399', bg: '#022b1e', border: '#0a3d2a' },
+  hybrid:  { label: 'Hybrid',  color: '#a78bfa', bg: '#1a0a38', border: '#2d1558' },
+  onsite:  { label: 'On-site', color: '#6b8aa3', bg: '#0b1628', border: '#1a2840' },
+};
+
+function inferWorkType(location: string | null): 'remote' | 'hybrid' | 'onsite' | null {
+  if (!location) return null;
+  const l = location.toLowerCase();
+  if (l.includes('remote')) return 'remote';
+  if (l.includes('hybrid')) return 'hybrid';
+  if (l.includes('on-site') || l.includes('onsite') || l.includes('in-office')) return 'onsite';
+  return null;
+}
+
+function WorkTypeBadge({ job }: { job: Job }) {
+  const wt = job.work_type ?? inferWorkType(job.location);
+  if (!wt) return null;
+  const s = WORK_TYPE_STYLES[wt];
+  return (
+    <span style={{ color: s.color, background: s.bg, border: `1px solid ${s.border}`, borderRadius: 'var(--radius-sm)', padding: '0.1875rem 0.4375rem', fontSize: '0.6875rem', fontWeight: 600, whiteSpace: 'nowrap', letterSpacing: '0.02em' }}>
+      {s.label}
+    </span>
+  );
+}
+
 function scoreAccentColor(score: number | null): string {
   if (score === null) return "#243653";
   if (score >= 80) return "#22c55e";
@@ -191,6 +217,7 @@ export default function JobRow({ job, onStatusChange, onSeenChange, compact, sel
             <span className="text-text-3 text-[0.75rem] whitespace-nowrap overflow-hidden text-ellipsis">{job.location}</span>
           </>
         )}
+        <WorkTypeBadge job={job} />
       </div>
       {actionButtons}
     </div>
@@ -220,6 +247,7 @@ export default function JobRow({ job, onStatusChange, onSeenChange, compact, sel
                 {job.source}
               </span>
               {job.posted_at && <span className="text-text-3 text-[0.75rem]">{formatDate(job.posted_at)}</span>}
+              <WorkTypeBadge job={job} />
               {job.tags && job.tags.length > 0 && job.tags.map(tag => (
                 <span
                   key={tag}
