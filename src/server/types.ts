@@ -30,8 +30,10 @@ export interface Preferences {
   linkedinSearchTerms: string; // newline-separated
   jobindexSearchTerms: string; // newline-separated
   notes: string;
-  lowScoreThreshold: number;   // jobs below this score are considered "low score" (0-100)
-  autoRejectLowScore: boolean; // automatically reject new jobs that score below the threshold
+  lowScoreThreshold: number;       // jobs below this score are considered "low score" (0-100)
+  defaultHideLowScore: boolean;    // initial state of the "Hide <N" checkbox
+  defaultHideUnscored: boolean;    // initial state of the "Hide unscored" checkbox
+  autoRejectLowScore: boolean;     // automatically reject new jobs that score below the threshold
   ollamaModel: string;         // Ollama model used for scoring/analysis
   fetchIntervalHours: number;  // how often to auto-fetch jobs (hours)
 }
@@ -49,6 +51,8 @@ export const DEFAULT_PREFERENCES: Preferences = {
   jobindexSearchTerms: '',
   notes: '',
   lowScoreThreshold: 20,
+  defaultHideLowScore: true,
+  defaultHideUnscored: false,
   autoRejectLowScore: false,
   ollamaModel: 'gemma4:26b',
   fetchIntervalHours: 2,

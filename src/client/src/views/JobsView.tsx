@@ -98,6 +98,7 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
   const [hideWeakMatches, setHideWeakMatches] = useState(true);
   const [hideUnscored, setHideUnscored] = useState(false);
   const [lowScoreThreshold, setLowScoreThreshold] = useState(20);
+  const filterDefaultsApplied = useRef(false);
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [postedWithin, setPostedWithin] = useState<PostedWithin>(() =>
@@ -156,9 +157,13 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
   useEffect(() => {
     fetch('/api/settings')
       .then(r => r.json())
-      .then((d: { preferences?: { lowScoreThreshold?: number } }) => {
-        if (typeof d.preferences?.lowScoreThreshold === 'number') {
-          setLowScoreThreshold(d.preferences.lowScoreThreshold);
+      .then((d: { preferences?: { lowScoreThreshold?: number; defaultHideLowScore?: boolean; defaultHideUnscored?: boolean } }) => {
+        const p = d.preferences ?? {};
+        if (typeof p.lowScoreThreshold === 'number') setLowScoreThreshold(p.lowScoreThreshold);
+        if (!filterDefaultsApplied.current) {
+          if (typeof p.defaultHideLowScore === 'boolean') setHideWeakMatches(p.defaultHideLowScore);
+          if (typeof p.defaultHideUnscored === 'boolean') setHideUnscored(p.defaultHideUnscored);
+          filterDefaultsApplied.current = true;
         }
       })
       .catch(() => {});

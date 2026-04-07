@@ -14,6 +14,8 @@ interface Preferences {
   jobindexSearchTerms: string;
   notes: string;
   lowScoreThreshold: number;
+  defaultHideLowScore: boolean;
+  defaultHideUnscored: boolean;
   autoRejectLowScore: boolean;
   ollamaModel: string;
   fetchIntervalHours: number;
@@ -43,6 +45,8 @@ const EMPTY_PREFS: Preferences = {
   jobindexSearchTerms: '',
   notes: '',
   lowScoreThreshold: 20,
+  defaultHideLowScore: true,
+  defaultHideUnscored: false,
   autoRejectLowScore: false,
   ollamaModel: 'gemma4:26b',
   fetchIntervalHours: 2,
@@ -535,30 +539,52 @@ export default function SettingsView() {
           </Field>
         </div>
 
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3 pt-1 border-t border-border">
-          <label className="flex items-center gap-2 cursor-pointer select-none text-sm text-text-2">
-            <input
-              type="checkbox"
-              checked={prefs.autoRejectLowScore}
-              onChange={e => updatePref('autoRejectLowScore', e.target.checked)}
-              className="checkbox-styled"
-            />
-            Auto-reject new jobs scored below threshold
-          </label>
-          <button
-            type="button"
-            onClick={rejectLowScore}
-            disabled={rejectingLow}
-            title={`Reject all unreviewed jobs currently below ${prefs.lowScoreThreshold}`}
-            className={[
-              "sm:ml-auto shrink-0 px-4 py-1.5 text-[0.8125rem] font-medium rounded-sm border",
-              rejectingLow
-                ? "bg-transparent text-text-3 border-border cursor-not-allowed"
-                : "bg-transparent text-red border-border-red cursor-pointer",
-            ].join(" ")}
-          >
-            {rejectingLow ? "Rejecting…" : `Reject all below ${prefs.lowScoreThreshold}`}
-          </button>
+        <div className="flex flex-col gap-3 pt-1 border-t border-border">
+          <div className="flex flex-wrap gap-x-6 gap-y-2">
+            <label className="flex items-center gap-2 cursor-pointer select-none text-sm text-text-2">
+              <input
+                type="checkbox"
+                checked={prefs.defaultHideLowScore}
+                onChange={e => updatePref('defaultHideLowScore', e.target.checked)}
+                className="checkbox-styled"
+              />
+              "Hide &lt;{prefs.lowScoreThreshold}" on by default
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer select-none text-sm text-text-2">
+              <input
+                type="checkbox"
+                checked={prefs.defaultHideUnscored}
+                onChange={e => updatePref('defaultHideUnscored', e.target.checked)}
+                className="checkbox-styled"
+              />
+              "Hide unscored" on by default
+            </label>
+          </div>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+            <label className="flex items-center gap-2 cursor-pointer select-none text-sm text-text-2">
+              <input
+                type="checkbox"
+                checked={prefs.autoRejectLowScore}
+                onChange={e => updatePref('autoRejectLowScore', e.target.checked)}
+                className="checkbox-styled"
+              />
+              Auto-reject new jobs scored below threshold
+            </label>
+            <button
+              type="button"
+              onClick={rejectLowScore}
+              disabled={rejectingLow}
+              title={`Reject all unreviewed jobs currently below ${prefs.lowScoreThreshold}`}
+              className={[
+                "sm:ml-auto shrink-0 px-4 py-1.5 text-[0.8125rem] font-medium rounded-sm border",
+                rejectingLow
+                  ? "bg-transparent text-text-3 border-border cursor-not-allowed"
+                  : "bg-transparent text-red border-border-red cursor-pointer",
+              ].join(" ")}
+            >
+              {rejectingLow ? "Rejecting…" : `Reject all below ${prefs.lowScoreThreshold}`}
+            </button>
+          </div>
         </div>
       </Accordion>
 
