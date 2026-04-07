@@ -96,6 +96,7 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
   const [totalJobs, setTotalJobs] = useState(0);
   const [offset, setOffset] = useState(0);
   const [hideWeakMatches, setHideWeakMatches] = useState(true);
+  const [hideUnscored, setHideUnscored] = useState(false);
   const [lowScoreThreshold, setLowScoreThreshold] = useState(20);
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -332,6 +333,7 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
       } else {
         if (filterStatus !== "rejected" && j.status === "rejected") return false;
         if (hideWeakMatches && j.match_score !== null && j.match_score < lowScoreThreshold) return false;
+        if (hideUnscored && j.match_score === null) return false;
         if (filterStatus === "unread" && j.seen_at !== null) return false;
         if (filterStatus === "new" && j.status !== "new") return false;
         if (filterStatus === "saved" && j.status !== "saved") return false;
@@ -538,7 +540,6 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
             )}
 
             <div className="flex items-center gap-3 sm:ml-auto">
-              {/* Hide weak matches */}
               <label className="flex items-center gap-[0.375rem] text-[0.8125rem] text-text-3 cursor-pointer select-none">
                 <input
                   type="checkbox"
@@ -547,6 +548,15 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
                   className="checkbox-styled"
                 />
                 Hide &lt;{lowScoreThreshold}
+              </label>
+              <label className="flex items-center gap-[0.375rem] text-[0.8125rem] text-text-3 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={hideUnscored}
+                  onChange={e => setHideUnscored(e.target.checked)}
+                  className="checkbox-styled"
+                />
+                Hide unscored
               </label>
             </div>
           </div>
@@ -625,7 +635,7 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
             </AnimatePresence>
           </motion.div>
 
-          {!pinnedIds && jobs.length < totalJobs && (
+          {!pinnedIds && filterStatus !== 'rejected' && jobs.length < totalJobs && (
             <div className="text-center py-5">
               <button
                 onClick={() => fetchJobs()}
