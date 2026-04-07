@@ -202,6 +202,8 @@ export default function SettingsView() {
   const [backups, setBackups] = useState<BackupInfo[]>([]);
   const [backingUp, setBackingUp] = useState(false);
   const [rejectingLow, setRejectingLow] = useState(false);
+  const [clearConfirm, setClearConfirm] = useState(false);
+  const [clearing, setClearing] = useState(false);
 
   const prefsDirty = JSON.stringify(prefs) !== JSON.stringify(savedPrefs);
   const resumeDirty = resume !== savedResume;
@@ -362,6 +364,21 @@ export default function SettingsView() {
       toast("Failed to reject low-score jobs");
     } finally {
       setRejectingLow(false);
+    }
+  }
+
+  async function clearAllJobs() {
+    setClearing(true);
+    try {
+      const res = await fetch("/api/jobs/clear", { method: "POST" });
+      if (!res.ok) throw new Error();
+      const data = await res.json() as { deleted: number };
+      toast(`Cleared ${data.deleted} job${data.deleted === 1 ? "" : "s"}`, "info");
+      setClearConfirm(false);
+    } catch {
+      toast("Failed to clear jobs");
+    } finally {
+      setClearing(false);
     }
   }
 
@@ -680,19 +697,52 @@ export default function SettingsView() {
             </p>
           </div>
         )}
-        <button
-          type="button"
-          onClick={rescore}
-          disabled={rescoring}
-          className={[
-            "w-fit px-4 py-1.5 text-[0.8125rem] font-medium rounded-sm border",
-            rescoring
-              ? "bg-transparent text-text-3 border-border cursor-not-allowed"
-              : "bg-surface-raised text-amber border-[#3a2200] cursor-pointer hover:bg-amber-bg",
-          ].join(" ")}
-        >
-          {rescoring ? "Re-scoring…" : "Re-score all jobs"}
-        </button>
+        <div className="flex flex-wrap gap-3 items-center">
+          <button
+            type="button"
+            onClick={rescore}
+            disabled={rescoring}
+            className={[
+              "w-fit px-4 py-1.5 text-[0.8125rem] font-medium rounded-sm border",
+              rescoring
+                ? "bg-transparent text-text-3 border-border cursor-not-allowed"
+                : "bg-surface-raised text-amber border-[#3a2200] cursor-pointer hover:bg-amber-bg",
+            ].join(" ")}
+          >
+            {rescoring ? "Re-scoring…" : "Re-score all jobs"}
+          </button>
+
+          <div className="flex items-center gap-2">
+            {clearConfirm ? (
+              <>
+                <span className="text-[0.8125rem] text-text-3">Are you sure? This cannot be undone.</span>
+                <button
+                  type="button"
+                  onClick={clearAllJobs}
+                  disabled={clearing}
+                  className="px-4 py-1.5 text-[0.8125rem] font-medium rounded-sm border border-border-red bg-transparent text-red cursor-pointer"
+                >
+                  {clearing ? "Clearing…" : "Yes, clear all"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setClearConfirm(false)}
+                  className="px-3 py-1.5 text-[0.8125rem] rounded-sm border border-border bg-transparent text-text-3 cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setClearConfirm(true)}
+                className="px-4 py-1.5 text-[0.8125rem] font-medium rounded-sm border border-border bg-transparent text-text-3 cursor-pointer btn-ghost"
+              >
+                Clear all jobs…
+              </button>
+            )}
+          </div>
+        </div>
       </Accordion>
     </div>
   );

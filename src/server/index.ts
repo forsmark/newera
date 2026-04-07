@@ -62,7 +62,10 @@ app.get('/api/status', (c) => {
     last_fetch_new_jobs: getLastFetchNewJobs(),
     data_files: {
       resume: getResume().length > 0,
-      preferences: Object.values(getPreferences()).some(v => v !== '' && v !== null && v !== 'any'),
+      preferences: (() => {
+        const p = getPreferences();
+        return p.linkedinSearchTerms.trim().length > 0 || p.jobindexSearchTerms.trim().length > 0;
+      })(),
     },
   });
 });

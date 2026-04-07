@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
-import { Job } from "../types";
+import { useNavigate } from "react-router-dom";
+import { Job, AppStatus } from "../types";
 import JobRow from "../components/JobRow";
 import { toast } from "../components/Toast";
 
 interface Props {
   refreshKey?: number;
   isFetching?: boolean;
+  status?: AppStatus | null;
 }
 
 type FilterStatus = "all" | "unread" | "new" | "saved" | "applied" | "rejected";
@@ -32,7 +34,63 @@ const itemVariants = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.2, ease: "easeOut" } },
 };
 
-export default function JobsView({ refreshKey, isFetching }: Props) {
+function Step({ done, children }: { done: boolean; children: React.ReactNode }) {
+  return (
+    <div className="flex items-start gap-3">
+      <span className={`mt-0.5 w-5 h-5 rounded-full flex items-center justify-center shrink-0 text-[0.625rem] font-bold ${done ? 'bg-green/20 text-green' : 'bg-surface-raised text-text-3 border border-border'}`}>
+        {done ? '✓' : ''}
+      </span>
+      <span className={`text-sm leading-snug ${done ? 'text-text-3 line-through decoration-text-3/40' : 'text-text-2'}`}>{children}</span>
+    </div>
+  );
+}
+
+function FirstTimeSetup({ status }: { status: AppStatus | null }) {
+  const navigate = useNavigate();
+  const hasResume = status?.data_files?.resume ?? false;
+  const hasSearchTerms = status?.data_files?.preferences ?? false;
+  const ollamaOk = status?.ollama_available ?? null;
+
+  return (
+    <div className="max-w-[480px] mx-auto">
+      <div className="bg-surface border border-border rounded p-6 flex flex-col gap-5">
+        <div>
+          <h2 className="text-text font-semibold text-base mb-1">Welcome to New Era</h2>
+          <p className="text-text-3 text-sm">Complete these steps to start finding jobs.</p>
+        </div>
+
+        <div className="flex flex-col gap-3">
+          <Step done={hasResume}>
+            Add your resume —{' '}
+            <button onClick={() => navigate('/settings')} className="text-accent underline bg-transparent border-none cursor-pointer text-sm p-0">
+              Settings → Resume
+            </button>
+          </Step>
+          <Step done={hasSearchTerms}>
+            Set search terms (LinkedIn or Jobindex) —{' '}
+            <button onClick={() => navigate('/settings')} className="text-accent underline bg-transparent border-none cursor-pointer text-sm p-0">
+              Settings → Job preferences
+            </button>
+          </Step>
+          <Step done={false}>
+            Click <strong className="text-text font-semibold">Fetch now</strong> in the nav bar above
+          </Step>
+        </div>
+
+        {ollamaOk !== null && (
+          <div className="border-t border-border pt-4 flex items-center gap-2 text-xs">
+            <span className={`w-2 h-2 rounded-full shrink-0 ${ollamaOk ? 'bg-green' : 'bg-red'}`} />
+            <span className="text-text-3">
+              Ollama {ollamaOk ? 'connected — jobs will be scored automatically' : 'not reachable — start Ollama for automatic scoring'}
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default function JobsView({ refreshKey, isFetching, status }: Props) {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalJobs, setTotalJobs] = useState(0);
@@ -507,16 +565,11 @@ export default function JobsView({ refreshKey, isFetching }: Props) {
       {loading ? (
         <div className="text-text-3 text-center py-16 text-sm">Loading…</div>
       ) : filtered.length === 0 ? (
-        <div className="text-text-3 text-center py-16">
-          {jobs.length === 0 ? (
-            <>
-              <div className="text-base font-semibold text-text-2 mb-2">No jobs yet</div>
-              <div className="text-sm">
-                Click <strong className="text-text-2 font-semibold">Fetch now</strong> in the nav to pull from all sources.
-              </div>
-            </>
+        <div className="py-10">
+          {jobs.length === 0 && status?.last_fetch_at === null ? (
+            <FirstTimeSetup status={status} />
           ) : (
-            <span className="text-sm">No jobs match the current filters.</span>
+            <div className="text-text-3 text-center py-6 text-sm">No jobs match the current filters.</div>
           )}
         </div>
       ) : (

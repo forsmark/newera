@@ -185,7 +185,7 @@ function Nav({ status, onFetchNow, fetching, onLogout, authEnabled }: NavProps) 
   );
 }
 
-function AnimatedRoutes({ jobsRefreshKey, isFetching }: { jobsRefreshKey: number; isFetching: boolean }) {
+function AnimatedRoutes({ jobsRefreshKey, isFetching, status }: { jobsRefreshKey: number; isFetching: boolean; status: AppStatus | null }) {
   const location = useLocation();
   return (
     <AnimatePresence mode="wait">
@@ -199,7 +199,7 @@ function AnimatedRoutes({ jobsRefreshKey, isFetching }: { jobsRefreshKey: number
       >
         <Routes location={location}>
           <Route path="/" element={<Navigate to="/jobs" replace />} />
-          <Route path="/jobs" element={<JobsView refreshKey={jobsRefreshKey} isFetching={isFetching} />} />
+          <Route path="/jobs" element={<JobsView refreshKey={jobsRefreshKey} isFetching={isFetching} status={status} />} />
           <Route path="/kanban" element={<KanbanView refreshKey={jobsRefreshKey} />} />
           <Route path="/settings" element={<SettingsView />} />
           <Route path="/logs" element={<LogsView />} />
@@ -317,7 +317,7 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      <AnimatedRoutes jobsRefreshKey={jobsRefreshKey} isFetching={isBusy} />
+      <AnimatedRoutes jobsRefreshKey={jobsRefreshKey} isFetching={isBusy} status={status} />
     </BrowserRouter>
   );
 }

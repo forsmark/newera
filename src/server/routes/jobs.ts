@@ -282,5 +282,12 @@ app.post('/:id/analyze', async (c) => {
   return c.json({ message: 'Re-analysis queued' }, 202);
 });
 
+// POST /api/jobs/clear — delete all jobs and applications from the DB
+app.post('/clear', (c) => {
+  db.run('DELETE FROM applications');
+  const result = db.run('DELETE FROM jobs');
+  return c.json({ deleted: result.changes });
+});
+
 export default app;
 
