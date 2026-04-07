@@ -14,6 +14,7 @@ interface Preferences {
   jobindexSearchTerms: string;
   notes: string;
   lowScoreThreshold: number;
+  autoRejectLowScore: boolean;
   ollamaModel: string;
   fetchIntervalHours: number;
 }
@@ -42,6 +43,7 @@ const EMPTY_PREFS: Preferences = {
   jobindexSearchTerms: '',
   notes: '',
   lowScoreThreshold: 20,
+  autoRejectLowScore: false,
   ollamaModel: 'gemma4:26b',
   fetchIntervalHours: 2,
 };
@@ -199,6 +201,7 @@ export default function SettingsView() {
 
   const [backups, setBackups] = useState<BackupInfo[]>([]);
   const [backingUp, setBackingUp] = useState(false);
+  const [rejectingLow, setRejectingLow] = useState(false);
 
   const prefsDirty = JSON.stringify(prefs) !== JSON.stringify(savedPrefs);
   const resumeDirty = resume !== savedResume;
@@ -344,6 +347,22 @@ export default function SettingsView() {
     const res = await fetch(`/api/backups/${encodeURIComponent(name)}`, { method: "DELETE" });
     if (res.ok) setBackups(prev => prev.filter(b => b.name !== name));
     else toast("Failed to delete backup");
+  }
+
+  async function rejectLowScore() {
+    setRejectingLow(true);
+    try {
+      const res = await fetch("/api/settings/reject-low-score", { method: "POST" });
+      if (!res.ok) throw new Error();
+      const data = await res.json() as { rejected: number };
+      toast(data.rejected > 0
+        ? `Rejected ${data.rejected} low-score job${data.rejected === 1 ? "" : "s"}`
+        : "No new jobs below threshold", "info");
+    } catch {
+      toast("Failed to reject low-score jobs");
+    } finally {
+      setRejectingLow(false);
+    }
   }
 
   async function rescore() {
@@ -497,6 +516,32 @@ export default function SettingsView() {
               onChange={e => updatePref('ollamaModel', e.target.value)}
               placeholder="gemma4:26b" />
           </Field>
+        </div>
+
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 pt-1 border-t border-border">
+          <label className="flex items-center gap-2 cursor-pointer select-none text-sm text-text-2">
+            <input
+              type="checkbox"
+              checked={prefs.autoRejectLowScore}
+              onChange={e => updatePref('autoRejectLowScore', e.target.checked)}
+              className="checkbox-styled"
+            />
+            Auto-reject new jobs scored below threshold
+          </label>
+          <button
+            type="button"
+            onClick={rejectLowScore}
+            disabled={rejectingLow}
+            title={`Reject all unreviewed jobs currently below ${prefs.lowScoreThreshold}`}
+            className={[
+              "sm:ml-auto shrink-0 px-4 py-1.5 text-[0.8125rem] font-medium rounded-sm border",
+              rejectingLow
+                ? "bg-transparent text-text-3 border-border cursor-not-allowed"
+                : "bg-transparent text-red border-border-red cursor-pointer",
+            ].join(" ")}
+          >
+            {rejectingLow ? "Rejecting…" : `Reject all below ${prefs.lowScoreThreshold}`}
+          </button>
         </div>
       </Accordion>
 

@@ -74,6 +74,16 @@ app.post('/resume/ingest-linkedin', async (c) => {
   return c.json({ parsed });
 });
 
+// POST /api/settings/reject-low-score — retroactively reject all new jobs below threshold
+app.post('/reject-low-score', (c) => {
+  const { lowScoreThreshold } = getPreferences();
+  const result = db.run(
+    "UPDATE jobs SET status = 'rejected' WHERE status = 'new' AND match_score IS NOT NULL AND match_score < ?",
+    [lowScoreThreshold],
+  );
+  return c.json({ rejected: result.changes });
+});
+
 // POST /api/settings/rescore
 app.post('/rescore', (c) => {
   const result = db.run(

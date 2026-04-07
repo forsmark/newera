@@ -90,6 +90,7 @@ export async function fetchJobs(): Promise<number> {
             JSON.stringify(result.tags),
             jobId,
           ]);
+          maybeAutoReject(jobId, result.match_score);
           console.log(`[scheduler] Analyzed job ${jobId}: score=${result.match_score} tags=${result.tags.join(',')}`);
         }
       }
@@ -130,8 +131,16 @@ export async function analyzeUnscoredJobs(): Promise<void> {
         JSON.stringify(result.tags),
         job.id,
       ]);
+      maybeAutoReject(job.id, result.match_score);
       console.log(`[scheduler] Scored job ${job.id}: ${result.match_score}`);
     }
+  }
+}
+
+function maybeAutoReject(jobId: string, score: number) {
+  const { autoRejectLowScore, lowScoreThreshold } = getPreferences();
+  if (autoRejectLowScore && score < lowScoreThreshold) {
+    db.run("UPDATE jobs SET status = 'rejected' WHERE id = ? AND status = 'new'", [jobId]);
   }
 }
 
