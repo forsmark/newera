@@ -11,7 +11,7 @@ interface Props {
   status?: AppStatus | null;
 }
 
-type FilterStatus = "all" | "unread" | "new" | "saved" | "applied" | "rejected";
+type FilterStatus = "all" | "unread" | "saved" | "applied" | "rejected";
 type FilterSource = "all" | "jsearch" | "jobindex";
 type PostedWithin = 'any' | '7d' | '30d';
 type SortBy = 'score' | 'posted' | 'fetched';
@@ -340,7 +340,6 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
         if (hideWeakMatches && j.match_score !== null && j.match_score < lowScoreThreshold) return false;
         if (hideUnscored && j.match_score === null) return false;
         if (filterStatus === "unread" && j.seen_at !== null) return false;
-        if (filterStatus === "new" && j.status !== "new") return false;
         if (filterStatus === "saved" && j.status !== "saved") return false;
         if (filterStatus === "applied" && j.status !== "applied") return false;
         if (filterStatus === "rejected" && j.status !== "rejected") return false;
@@ -405,7 +404,6 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
   const jsearchCount = jobs.filter(j => j.source === 'jsearch').length;
   const jobindexCount = jobs.filter(j => j.source === 'jobindex').length;
   const unreadCount = jobs.filter(j => j.seen_at === null && j.status !== 'rejected').length;
-  const newCount = jobs.filter(j => j.status === 'new').length;
   const savedCount = jobs.filter(j => j.status === 'saved').length;
   const appliedCount = jobs.filter(j => j.status === 'applied').length;
   const rejectedCount = jobs.filter(j => j.status === 'rejected').length;
@@ -480,8 +478,8 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
         <div className="flex gap-2 sm:gap-3 items-center flex-wrap">
           {/* Status tabs */}
           <div className="flex gap-0 border-b border-border overflow-x-auto shrink-0 w-full sm:w-auto">
-            {(["all", "unread", "new", "saved", "applied", "rejected"] as FilterStatus[]).map(s => {
-              const count = s === "unread" ? unreadCount : s === "new" ? newCount : s === "saved" ? savedCount : s === "applied" ? appliedCount : s === "rejected" ? rejectedCount : null;
+            {(["all", "unread", "saved", "applied", "rejected"] as FilterStatus[]).map(s => {
+              const count = s === "unread" ? unreadCount : s === "saved" ? savedCount : s === "applied" ? appliedCount : s === "rejected" ? rejectedCount : null;
               const isActive = filterStatus === s;
               return (
                 <button
