@@ -81,13 +81,31 @@ app.patch('/:id', async (c) => {
     const { status } = body as { status: string };
     db.run('UPDATE jobs SET status = ? WHERE id = ?', [status, id]);
 
-    if (status === 'applied') {
+    if (status === 'saved') {
       const now = new Date().toISOString();
       db.run(
         `INSERT OR IGNORE INTO applications (job_id, kanban_column, applied_at, updated_at)
-         VALUES (?, 'applied', ?, ?)`,
+         VALUES (?, 'saved', ?, ?)`,
         [id, now, now],
       );
+    }
+
+    if (status === 'applied') {
+      const now = new Date().toISOString();
+      // Move from saved column if already there, otherwise insert fresh
+      const existing = db.query('SELECT * FROM applications WHERE job_id = ?').get(id);
+      if (existing) {
+        db.run(
+          `UPDATE applications SET kanban_column = 'applied', updated_at = ? WHERE job_id = ? AND kanban_column = 'saved'`,
+          [now, id],
+        );
+      } else {
+        db.run(
+          `INSERT OR IGNORE INTO applications (job_id, kanban_column, applied_at, updated_at)
+           VALUES (?, 'applied', ?, ?)`,
+          [id, now, now],
+        );
+      }
       // Fire-and-forget: fetch and archive the full job posting
       (async () => {
         const text = await fetchPageText(job.url);
@@ -144,6 +162,65 @@ app.post('/bulk-status', async (c) => {
   });
 
   const updated = updateMany(ids as string[]);
+  return c.json({ updated });
+});
+
+// POST /api/jobs/bulk-seen
+// Body: { ids: string[] }
+// Marks all provided job IDs as seen (sets seen_at if not already set)
+app.post('/bulk-seen', async (c) => {
+  let body: { ids?: unknown };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400);
+  }
+
+  const { ids } = body;
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return c.json({ error: 'ids must be a non-empty array' }, 400);
+  }
+
+  const now = new Date().toISOString();
+  const markSeen = db.transaction((jobIds: string[]) => {
+    const stmt = db.prepare('UPDATE jobs SET seen_at = ? WHERE id = ? AND seen_at IS NULL');
+    let count = 0;
+    for (const id of jobIds) {
+      count += stmt.run(now, id).changes;
+    }
+    return count;
+  });
+
+  const updated = markSeen(ids as string[]);
+  return c.json({ updated, seen_at: now });
+});
+
+// POST /api/jobs/bulk-unseen
+// Body: { ids: string[] }
+// Marks all provided job IDs as unread (clears seen_at)
+app.post('/bulk-unseen', async (c) => {
+  let body: { ids?: unknown };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400);
+  }
+
+  const { ids } = body;
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return c.json({ error: 'ids must be a non-empty array' }, 400);
+  }
+
+  const markUnseen = db.transaction((jobIds: string[]) => {
+    const stmt = db.prepare('UPDATE jobs SET seen_at = NULL WHERE id = ?');
+    let count = 0;
+    for (const id of jobIds) {
+      count += stmt.run(id).changes;
+    }
+    return count;
+  });
+
+  const updated = markUnseen(ids as string[]);
   return c.json({ updated });
 });
 

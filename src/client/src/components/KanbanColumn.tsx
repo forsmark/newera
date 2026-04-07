@@ -27,7 +27,7 @@ export default function KanbanColumn({ title, column, color, cards, onDrop, onCa
   }
 
   return (
-    <div className="flex-[0_0_284px] flex flex-col gap-2.5">
+    <div className="flex-[0_0_284px] flex flex-col gap-2.5 self-stretch">
       {/* Header */}
       <div
         className="flex items-center justify-between px-4 py-3 rounded bg-surface border border-border"
@@ -44,7 +44,7 @@ export default function KanbanColumn({ title, column, color, cards, onDrop, onCa
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        className="flex flex-col gap-2 min-h-[120px] rounded p-1 transition-[background,border-color] duration-150"
+        className="flex flex-col gap-2 flex-1 rounded p-1 transition-[background,border-color] duration-150"
         style={{
           background: dragOver ? "rgba(59,130,246,0.04)" : "transparent",
           border: dragOver ? `1px dashed ${color}40` : "1px dashed transparent",

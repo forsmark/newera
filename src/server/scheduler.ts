@@ -7,12 +7,14 @@ import type { Job } from './types';
 
 let lastFetchAt: string | null = null;
 let isFetching = false;
+let lastFetchNewJobs = 0;
 
 export function getLastFetchAt(): string | null {
   return lastFetchAt;
 }
 
 export function getIsFetching(): boolean { return isFetching; }
+export function getLastFetchNewJobs(): number { return lastFetchNewJobs; }
 
 export async function fetchJobs(): Promise<number> {
   if (isFetching) {
@@ -70,6 +72,7 @@ export async function fetchJobs(): Promise<number> {
 
     console.log(`[scheduler] ${newJobIds.length} new jobs inserted`);
     lastFetchAt = new Date().toISOString();
+    lastFetchNewJobs = newJobIds.length;
 
     // 3. Analyze new jobs with LLM in the background (don't await — return count immediately)
     (async () => {
@@ -103,6 +106,9 @@ export async function fetchJobs(): Promise<number> {
 }
 
 export async function analyzeUnscoredJobs(): Promise<void> {
+  const { getResume } = await import('./routes/settings');
+  if (!getResume()) return;
+
   const unscoredJobs = db.query(`
     SELECT * FROM jobs
     WHERE match_score IS NULL
@@ -129,7 +135,7 @@ export async function analyzeUnscoredJobs(): Promise<void> {
   }
 }
 
-const INTERVAL_MS = 12 * 60 * 60 * 1000;
+const INTERVAL_MS = 2 * 60 * 60 * 1000;
 
 export function startScheduler(): void {
   fetchJobs().catch(console.error);

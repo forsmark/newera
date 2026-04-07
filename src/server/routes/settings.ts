@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import db from '../db';
 import { analyzeUnscoredJobs } from '../scheduler';
 import { parseResume } from '../llm';
+import { fetchPageText } from '../utils/fetchPageText';
 import type { Preferences } from '../types';
 import { DEFAULT_PREFERENCES } from '../types';
 
@@ -68,6 +69,32 @@ app.post('/resume/ingest', async (c) => {
   }
   const parsed = await parseResume(body.rawText);
   if (!parsed) return c.json({ error: 'LLM unavailable or parse failed' }, 503);
+  return c.json({ parsed });
+});
+
+// POST /api/settings/resume/ingest-linkedin
+// Fetches a LinkedIn profile URL and parses it into structured CV markdown
+app.post('/resume/ingest-linkedin', async (c) => {
+  const body = await c.req.json<{ url?: string }>().catch(() => null);
+  if (!body || typeof body.url !== 'string' || !body.url.trim()) {
+    return c.json({ error: 'url required' }, 400);
+  }
+
+  const url = body.url.trim();
+  if (!url.includes('linkedin.com/in/')) {
+    return c.json({ error: 'URL must be a LinkedIn profile URL (linkedin.com/in/…)' }, 400);
+  }
+
+  const pageText = await fetchPageText(url);
+  if (!pageText || pageText.length < 100) {
+    return c.json({
+      error: 'Could not extract profile data — LinkedIn may require login. Copy your profile text and use "Ingest resume" instead.',
+    }, 503);
+  }
+
+  const parsed = await parseResume(pageText);
+  if (!parsed) return c.json({ error: 'LLM unavailable or parse failed' }, 503);
+
   return c.json({ parsed });
 });
 

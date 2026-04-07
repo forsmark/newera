@@ -11,3 +11,6 @@ dist/
 **/.playwright-cli/
 *.png
 src/server/mobile-before.png
+.claude/
+backups/
+test-results/

@@ -47,11 +47,12 @@ export const DEFAULT_PREFERENCES: Preferences = {
 
 export interface Application {
   job_id: string;
-  kanban_column: 'applied' | 'interview' | 'offer' | 'rejected';
+  kanban_column: 'saved' | 'applied' | 'interview' | 'offer' | 'rejected';
   notes: string | null;
   interview_at: string | null;
   applied_at: string;
   updated_at: string;
+  cover_letter: string | null;
 }
 
 export interface ApplicationWithJob extends Application {

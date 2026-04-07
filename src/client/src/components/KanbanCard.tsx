@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Application } from "../types";
+import { useEffect, useRef, useState } from "react";
+import { Application, Artifact } from "../types";
 
 interface Props {
   application: Application;
@@ -33,6 +33,18 @@ export default function KanbanCard({ application, onUpdate, columnColor = "#2436
   );
   const [saving, setSaving] = useState(false);
   const [archiveExpanded, setArchiveExpanded] = useState(false);
+  const [coverLetterExpanded, setCoverLetterExpanded] = useState(false);
+  const [generatingCoverLetter, setGeneratingCoverLetter] = useState(false);
+  const [coverLetterError, setCoverLetterError] = useState<string | null>(null);
+
+  const [artifacts, setArtifacts] = useState<Artifact[]>([]);
+  const [artifactsExpanded, setArtifactsExpanded] = useState(false);
+  const [artifactsLoaded, setArtifactsLoaded] = useState(false);
+  const [addingLink, setAddingLink] = useState(false);
+  const [linkName, setLinkName] = useState('');
+  const [linkUrl, setLinkUrl] = useState('');
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!editing) {
@@ -69,7 +81,97 @@ export default function KanbanCard({ application, onUpdate, columnColor = "#2436
     setEditing(false);
   }
 
+  async function handleGenerateCoverLetter() {
+    setGeneratingCoverLetter(true);
+    setCoverLetterError(null);
+    try {
+      const res = await fetch(`/api/kanban/${application.job_id}/cover-letter`, { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json() as { cover_letter: string };
+        onUpdate({ ...application, cover_letter: data.cover_letter });
+        setCoverLetterExpanded(true);
+      } else {
+        const data = await res.json() as { error?: string };
+        setCoverLetterError(data.error ?? 'Generation failed');
+      }
+    } catch {
+      setCoverLetterError('Network error — generation may still be in progress, try refreshing');
+    } finally {
+      setGeneratingCoverLetter(false);
+    }
+  }
+
+  async function loadArtifacts() {
+    if (artifactsLoaded) return;
+    const res = await fetch(`/api/kanban/${application.job_id}/artifacts`);
+    if (res.ok) {
+      setArtifacts(await res.json() as Artifact[]);
+      setArtifactsLoaded(true);
+    }
+  }
+
+  async function handleToggleArtifacts() {
+    if (!artifactsExpanded && !artifactsLoaded) await loadArtifacts();
+    setArtifactsExpanded(v => !v);
+  }
+
+  async function handleAddLink(e: React.FormEvent) {
+    e.preventDefault();
+    const name = linkName.trim();
+    const url = linkUrl.trim();
+    if (!name || !url) return;
+    const res = await fetch(`/api/kanban/${application.job_id}/artifacts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, url }),
+    });
+    if (res.ok) {
+      const newArtifact = await res.json() as Artifact;
+      setArtifacts(prev => [...prev, newArtifact]);
+      setLinkName('');
+      setLinkUrl('');
+      setAddingLink(false);
+    }
+  }
+
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingFile(true);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      form.append('name', file.name);
+      const res = await fetch(`/api/kanban/${application.job_id}/artifacts`, { method: 'POST', body: form });
+      if (res.ok) {
+        const newArtifact = await res.json() as Artifact;
+        setArtifacts(prev => [...prev, newArtifact]);
+      }
+    } finally {
+      setUploadingFile(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }
+
+  async function handleDeleteArtifact(id: string) {
+    const res = await fetch(`/api/kanban/${application.job_id}/artifacts/${id}`, { method: 'DELETE' });
+    if (res.ok) setArtifacts(prev => prev.filter(a => a.id !== id));
+  }
+
+  async function handleClearCoverLetter() {
+    const res = await fetch(`/api/kanban/${application.job_id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cover_letter: null }),
+    });
+    if (res.ok) {
+      onUpdate(await res.json());
+      setCoverLetterExpanded(false);
+    }
+  }
+
   const { job } = application;
+  const actionLabel = application.kanban_column === 'saved' ? 'Saved' : 'Applied';
 
   return (
     <div
@@ -99,7 +201,7 @@ export default function KanbanCard({ application, onUpdate, columnColor = "#2436
         <span className="bg-bg border border-border rounded-sm px-[0.3125rem] py-[0.0625rem] text-[0.6rem] text-text-3 uppercase tracking-[0.05em] font-semibold shrink-0">
           {job.source}
         </span>
-        <span className="text-text-3 text-[0.75rem]">Applied {daysAgo(application.applied_at)}</span>
+        <span className="text-text-3 text-[0.75rem]">{actionLabel} {daysAgo(application.applied_at)}</span>
         <a
           href={job.url}
           target="_blank"
@@ -129,6 +231,142 @@ export default function KanbanCard({ application, onUpdate, columnColor = "#2436
       {application.notes && !editing && (
         <div className="text-text-2 text-[0.75rem] mb-[0.375rem] italic leading-[1.4]">
           {application.notes.slice(0, 100)}{application.notes.length > 100 ? "…" : ""}
+        </div>
+      )}
+
+      {/* Cover letter */}
+      {!editing && (
+        <div className="mt-1 mb-[0.375rem]">
+          {application.cover_letter ? (
+            <>
+              <button
+                onClick={e => { e.stopPropagation(); setCoverLetterExpanded(v => !v); }}
+                className="px-3 py-1.5 text-[0.75rem] rounded-sm border border-border bg-transparent text-text-3 font-medium cursor-pointer btn-ghost w-full text-left"
+              >
+                {coverLetterExpanded ? "Hide cover letter ↑" : "View cover letter ↓"}
+              </button>
+              {coverLetterExpanded && (
+                <div className="mt-1.5" onClick={e => e.stopPropagation()}>
+                  <div
+                    className="px-2.5 py-2 rounded-sm bg-bg border border-border text-text-2 text-[0.75rem] leading-[1.65] whitespace-pre-wrap overflow-y-auto"
+                    style={{ maxHeight: "320px" }}
+                  >
+                    {application.cover_letter}
+                  </div>
+                  <div className="flex gap-1.5 mt-1.5">
+                    <button
+                      onClick={handleGenerateCoverLetter}
+                      disabled={generatingCoverLetter}
+                      className="px-3 py-1.5 text-[0.75rem] rounded-sm border border-border bg-transparent text-text-3 font-medium cursor-pointer btn-ghost disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {generatingCoverLetter ? "Generating…" : "Regenerate"}
+                    </button>
+                    <button
+                      onClick={handleClearCoverLetter}
+                      className="px-3 py-1.5 text-[0.75rem] rounded-sm border border-border bg-transparent text-red font-medium cursor-pointer"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <div>
+              <button
+                onClick={e => { e.stopPropagation(); handleGenerateCoverLetter(); }}
+                disabled={generatingCoverLetter}
+                className="px-3 py-1.5 text-[0.75rem] rounded-sm border border-border bg-transparent text-text-3 font-medium cursor-pointer btn-ghost w-full text-left disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {generatingCoverLetter ? "Generating cover letter…" : "Generate cover letter"}
+              </button>
+              {coverLetterError && (
+                <div className="mt-1 text-[0.7rem] text-red">{coverLetterError}</div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Attachments */}
+      {!editing && (
+        <div className="mt-1 mb-[0.375rem]">
+          <button
+            onClick={e => { e.stopPropagation(); handleToggleArtifacts(); }}
+            className="px-3 py-1.5 text-[0.75rem] rounded-sm border border-border bg-transparent text-text-3 font-medium cursor-pointer btn-ghost w-full text-left"
+          >
+            {artifactsExpanded
+              ? `Attachments ↑${artifacts.length > 0 ? ` (${artifacts.length})` : ''}`
+              : `Attachments ↓${artifactsLoaded && artifacts.length > 0 ? ` (${artifacts.length})` : ''}`}
+          </button>
+          {artifactsExpanded && (
+            <div className="mt-1.5 flex flex-col gap-1" onClick={e => e.stopPropagation()}>
+              {artifacts.map(a => (
+                <div key={a.id} className="flex items-center gap-1.5 px-2 py-1 bg-bg border border-border rounded-sm text-[0.7rem]">
+                  {a.type === 'link' ? (
+                    <a href={a.url ?? '#'} target="_blank" rel="noopener noreferrer"
+                      className="text-accent flex-1 truncate no-underline">{a.name}</a>
+                  ) : (
+                    <a href={`/api/kanban/${application.job_id}/artifacts/${a.id}/file`}
+                      target="_blank" rel="noopener noreferrer"
+                      className="text-text-2 flex-1 truncate no-underline">
+                      {a.name}
+                      {a.file_size !== null && (
+                        <span className="text-text-3 ml-1">({(a.file_size / 1024).toFixed(0)} KB)</span>
+                      )}
+                    </a>
+                  )}
+                  <button onClick={() => handleDeleteArtifact(a.id)}
+                    className="text-red bg-transparent border-none cursor-pointer p-0 shrink-0">×</button>
+                </div>
+              ))}
+
+              {/* Add link form */}
+              {addingLink ? (
+                <form onSubmit={handleAddLink} className="flex flex-col gap-1">
+                  <input
+                    autoFocus
+                    type="text"
+                    placeholder="Label"
+                    value={linkName}
+                    onChange={e => setLinkName(e.target.value)}
+                    className="px-2 py-1 rounded-sm border border-border bg-bg text-text text-[0.7rem] outline-none"
+                  />
+                  <input
+                    type="url"
+                    placeholder="https://…"
+                    value={linkUrl}
+                    onChange={e => setLinkUrl(e.target.value)}
+                    className="px-2 py-1 rounded-sm border border-border bg-bg text-text text-[0.7rem] outline-none"
+                  />
+                  <div className="flex gap-1">
+                    <button type="submit" disabled={!linkName.trim() || !linkUrl.trim()}
+                      className="px-2 py-1 text-[0.7rem] rounded-sm border border-border bg-surface text-text-2 cursor-pointer disabled:opacity-40">
+                      Add
+                    </button>
+                    <button type="button" onClick={() => { setAddingLink(false); setLinkName(''); setLinkUrl(''); }}
+                      className="px-2 py-1 text-[0.7rem] rounded-sm border border-border bg-transparent text-text-3 cursor-pointer">
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <div className="flex gap-1.5">
+                  <button onClick={() => setAddingLink(true)}
+                    className="px-2 py-1 text-[0.7rem] rounded-sm border border-border bg-transparent text-text-3 cursor-pointer btn-ghost">
+                    + Link
+                  </button>
+                  <button onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadingFile}
+                    className="px-2 py-1 text-[0.7rem] rounded-sm border border-border bg-transparent text-text-3 cursor-pointer btn-ghost disabled:opacity-40">
+                    {uploadingFile ? 'Uploading…' : '+ File'}
+                  </button>
+                  <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileUpload}
+                    accept=".pdf,.doc,.docx,.txt,.md,.png,.jpg,.jpeg" />
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

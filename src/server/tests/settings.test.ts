@@ -79,6 +79,7 @@ describe('PUT /preferences', () => {
 
 describe('POST /rescore', () => {
   beforeEach(() => {
+    db.run('DELETE FROM applications');
     db.run('DELETE FROM jobs');
   });
 

@@ -6,6 +6,7 @@ import { toast } from "../components/Toast";
 type KanbanCol = Application["kanban_column"];
 
 const COLUMNS: { key: KanbanCol; title: string; color: string }[] = [
+  { key: "saved",     title: "Saved",     color: "#f59e0b" },
   { key: "applied",   title: "Applied",   color: "#3b82f6" },
   { key: "interview", title: "Interview", color: "#a855f7" },
   { key: "offer",     title: "Offer",     color: "#22c55e" },
@@ -67,7 +68,7 @@ export default function KanbanView({ refreshKey }: Props) {
       <div className="text-text-3 text-center py-20 px-4">
         <div className="text-base font-semibold text-text-2 mb-2">No applications yet</div>
         <div className="text-sm">
-          Mark a job as <strong className="text-text-2 font-semibold">Applied →</strong> in the Jobs view to track it here.
+          Save or mark a job as <strong className="text-text-2 font-semibold">Applied →</strong> in the Jobs view to track it here.
         </div>
       </div>
     );
@@ -84,7 +85,7 @@ export default function KanbanView({ refreshKey }: Props) {
           className="w-full px-3 py-[0.375rem] rounded-sm border border-border bg-surface text-text text-sm outline-none"
         />
       </div>
-      <div className="flex gap-4 overflow-x-auto items-start min-h-[calc(100vh_-_130px)]">
+      <div className="flex gap-4 overflow-x-auto items-stretch min-h-[calc(100vh_-_130px)]">
         {COLUMNS.map(col => (
           <KanbanColumn
             key={col.key}

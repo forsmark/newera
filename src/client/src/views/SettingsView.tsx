@@ -20,6 +20,12 @@ interface SystemInfo {
   unscored_jobs: number;
 }
 
+interface BackupInfo {
+  name: string;
+  size: number;
+  created_at: string;
+}
+
 const EMPTY_PREFS: Preferences = {
   location: '',
   commutableLocations: '',
@@ -69,8 +75,14 @@ export default function SettingsView() {
   const [ingestResult, setIngestResult] = useState('');
   const [ingesting, setIngesting] = useState(false);
 
+  const [linkedinUrl, setLinkedinUrl] = useState('');
+  const [ingestingLinkedin, setIngestingLinkedin] = useState(false);
+
   const [system, setSystem] = useState<SystemInfo | null>(null);
   const [rescoring, setRescoring] = useState(false);
+
+  const [backups, setBackups] = useState<BackupInfo[]>([]);
+  const [backingUp, setBackingUp] = useState(false);
 
   const prefsDirty = JSON.stringify(prefs) !== JSON.stringify(savedPrefs);
   const resumeDirty = resume !== savedResume;
@@ -90,6 +102,11 @@ export default function SettingsView() {
     fetch("/api/status")
       .then(r => { if (!r.ok) throw new Error(); return r.json(); })
       .then(d => setSystem({ ollama_available: d.ollama_available ?? null, unscored_jobs: d.unscored_jobs ?? 0 }))
+      .catch(() => {});
+
+    fetch("/api/backups")
+      .then(r => r.json())
+      .then((d: { backups: BackupInfo[] }) => setBackups(d.backups))
       .catch(() => {});
   }, []);
 
@@ -161,6 +178,54 @@ export default function SettingsView() {
     setIngestText('');
     setIngestResult('');
     toast("Parsed resume loaded — review and save", "info");
+  }
+
+  async function ingestLinkedin() {
+    const url = linkedinUrl.trim();
+    if (!url.includes('linkedin.com/in/')) {
+      toast("Enter a LinkedIn profile URL (linkedin.com/in/…)");
+      return;
+    }
+    setIngestingLinkedin(true);
+    setIngestResult('');
+    try {
+      const res = await fetch("/api/settings/resume/ingest-linkedin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      const data = await res.json() as { parsed?: string; error?: string };
+      if (!res.ok) throw new Error(data.error ?? 'Failed');
+      setIngestResult(data.parsed!);
+    } catch (err) {
+      toast((err as Error).message || "LinkedIn import failed");
+    } finally {
+      setIngestingLinkedin(false);
+    }
+  }
+
+  async function createBackup() {
+    setBackingUp(true);
+    try {
+      const res = await fetch("/api/backups", { method: "POST" });
+      if (!res.ok) throw new Error();
+      const b = await res.json() as BackupInfo;
+      setBackups(prev => [b, ...prev]);
+      toast("Backup created", "info");
+    } catch {
+      toast("Backup failed");
+    } finally {
+      setBackingUp(false);
+    }
+  }
+
+  async function deleteBackup(name: string) {
+    const res = await fetch(`/api/backups/${encodeURIComponent(name)}`, { method: "DELETE" });
+    if (res.ok) {
+      setBackups(prev => prev.filter(b => b.name !== name));
+    } else {
+      toast("Failed to delete backup");
+    }
   }
 
   async function rescore() {
@@ -355,6 +420,82 @@ export default function SettingsView() {
             </div>
           )}
         </div>
+
+        {/* LinkedIn import */}
+        <div className="border-t border-border pt-4 flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <p className="text-[0.8125rem] text-text-2 font-medium">Import from LinkedIn</p>
+            <p className="text-[0.75rem] text-text-3">Public profiles only — may not work if login is required</p>
+          </div>
+          <div className="flex gap-2">
+            <input
+              type="url"
+              value={linkedinUrl}
+              onChange={e => setLinkedinUrl(e.target.value)}
+              className={inputClass}
+              placeholder="https://www.linkedin.com/in/your-profile/"
+            />
+            <button
+              onClick={ingestLinkedin}
+              disabled={ingestingLinkedin || !linkedinUrl.trim()}
+              className={[
+                "shrink-0 px-4 py-1.5 text-[0.8125rem] font-medium rounded-sm border",
+                ingestingLinkedin || !linkedinUrl.trim()
+                  ? "bg-transparent text-text-3 border-border cursor-not-allowed"
+                  : "bg-surface-raised text-text-2 border-border cursor-pointer btn-ghost",
+              ].join(" ")}
+            >
+              {ingestingLinkedin ? "Fetching…" : "Fetch"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Backups */}
+      <div className="bg-surface rounded border border-border p-4 flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <h2 className={sectionHeadingClass} style={{ marginBottom: 0 }}>Database Backups</h2>
+          <button
+            onClick={createBackup}
+            disabled={backingUp}
+            className={[
+              "px-4 py-1.5 text-[0.8125rem] font-medium rounded-sm border",
+              backingUp
+                ? "bg-transparent text-text-3 border-border cursor-not-allowed"
+                : "bg-surface-raised text-text-2 border-border cursor-pointer btn-ghost",
+            ].join(" ")}
+          >
+            {backingUp ? "Backing up…" : "Back up now"}
+          </button>
+        </div>
+        <p className="text-[0.75rem] text-text-3 m-0">
+          Automatic backups run every 6 hours. Last {Math.min(backups.length, 10)} kept.
+        </p>
+        {backups.length === 0 ? (
+          <p className="text-[0.75rem] text-text-3">No backups yet.</p>
+        ) : (
+          <div className="flex flex-col gap-1">
+            {backups.map(b => (
+              <div key={b.name} className="flex items-center gap-3 text-xs py-1 border-b border-border last:border-0">
+                <span className="text-text-2 font-mono flex-1">{b.name}</span>
+                <span className="text-text-3 shrink-0">{(b.size / 1024).toFixed(1)} KB</span>
+                <a
+                  href={`/api/backups/${b.name}`}
+                  download={b.name}
+                  className="text-accent no-underline shrink-0"
+                >
+                  ↓ Download
+                </a>
+                <button
+                  onClick={() => deleteBackup(b.name)}
+                  className="text-red bg-transparent border-none cursor-pointer text-xs shrink-0 p-0"
+                >
+                  Delete
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* System */}

@@ -29,16 +29,29 @@ export interface AppStatus {
     pending: number;
   };
   ollama_available?: boolean | null;
+  last_fetch_new_jobs?: number;
   data_files?: { resume: boolean; preferences: boolean };
+}
+
+export interface Artifact {
+  id: string;
+  job_id: string;
+  type: 'file' | 'link';
+  name: string;
+  url: string | null;
+  mime_type: string | null;
+  file_size: number | null;
+  created_at: string;
 }
 
 export interface Application {
   job_id: string;
-  kanban_column: 'applied' | 'interview' | 'offer' | 'rejected';
+  kanban_column: 'saved' | 'applied' | 'interview' | 'offer' | 'rejected';
   notes: string | null;
   interview_at: string | null;
   applied_at: string;
   updated_at: string;
   archived_description: string | null;
+  cover_letter: string | null;
   job: Job;
 }

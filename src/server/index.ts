@@ -1,21 +1,43 @@
 import { Hono } from 'hono';
 import { serveStatic } from 'hono/bun';
 import { resolve } from 'path';
+import { setupLogger } from './logger';
 import jobsRoute from './routes/jobs';
 import kanbanRoute from './routes/kanban';
 import fetchRoute from './routes/fetch';
 import settingsRoute, { getResume, getPreferences } from './routes/settings';
-import { startScheduler, getLastFetchAt, getIsFetching } from './scheduler';
+import logsRoute from './routes/logs';
+import authRoute from './routes/auth';
+import backupsRoute from './routes/backups';
+import { isAuthEnabled, validateSession } from './auth';
+import { startBackupScheduler } from './backup';
+import { startScheduler, getLastFetchAt, getIsFetching, getLastFetchNewJobs } from './scheduler';
 import { checkOllamaHealth, getOllamaAvailable } from './llm';
+import { getCookie } from 'hono/cookie';
 import db from './db';
+
+// Set up DB-backed logging before anything else writes to console
+setupLogger();
 
 const app = new Hono();
 
+// Auth middleware — protects all /api/* except /api/auth/*
+app.use('/api/*', async (c, next) => {
+  if (!isAuthEnabled()) return next();
+  if (c.req.path.startsWith('/api/auth/')) return next();
+  const token = getCookie(c, 'session');
+  if (!validateSession(token)) return c.json({ error: 'Unauthorized' }, 401);
+  return next();
+});
+
 // API routes
+app.route('/api/auth', authRoute);
 app.route('/api/jobs', jobsRoute);
 app.route('/api/kanban', kanbanRoute);
 app.route('/api/fetch', fetchRoute);
 app.route('/api/settings', settingsRoute);
+app.route('/api/logs', logsRoute);
+app.route('/api/backups', backupsRoute);
 
 // GET /api/status
 app.get('/api/status', (c) => {
@@ -37,6 +59,7 @@ app.get('/api/status', (c) => {
     unscored_jobs: unscoredRow.count,
     score_distribution: scoreDist,
     ollama_available: getOllamaAvailable(),
+    last_fetch_new_jobs: getLastFetchNewJobs(),
     data_files: {
       resume: getResume().length > 0,
       preferences: Object.values(getPreferences()).some(v => v !== '' && v !== null && v !== 'any'),
@@ -46,15 +69,20 @@ app.get('/api/status', (c) => {
 
 // Serve static files (built React app)
 const DIST = resolve(import.meta.dir, '../../dist');
-app.use('/*', serveStatic({ root: DIST }));
-// Fallback: serve index.html for client-side routing
-app.get('/*', serveStatic({ path: resolve(DIST, 'index.html') }));
+// Serve hashed assets and any root-level static files (favicon, etc.)
+app.use('/assets/*', serveStatic({ root: DIST }));
+app.use('/favicon*', serveStatic({ root: DIST }));
+app.use('/robots.txt', serveStatic({ root: DIST }));
+// SPA fallback: all other routes serve index.html for client-side routing
+app.get('/*', (c) => new Response(Bun.file(resolve(DIST, 'index.html'))));
 
-// Start Ollama health check and scheduler
+// Start Ollama health check, job scheduler, and backup scheduler
 checkOllamaHealth().catch(console.error);
 startScheduler();
+startBackupScheduler();
 
 export default {
   port: 3000,
   fetch: app.fetch,
+  idleTimeout: 0, // disable idle timeout — cover letter generation can take several minutes
 };

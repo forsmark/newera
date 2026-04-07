@@ -7,11 +7,9 @@ interface Props {
   isFetching?: boolean;
 }
 
-const DESC_LIMIT = 500;
 
 export default function JobDetail({ job, onRescore, isFetching }: Props) {
   const [copied, setCopied] = useState(false);
-  const [descExpanded, setDescExpanded] = useState(false);
 
   async function handleCopy() {
     const text = [`${job.title} — ${job.company}`, job.url, `Match score: ${job.match_score ?? 'pending'}`].join('\n');
@@ -30,11 +28,6 @@ export default function JobDetail({ job, onRescore, isFetching }: Props) {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
-
-  const hasLongDesc = job.description !== null && job.description.length > DESC_LIMIT;
-  const descText = job.description
-    ? (hasLongDesc && !descExpanded ? job.description.slice(0, DESC_LIMIT) + '…' : job.description)
-    : null;
 
   const isPending = job.match_score === null;
 
@@ -81,25 +74,6 @@ export default function JobDetail({ job, onRescore, isFetching }: Props) {
           )}
         </div>
       ) : null}
-
-      {/* Job description */}
-      {descText && (
-        <div
-          className="px-4 pb-[0.875rem]"
-          style={{ borderTop: (job.match_summary || job.match_reasoning) ? '1px solid #1a2840' : 'none', paddingTop: (job.match_summary || job.match_reasoning) ? '0.875rem' : undefined }}
-        >
-          <div className={sectionLabel}>Description</div>
-          <div className="text-text-2 text-sm leading-[1.65] whitespace-pre-wrap">{descText}</div>
-          {hasLongDesc && (
-            <button
-              onClick={() => setDescExpanded(v => !v)}
-              className="mt-[0.375rem] p-0 border-none bg-transparent text-text-3 text-[0.75rem] cursor-pointer underline"
-            >
-              {descExpanded ? "Show less" : "Show full description"}
-            </button>
-          )}
-        </div>
-      )}
 
       {/* Tags */}
       {job.tags && job.tags.length > 0 && (

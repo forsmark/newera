@@ -17,6 +17,7 @@ const HEADERS = {
   'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
   'Accept': 'text/html,application/xhtml+xml',
   'Accept-Language': 'en-US,en;q=0.9',
+  'Connection': 'close',
 };
 
 function buildSearchUrl(keywords: string, start = 0): string {
@@ -148,16 +149,29 @@ function loadKeywords(): string[] {
   return lines.length > 0 ? lines : DEFAULT_KEYWORDS;
 }
 
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 async function fetchOnePage(keywords: string, start: number): Promise<ParsedJob[]> {
   const url = buildSearchUrl(keywords, start);
-  const response = await fetch(url, {
-    headers: HEADERS,
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (!response.ok) {
-    throw new Error(`LinkedIn guest API returned ${response.status} for "${keywords}" start=${start}`);
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) {
+      const backoff = attempt === 1 ? 15_000 : 45_000;
+      console.warn(`[linkedin] 429 for "${keywords}" start=${start} — retrying in ${backoff / 1000}s (attempt ${attempt + 1})`);
+      await sleep(backoff);
+    }
+    const response = await fetch(url, {
+      headers: HEADERS,
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (response.status === 429) continue;
+    if (!response.ok) {
+      throw new Error(`LinkedIn guest API returned ${response.status} for "${keywords}" start=${start}`);
+    }
+    return parseJobCards(await response.text());
   }
-  return parseJobCards(await response.text());
+
+  throw new Error(`LinkedIn guest API returned 429 for "${keywords}" start=${start} (all retries exhausted)`);
 }
 
 async function fetchJobs(keywords: string): Promise<JobPartial[]> {
@@ -199,7 +213,9 @@ export async function fetchLinkedIn(): Promise<JobPartial[]> {
   const keywords = loadKeywords();
   let allJobs: JobPartial[] = [];
 
-  for (const kw of keywords) {
+  for (let i = 0; i < keywords.length; i++) {
+    if (i > 0) await sleep(3_000 + Math.random() * 2_000); // 3–5s between keyword batches
+    const kw = keywords[i];
     try {
       const jobs = await fetchJobs(kw);
       console.log(`[linkedin] "${kw}" → ${jobs.length} results`);

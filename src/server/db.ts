@@ -49,9 +49,33 @@ db.run(`
   )
 `);
 
+db.run(`
+  CREATE TABLE IF NOT EXISTS logs (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    level      TEXT NOT NULL,
+    message    TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  )
+`);
+
+db.run(`
+  CREATE TABLE IF NOT EXISTS application_artifacts (
+    id         TEXT PRIMARY KEY,
+    job_id     TEXT NOT NULL REFERENCES applications(job_id) ON DELETE CASCADE,
+    type       TEXT NOT NULL CHECK(type IN ('file', 'link')),
+    name       TEXT NOT NULL,
+    url        TEXT,
+    file_data  BLOB,
+    mime_type  TEXT,
+    file_size  INTEGER,
+    created_at TEXT NOT NULL
+  )
+`);
+
 // Migrate existing DBs — ignore error if column already exists
 try { db.run('ALTER TABLE jobs ADD COLUMN tags TEXT'); } catch { /* already exists */ }
 try { db.run('ALTER TABLE jobs ADD COLUMN match_summary TEXT'); } catch { /* already exists */ }
 try { db.run('ALTER TABLE applications ADD COLUMN archived_description TEXT'); } catch { /* already exists */ }
+try { db.run('ALTER TABLE applications ADD COLUMN cover_letter TEXT'); } catch { /* already exists */ }
 
 export default db;

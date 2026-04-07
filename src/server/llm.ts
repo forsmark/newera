@@ -5,6 +5,7 @@ const OLLAMA_URL = `${OLLAMA_BASE_URL}/api/generate`;
 const OLLAMA_HEALTH_URL = `${OLLAMA_BASE_URL}/api/tags`;
 const MODEL = 'gemma4:26b';
 const TIMEOUT_MS = 60_000;
+const COVER_LETTER_TIMEOUT_MS = 4 * 60_000; // 4 minutes — cover letters take longer on large models
 
 let ollamaAvailable: boolean | null = null; // null = not yet checked
 
@@ -227,6 +228,75 @@ ${truncated}`;
     return text && text.length > 50 ? text : null;
   } catch (err) {
     console.warn('[llm] parseResume failed:', (err as Error).message);
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function generateCoverLetter(job: Job, archivedDescription?: string | null): Promise<string | null> {
+  const { getResume, getPreferences } = await import('./routes/settings');
+  const resume = getResume();
+  const preferences = getPreferences();
+
+  if (!resume) {
+    console.warn('[llm] No resume set — skipping cover letter for job', job.id);
+    return null;
+  }
+
+  const description = archivedDescription ?? job.description ?? 'Not provided';
+  const truncatedDesc = description.length > 8_000 ? description.slice(0, 8_000) + '\n[truncated]' : description;
+
+  const prompt = `You are writing a cover letter on behalf of a job applicant.
+
+## Candidate Resume
+${resume}
+
+## Candidate Preferences / Context
+${formatPreferences(preferences)}
+
+## Job Posting
+Title: ${job.title}
+Company: ${job.company}
+Location: ${job.location ?? 'Not specified'}
+Description:
+${truncatedDesc}
+
+## Instructions
+Write a professional cover letter for this specific role. Requirements:
+- Sound natural and human — avoid AI-sounding phrases, buzzwords, and corporate jargon
+- Do NOT use em-dashes (—) anywhere in the letter
+- Keep it concise: 3-4 short paragraphs
+- Opening: express genuine interest in this specific role and company
+- Middle: connect 2-3 concrete experiences or skills from the resume to the job requirements
+- Closing: brief call to action, no hollow sign-off phrases
+- Do not invent experience not in the resume
+- Address it as a letter (no "Dear Hiring Manager" if you can personalise it)
+
+Return only the cover letter text, no commentary or metadata.`;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), COVER_LETTER_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(OLLAMA_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: MODEL, prompt, stream: false, think: false }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) throw new Error(`Ollama returned HTTP ${response.status}`);
+
+    const json = (await response.json()) as { response?: string };
+    const text = json.response?.trim();
+    return text && text.length > 50 ? text : null;
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      console.error(`[llm] generateCoverLetter timed out for job ${job.id}`);
+    } else {
+      console.error('[llm] generateCoverLetter failed for job', job.id, ':', err);
+    }
     return null;
   } finally {
     clearTimeout(timer);

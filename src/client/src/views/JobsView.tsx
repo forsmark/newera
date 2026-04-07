@@ -9,7 +9,7 @@ interface Props {
   isFetching?: boolean;
 }
 
-type FilterStatus = "all" | "unread" | "new" | "saved" | "applied";
+type FilterStatus = "all" | "unread" | "new" | "saved" | "applied" | "rejected";
 type FilterSource = "all" | "jsearch" | "jobindex";
 type PostedWithin = 'any' | '7d' | '30d';
 type SortBy = 'score' | 'posted' | 'fetched';
@@ -37,7 +37,6 @@ export default function JobsView({ refreshKey, isFetching }: Props) {
   const [loading, setLoading] = useState(true);
   const [totalJobs, setTotalJobs] = useState(0);
   const [offset, setOffset] = useState(0);
-  const [showRejected, setShowRejected] = useState(false);
   const [hideWeakMatches, setHideWeakMatches] = useState(true);
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -52,6 +51,7 @@ export default function JobsView({ refreshKey, isFetching }: Props) {
   const [compact, setCompact] = useState<boolean>(() =>
     localStorage.getItem("jobs-compact-view") === "true"
   );
+  const [pinnedIds, setPinnedIds] = useState<Set<string> | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
   const [rescoring, setRescoring] = useState(false);
@@ -88,9 +88,25 @@ export default function JobsView({ refreshKey, isFetching }: Props) {
   }, [offset]);
 
   useEffect(() => {
+    setPinnedIds(null);
     fetchJobs(0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshKey]);
+
+  // Filters that persist in-view even as items change state (sticky snapshot)
+  const STICKY_FILTERS: FilterStatus[] = ['unread', 'saved'];
+
+  function handleFilterStatusChange(s: FilterStatus) {
+    if (STICKY_FILTERS.includes(s)) {
+      const matchFn = s === 'unread'
+        ? (j: Job) => j.seen_at === null && j.status !== 'rejected'
+        : (j: Job) => j.status === 'saved';
+      setPinnedIds(new Set(jobs.filter(matchFn).map(j => j.id)));
+    } else {
+      setPinnedIds(null);
+    }
+    setFilterStatus(s);
+  }
 
   const hasPendingScores = jobs.some(j => j.match_score === null);
 
@@ -119,8 +135,8 @@ export default function JobsView({ refreshKey, isFetching }: Props) {
     setJobs(prev => prev.map(j => j.id === id ? { ...j, status: status as Job["status"] } : j));
   }
 
-  function handleSeen(id: string) {
-    setJobs(prev => prev.map(j => j.id === id ? { ...j, seen_at: new Date().toISOString() } : j));
+  function handleSeenChange(id: string, seen_at: string | null) {
+    setJobs(prev => prev.map(j => j.id === id ? { ...j, seen_at } : j));
   }
 
   function handleRescore(id: string) {
@@ -167,6 +183,51 @@ export default function JobsView({ refreshKey, isFetching }: Props) {
     }
   }
 
+  async function bulkMarkRead() {
+    if (selectedIds.size === 0) return;
+    setBulkLoading(true);
+    try {
+      const res = await fetch('/api/jobs/bulk-seen', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [...selectedIds] }),
+      });
+      if (!res.ok) {
+        toast('Bulk update failed — please try again');
+      } else {
+        const data = await res.json() as { seen_at: string };
+        setJobs(prev => prev.map(j =>
+          selectedIds.has(j.id) ? { ...j, seen_at: j.seen_at ?? data.seen_at } : j
+        ));
+        setSelectedIds(new Set());
+      }
+    } finally {
+      setBulkLoading(false);
+    }
+  }
+
+  async function bulkMarkUnread() {
+    if (selectedIds.size === 0) return;
+    setBulkLoading(true);
+    try {
+      const res = await fetch('/api/jobs/bulk-unseen', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [...selectedIds] }),
+      });
+      if (!res.ok) {
+        toast('Bulk update failed — please try again');
+      } else {
+        setJobs(prev => prev.map(j =>
+          selectedIds.has(j.id) ? { ...j, seen_at: null } : j
+        ));
+        setSelectedIds(new Set());
+      }
+    } finally {
+      setBulkLoading(false);
+    }
+  }
+
   async function handleRescoreAll() {
     if (rescoring) return;
     setRescoring(true);
@@ -194,12 +255,19 @@ export default function JobsView({ refreshKey, isFetching }: Props) {
 
   const filtered = jobs
     .filter(j => {
-      if (!showRejected && j.status === "rejected") return false;
-      if (hideWeakMatches && j.match_score !== null && j.match_score < 20) return false;
-      if (filterStatus === "unread" && j.seen_at !== null) return false;
-      if (filterStatus === "new" && j.status !== "new") return false;
-      if (filterStatus === "saved" && j.status !== "saved") return false;
-      if (filterStatus === "applied" && j.status !== "applied") return false;
+      // Sticky snapshot: keep jobs that were in view when the filter was applied
+      if (pinnedIds && STICKY_FILTERS.includes(filterStatus)) {
+        if (!pinnedIds.has(j.id)) return false;
+        if (j.status === 'rejected') return false;
+      } else {
+        if (filterStatus !== "rejected" && j.status === "rejected") return false;
+        if (hideWeakMatches && j.match_score !== null && j.match_score < 20) return false;
+        if (filterStatus === "unread" && j.seen_at !== null) return false;
+        if (filterStatus === "new" && j.status !== "new") return false;
+        if (filterStatus === "saved" && j.status !== "saved") return false;
+        if (filterStatus === "applied" && j.status !== "applied") return false;
+        if (filterStatus === "rejected" && j.status !== "rejected") return false;
+      }
       if (filterSource !== "all" && j.source !== filterSource) return false;
       if (activeTag && !(j.tags?.includes(activeTag))) return false;
       if (searchQuery) {
@@ -263,6 +331,7 @@ export default function JobsView({ refreshKey, isFetching }: Props) {
   const newCount = jobs.filter(j => j.status === 'new').length;
   const savedCount = jobs.filter(j => j.status === 'saved').length;
   const appliedCount = jobs.filter(j => j.status === 'applied').length;
+  const rejectedCount = jobs.filter(j => j.status === 'rejected').length;
 
   // Determine whether to animate the list (filter changed)
   const shouldAnimate = !prefersReducedMotion && filterKey !== prevFilterKey.current;
@@ -334,13 +403,13 @@ export default function JobsView({ refreshKey, isFetching }: Props) {
         <div className="flex gap-2 sm:gap-3 items-center flex-wrap">
           {/* Status tabs */}
           <div className="flex gap-0 border-b border-border overflow-x-auto shrink-0 w-full sm:w-auto">
-            {(["all", "unread", "new", "saved", "applied"] as FilterStatus[]).map(s => {
-              const count = s === "unread" ? unreadCount : s === "new" ? newCount : s === "saved" ? savedCount : s === "applied" ? appliedCount : null;
+            {(["all", "unread", "new", "saved", "applied", "rejected"] as FilterStatus[]).map(s => {
+              const count = s === "unread" ? unreadCount : s === "new" ? newCount : s === "saved" ? savedCount : s === "applied" ? appliedCount : s === "rejected" ? rejectedCount : null;
               const isActive = filterStatus === s;
               return (
                 <button
                   key={s}
-                  onClick={() => setFilterStatus(s)}
+                  onClick={() => handleFilterStatusChange(s)}
                   className="px-3 py-2 border-none bg-transparent cursor-pointer text-[0.8125rem] whitespace-nowrap -mb-px"
                   style={{
                     borderBottom: `2px solid ${isActive ? '#3b82f6' : 'transparent'}`,
@@ -407,17 +476,7 @@ export default function JobsView({ refreshKey, isFetching }: Props) {
                   onChange={e => setHideWeakMatches(e.target.checked)}
                   className="checkbox-styled"
                 />
-                Hide &lt;20
-              </label>
-              {/* Show rejected */}
-              <label className="flex items-center gap-[0.375rem] text-[0.8125rem] text-text-3 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={showRejected}
-                  onChange={e => setShowRejected(e.target.checked)}
-                  className="checkbox-styled"
-                />
-                Show rejected
+                Hide low score
               </label>
             </div>
           </div>
@@ -470,23 +529,35 @@ export default function JobsView({ refreshKey, isFetching }: Props) {
             initial={shouldAnimate ? "hidden" : false}
             animate={shouldAnimate ? "visible" : undefined}
           >
-            {filtered.map((job, index) => (
-              <JobRow
-                key={job.id}
-                job={job}
-                focused={index === focusedIndex}
-                onFocusRequest={() => setFocusedIndex(index)}
-                onStatusChange={handleStatusChange}
-                onSeen={handleSeen}
-                compact={compact}
-                selected={selectedIds.has(job.id)}
-                onToggleSelect={toggleSelect}
-                onRescore={handleRescore}
-                isFetching={isFetching}
-                onTagClick={tag => setActiveTag(prev => prev === tag ? null : tag)}
-                activeTag={activeTag ?? undefined}
-              />
-            ))}
+            <AnimatePresence initial={false}>
+              {filtered.map((job, index) => (
+                <motion.div
+                  key={job.id}
+                  layout
+                  variants={shouldAnimate && index < animatedItems ? itemVariants : undefined}
+                  exit={prefersReducedMotion ? {} : {
+                    opacity: 0,
+                    x: -32,
+                    transition: { duration: 0.2, ease: "easeIn" },
+                  }}
+                >
+                  <JobRow
+                    job={job}
+                    focused={index === focusedIndex}
+                    onFocusRequest={() => setFocusedIndex(index)}
+                    onStatusChange={handleStatusChange}
+                    compact={compact}
+                    selected={selectedIds.has(job.id)}
+                    onToggleSelect={toggleSelect}
+                    onSeenChange={handleSeenChange}
+                    onRescore={handleRescore}
+                    isFetching={isFetching}
+                    onTagClick={tag => setActiveTag(prev => prev === tag ? null : tag)}
+                    activeTag={activeTag ?? undefined}
+                  />
+                </motion.div>
+              ))}
+            </AnimatePresence>
           </motion.div>
 
           {jobs.length < totalJobs && (
@@ -529,7 +600,6 @@ export default function JobsView({ refreshKey, isFetching }: Props) {
                 ["s", "Save job"],
                 ["n", "Un-save job"],
                 ["r", "Reject job"],
-                ["a", "Mark applied"],
                 ["u", "Open URL"],
                 ["?", "This help"],
               ].map(([key, desc]) => (
@@ -555,6 +625,20 @@ export default function JobsView({ refreshKey, isFetching }: Props) {
             className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-surface border border-border rounded px-4 py-[0.625rem] flex items-center gap-[0.625rem] shadow-[0_8px_32px_rgba(0,0,0,0.5)] z-[100]"
           >
             <span className="text-text-2 text-sm font-medium">{selectedIds.size} selected</span>
+            <button
+              onClick={bulkMarkRead}
+              disabled={bulkLoading}
+              className="px-3.5 py-1.5 rounded-sm border border-border bg-transparent text-text-2 cursor-pointer text-[0.8125rem] font-medium"
+            >
+              Mark read
+            </button>
+            <button
+              onClick={bulkMarkUnread}
+              disabled={bulkLoading}
+              className="px-3.5 py-1.5 rounded-sm border border-border bg-transparent text-text-2 cursor-pointer text-[0.8125rem] font-medium"
+            >
+              Mark unread
+            </button>
             <button
               onClick={() => bulkSetStatus('saved')}
               disabled={bulkLoading}
