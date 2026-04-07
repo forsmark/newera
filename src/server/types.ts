@@ -20,7 +20,7 @@ export interface Job {
 export interface Preferences {
   location: string;            // e.g. "Copenhagen / Greater Copenhagen"
   commutableLocations: string; // e.g. "Malmö, Sweden"
-  remote: 'any' | 'onsite' | 'hybrid' | 'remote';
+  remote: string[];  // subset of ['onsite','hybrid','remote'], empty = any
   seniority: 'any' | 'junior' | 'mid' | 'senior' | 'lead';
   minSalaryDkk: number | null;
   techInterests: string;       // comma-separated
@@ -29,12 +29,15 @@ export interface Preferences {
   linkedinSearchTerms: string; // newline-separated
   jobindexSearchTerms: string; // newline-separated
   notes: string;
+  lowScoreThreshold: number;   // jobs below this score are considered "low score" (0-100)
+  ollamaModel: string;         // Ollama model used for scoring/analysis
+  fetchIntervalHours: number;  // how often to auto-fetch jobs (hours)
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
   location: '',
   commutableLocations: '',
-  remote: 'any',
+  remote: [],
   seniority: 'any',
   minSalaryDkk: null,
   techInterests: '',
@@ -43,6 +46,9 @@ export const DEFAULT_PREFERENCES: Preferences = {
   linkedinSearchTerms: '',
   jobindexSearchTerms: '',
   notes: '',
+  lowScoreThreshold: 20,
+  ollamaModel: 'gemma4:26b',
+  fetchIntervalHours: 2,
 };
 
 export interface Application {

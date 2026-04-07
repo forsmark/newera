@@ -60,10 +60,9 @@ const IconKanban = () => (
   </svg>
 );
 
-const IconGear = () => (
+const IconWrench = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-    <circle cx="8" cy="8" r="2.5" stroke="currentColor" strokeWidth="1.5"/>
-    <path d="M8 1v1.5M8 13.5V15M1 8h1.5M13.5 8H15M3.05 3.05l1.06 1.06M11.89 11.89l1.06 1.06M12.95 3.05l-1.06 1.06M4.11 11.89l-1.06 1.06" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+    <path d="M10.5 2a3.5 3.5 0 0 0-3.36 4.48L2.22 11.4a1.5 1.5 0 1 0 2.12 2.12l4.93-4.92A3.5 3.5 0 0 0 13.9 4.2l-1.97 1.97-1.06-1.06 1.97-1.97A3.5 3.5 0 0 0 10.5 2Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
   </svg>
 );
 
@@ -101,7 +100,7 @@ function Nav({ status, onFetchNow, fetching, onLogout, authEnabled }: NavProps) 
         <span className="hidden sm:inline">Applications</span>
       </NavLink>
       <NavLink to="/settings" className="nav-link shrink-0 py-1.5 px-2 sm:px-3" style={navLinkStyle} title="Settings">
-        <IconGear />
+        <IconWrench />
         <span className="hidden sm:inline">Settings</span>
       </NavLink>
       <NavLink to="/logs" className="nav-link shrink-0 py-1.5 px-2 sm:px-3" style={navLinkStyle} title="Logs">

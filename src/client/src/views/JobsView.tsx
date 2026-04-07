@@ -38,6 +38,7 @@ export default function JobsView({ refreshKey, isFetching }: Props) {
   const [totalJobs, setTotalJobs] = useState(0);
   const [offset, setOffset] = useState(0);
   const [hideWeakMatches, setHideWeakMatches] = useState(true);
+  const [lowScoreThreshold, setLowScoreThreshold] = useState(20);
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [postedWithin, setPostedWithin] = useState<PostedWithin>(() =>
@@ -92,6 +93,17 @@ export default function JobsView({ refreshKey, isFetching }: Props) {
     fetchJobs(0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshKey]);
+
+  useEffect(() => {
+    fetch('/api/settings')
+      .then(r => r.json())
+      .then((d: { preferences?: { lowScoreThreshold?: number } }) => {
+        if (typeof d.preferences?.lowScoreThreshold === 'number') {
+          setLowScoreThreshold(d.preferences.lowScoreThreshold);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Filters that persist in-view even as items change state (sticky snapshot)
   const STICKY_FILTERS: FilterStatus[] = ['unread', 'saved'];
@@ -261,7 +273,7 @@ export default function JobsView({ refreshKey, isFetching }: Props) {
         if (j.status === 'rejected') return false;
       } else {
         if (filterStatus !== "rejected" && j.status === "rejected") return false;
-        if (hideWeakMatches && j.match_score !== null && j.match_score < 20) return false;
+        if (hideWeakMatches && j.match_score !== null && j.match_score < lowScoreThreshold) return false;
         if (filterStatus === "unread" && j.seen_at !== null) return false;
         if (filterStatus === "new" && j.status !== "new") return false;
         if (filterStatus === "saved" && j.status !== "saved") return false;
@@ -476,7 +488,7 @@ export default function JobsView({ refreshKey, isFetching }: Props) {
                   onChange={e => setHideWeakMatches(e.target.checked)}
                   className="checkbox-styled"
                 />
-                Hide low score
+                Hide &lt;{lowScoreThreshold}
               </label>
             </div>
           </div>
@@ -560,7 +572,7 @@ export default function JobsView({ refreshKey, isFetching }: Props) {
             </AnimatePresence>
           </motion.div>
 
-          {jobs.length < totalJobs && (
+          {!pinnedIds && jobs.length < totalJobs && (
             <div className="text-center py-5">
               <button
                 onClick={() => fetchJobs()}

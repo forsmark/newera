@@ -1,9 +1,9 @@
 import type { Job, Preferences } from './types';
 import { OLLAMA_BASE_URL } from './config';
+import { getPreferences } from './settings';
 
 const OLLAMA_URL = `${OLLAMA_BASE_URL}/api/generate`;
 const OLLAMA_HEALTH_URL = `${OLLAMA_BASE_URL}/api/tags`;
-const MODEL = 'gemma4:26b';
 const TIMEOUT_MS = 60_000;
 const COVER_LETTER_TIMEOUT_MS = 4 * 60_000; // 4 minutes — cover letters take longer on large models
 
@@ -39,7 +39,7 @@ function formatPreferences(p: Preferences): string {
   const lines: string[] = [];
   if (p.location) lines.push(`Preferred location: ${p.location}`);
   if (p.commutableLocations) lines.push(`Also commutable to: ${p.commutableLocations}`);
-  if (p.remote && p.remote !== 'any') lines.push(`Work style: ${p.remote}`);
+  if (Array.isArray(p.remote) && p.remote.length > 0) lines.push(`Work style preference: ${p.remote.join(' or ')}`);
   if (p.seniority && p.seniority !== 'any') lines.push(`Target seniority: ${p.seniority}`);
   if (p.minSalaryDkk) lines.push(`Min salary: ${p.minSalaryDkk.toLocaleString('da-DK')} DKK/month`);
   if (p.techInterests) lines.push(`Tech interests: ${p.techInterests}`);
@@ -138,7 +138,7 @@ ${truncated}`;
     const response = await fetch(OLLAMA_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: MODEL, prompt, stream: false, think: false }),
+      body: JSON.stringify({ model: getPreferences().ollamaModel, prompt, stream: false, think: false }),
       signal: controller.signal,
     });
 
@@ -183,7 +183,7 @@ ${truncated}
     const response = await fetch(OLLAMA_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: MODEL, prompt, stream: false, think: false }),
+      body: JSON.stringify({ model: getPreferences().ollamaModel, prompt, stream: false, think: false }),
       signal: controller.signal,
     });
 
@@ -219,7 +219,7 @@ ${truncated}`;
     const response = await fetch(OLLAMA_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: MODEL, prompt, stream: false, think: false }),
+      body: JSON.stringify({ model: getPreferences().ollamaModel, prompt, stream: false, think: false }),
       signal: controller.signal,
     });
     if (!response.ok) throw new Error(`Ollama returned HTTP ${response.status}`);
@@ -282,7 +282,7 @@ Return only the cover letter text, no commentary or metadata.`;
     const response = await fetch(OLLAMA_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: MODEL, prompt, stream: false, think: false }),
+      body: JSON.stringify({ model: getPreferences().ollamaModel, prompt, stream: false, think: false }),
       signal: controller.signal,
     });
 
@@ -324,7 +324,7 @@ export async function analyzeJob(job: Job): Promise<AnalysisResult | null> {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: MODEL,
+        model: getPreferences().ollamaModel,
         prompt,
         stream: false,
         think: false,   // disable extended thinking — reduces latency from 60s+ to <5s

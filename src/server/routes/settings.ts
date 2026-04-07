@@ -4,35 +4,11 @@ import { analyzeUnscoredJobs } from '../scheduler';
 import { parseResume } from '../llm';
 import { fetchPageText } from '../utils/fetchPageText';
 import type { Preferences } from '../types';
-import { DEFAULT_PREFERENCES } from '../types';
+import { getSetting, setSetting, getPreferences, getResume } from '../settings';
+
+export { getPreferences, getResume };
 
 const app = new Hono();
-
-function getSetting(key: string): string | null {
-  const row = db.query<{ value: string }, [string]>('SELECT value FROM settings WHERE key = ?').get(key);
-  return row?.value ?? null;
-}
-
-function setSetting(key: string, value: string) {
-  db.run(
-    'INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at',
-    [key, value, new Date().toISOString()],
-  );
-}
-
-export function getPreferences(): Preferences {
-  const raw = getSetting('preferences');
-  if (!raw) return { ...DEFAULT_PREFERENCES };
-  try {
-    return { ...DEFAULT_PREFERENCES, ...(JSON.parse(raw) as Partial<Preferences>) };
-  } catch {
-    return { ...DEFAULT_PREFERENCES };
-  }
-}
-
-export function getResume(): string {
-  return getSetting('resume') ?? '';
-}
 
 // GET /api/settings
 app.get('/', (c) => {

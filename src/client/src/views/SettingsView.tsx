@@ -4,7 +4,7 @@ import { toast } from "../components/Toast";
 interface Preferences {
   location: string;
   commutableLocations: string;
-  remote: 'any' | 'onsite' | 'hybrid' | 'remote';
+  remote: string[];
   seniority: 'any' | 'junior' | 'mid' | 'senior' | 'lead';
   minSalaryDkk: number | null;
   techInterests: string;
@@ -13,6 +13,9 @@ interface Preferences {
   linkedinSearchTerms: string;
   jobindexSearchTerms: string;
   notes: string;
+  lowScoreThreshold: number;
+  ollamaModel: string;
+  fetchIntervalHours: number;
 }
 
 interface SystemInfo {
@@ -29,7 +32,7 @@ interface BackupInfo {
 const EMPTY_PREFS: Preferences = {
   location: '',
   commutableLocations: '',
-  remote: 'any',
+  remote: [],
   seniority: 'any',
   minSalaryDkk: null,
   techInterests: '',
@@ -38,26 +41,139 @@ const EMPTY_PREFS: Preferences = {
   linkedinSearchTerms: '',
   jobindexSearchTerms: '',
   notes: '',
+  lowScoreThreshold: 20,
+  ollamaModel: 'gemma4:26b',
+  fetchIntervalHours: 2,
 };
+
+const WORK_STYLES = [
+  { value: 'onsite', label: 'On-site' },
+  { value: 'hybrid', label: 'Hybrid' },
+  { value: 'remote', label: 'Remote' },
+];
 
 const inputClass = "w-full bg-surface-deep text-text text-sm border border-border rounded-sm px-3 py-2 outline-none focus:border-accent";
 const labelClass = "text-[0.75rem] font-medium text-text-3 block mb-1";
-const sectionHeadingClass = "text-text font-semibold text-sm mb-3";
 
-function SectionCard({ children, title }: { children: React.ReactNode; title: string }) {
+function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
-    <div className="bg-surface rounded border border-border p-4 flex flex-col gap-4">
-      <h2 className={sectionHeadingClass}>{title}</h2>
+    <div>
+      <label className={labelClass}>
+        {label}
+        {hint && <span className="ml-1 font-normal text-text-3 opacity-70">{hint}</span>}
+      </label>
       {children}
     </div>
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+// Controlled number input that doesn't snap to 0 when deleting the last digit
+function NumberInput({
+  value, onChange, min, max, step = 1, placeholder, className,
+}: {
+  value: number | null;
+  onChange: (v: number | null) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+  placeholder?: string;
+  className?: string;
+}) {
+  const [raw, setRaw] = useState(value === null ? '' : String(value));
+  const focusedRef = useRef(false);
+
+  // Sync display when value changes from outside (e.g. loaded from API)
+  useEffect(() => {
+    if (!focusedRef.current) {
+      setRaw(value === null ? '' : String(value));
+    }
+  }, [value]);
+
+  function validate(s: string): { n: number; error: boolean } | { n: null; error: false } {
+    if (s === '') return { n: null, error: false };
+    const n = Number(s);
+    if (isNaN(n)) return { n: NaN as unknown as number, error: true };
+    if (min !== undefined && n < min) return { n, error: true };
+    if (max !== undefined && n > max) return { n, error: true };
+    return { n, error: false };
+  }
+
+  const { error } = validate(raw);
+
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const s = e.target.value;
+    setRaw(s);
+    const result = validate(s);
+    if (!result.error && result.n !== null) onChange(result.n);
+    else if (!result.error && result.n === null) onChange(null);
+  }
+
+  function handleBlur() {
+    focusedRef.current = false;
+    const result = validate(raw);
+    if (result.error) {
+      // revert to last valid value
+      setRaw(value === null ? '' : String(value));
+    } else if (result.n !== null) {
+      // clamp and normalise display
+      const clamped = min !== undefined && result.n < min ? min
+        : max !== undefined && result.n > max ? max
+        : result.n;
+      setRaw(String(clamped));
+      onChange(clamped);
+    } else {
+      onChange(null);
+    }
+  }
+
   return (
-    <div>
-      <label className={labelClass}>{label}</label>
-      {children}
+    <input
+      type="number"
+      value={raw}
+      min={min}
+      max={max}
+      step={step}
+      placeholder={placeholder}
+      className={`${className ?? inputClass}${error ? ' border-red' : ''}`}
+      onChange={handleChange}
+      onFocus={() => { focusedRef.current = true; }}
+      onBlur={handleBlur}
+    />
+  );
+}
+
+function Accordion({
+  title, defaultOpen = true, action, children,
+}: {
+  title: string;
+  defaultOpen?: boolean;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="bg-surface rounded border border-border">
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center justify-between px-4 py-3 bg-transparent border-none cursor-pointer text-left"
+      >
+        <span className="text-text font-semibold text-sm">{title}</span>
+        <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+          {action}
+          <span
+            className="text-text-3 text-[0.625rem] select-none pointer-events-none"
+            style={{ display: 'inline-block', transition: 'transform 0.2s', transform: open ? 'rotate(180deg)' : 'rotate(0deg)' }}
+          >
+            ▼
+          </span>
+        </div>
+      </button>
+      {open && (
+        <div className="px-4 pb-4 border-t border-border pt-4 flex flex-col gap-4">
+          {children}
+        </div>
+      )}
     </div>
   );
 }
@@ -91,7 +207,11 @@ export default function SettingsView() {
     fetch("/api/settings")
       .then(r => r.json())
       .then((data: { preferences: Preferences; resume: string }) => {
-        const p = { ...EMPTY_PREFS, ...data.preferences };
+        const p: Preferences = {
+          ...EMPTY_PREFS,
+          ...data.preferences,
+          remote: Array.isArray(data.preferences?.remote) ? data.preferences.remote : [],
+        };
         setPrefs(p);
         setSavedPrefs(p);
         setResume(data.resume ?? '');
@@ -112,6 +232,13 @@ export default function SettingsView() {
 
   function updatePref<K extends keyof Preferences>(key: K, value: Preferences[K]) {
     setPrefs(p => ({ ...p, [key]: value }));
+  }
+
+  function toggleWorkStyle(style: string) {
+    setPrefs(p => {
+      const has = p.remote.includes(style);
+      return { ...p, remote: has ? p.remote.filter(s => s !== style) : [...p.remote, style] };
+    });
   }
 
   async function savePrefs() {
@@ -151,10 +278,7 @@ export default function SettingsView() {
   }
 
   async function ingestResume() {
-    if (ingestText.trim().length < 50) {
-      toast("Paste at least 50 characters of CV text");
-      return;
-    }
+    if (ingestText.trim().length < 50) { toast("Paste at least 50 characters of CV text"); return; }
     setIngesting(true);
     setIngestResult('');
     try {
@@ -173,7 +297,7 @@ export default function SettingsView() {
     }
   }
 
-  function useIngestResult() {
+  function applyIngestResult() {
     setResume(ingestResult);
     setIngestText('');
     setIngestResult('');
@@ -182,10 +306,7 @@ export default function SettingsView() {
 
   async function ingestLinkedin() {
     const url = linkedinUrl.trim();
-    if (!url.includes('linkedin.com/in/')) {
-      toast("Enter a LinkedIn profile URL (linkedin.com/in/…)");
-      return;
-    }
+    if (!url.includes('linkedin.com/in/')) { toast("Enter a LinkedIn profile URL (linkedin.com/in/…)"); return; }
     setIngestingLinkedin(true);
     setIngestResult('');
     try {
@@ -221,11 +342,8 @@ export default function SettingsView() {
 
   async function deleteBackup(name: string) {
     const res = await fetch(`/api/backups/${encodeURIComponent(name)}`, { method: "DELETE" });
-    if (res.ok) {
-      setBackups(prev => prev.filter(b => b.name !== name));
-    } else {
-      toast("Failed to delete backup");
-    }
+    if (res.ok) setBackups(prev => prev.filter(b => b.name !== name));
+    else toast("Failed to delete backup");
   }
 
   async function rescore() {
@@ -244,6 +362,7 @@ export default function SettingsView() {
 
   const saveBtn = (dirty: boolean, saving: boolean, onClick: () => void) => (
     <button
+      type="button"
       onClick={onClick}
       disabled={!dirty || saving}
       className={[
@@ -258,17 +377,11 @@ export default function SettingsView() {
   );
 
   return (
-    <div className="max-w-[800px] mx-auto px-4 py-6 flex flex-col gap-6">
-      <h1 className="text-text font-semibold text-base">Settings</h1>
+    <div className="max-w-[800px] mx-auto px-4 py-6 flex flex-col gap-3">
+      <h1 className="text-text font-semibold text-base mb-1">Settings</h1>
 
-      {/* Preferences */}
-      <div className="bg-surface rounded border border-border p-4 flex flex-col gap-5">
-        <div className="flex items-center justify-between">
-          <h2 className={sectionHeadingClass} style={{ marginBottom: 0 }}>Preferences</h2>
-          {saveBtn(prefsDirty, savingPrefs, savePrefs)}
-        </div>
-
-        {/* Location */}
+      {/* Job preferences */}
+      <Accordion title="Job preferences" action={saveBtn(prefsDirty, savingPrefs, savePrefs)}>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="Preferred location">
             <input className={inputClass} value={prefs.location}
@@ -282,16 +395,21 @@ export default function SettingsView() {
           </Field>
         </div>
 
-        {/* Role */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <Field label="Work style">
-            <select className={inputClass} value={prefs.remote}
-              onChange={e => updatePref('remote', e.target.value as Preferences['remote'])}>
-              <option value="any">Any</option>
-              <option value="onsite">On-site</option>
-              <option value="hybrid">Hybrid</option>
-              <option value="remote">Remote</option>
-            </select>
+          <Field label="Work style" hint="(any if none selected)">
+            <div className="flex flex-wrap gap-2 pt-1">
+              {WORK_STYLES.map(({ value, label }) => (
+                <label key={value} className="flex items-center gap-1.5 cursor-pointer text-sm text-text-2 select-none">
+                  <input
+                    type="checkbox"
+                    checked={prefs.remote.includes(value)}
+                    onChange={() => toggleWorkStyle(value)}
+                    className="checkbox-styled"
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
           </Field>
           <Field label="Seniority">
             <select className={inputClass} value={prefs.seniority}
@@ -304,36 +422,35 @@ export default function SettingsView() {
             </select>
           </Field>
           <Field label="Min salary (DKK/month)">
-            <input type="number" className={inputClass}
-              value={prefs.minSalaryDkk ?? ''}
-              onChange={e => updatePref('minSalaryDkk', e.target.value ? Number(e.target.value) : null)}
-              placeholder="e.g. 55000" min={0} step={1000} />
+            <NumberInput
+              value={prefs.minSalaryDkk}
+              onChange={v => updatePref('minSalaryDkk', v)}
+              min={0} step={1000} placeholder="e.g. 55000"
+            />
           </Field>
         </div>
 
-        {/* Tech stack */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Tech interests (comma-separated)">
+          <Field label="Tech interests" hint="(comma-separated)">
             <input className={inputClass} value={prefs.techInterests}
               onChange={e => updatePref('techInterests', e.target.value)}
               placeholder="React, TypeScript, Node.js" />
           </Field>
-          <Field label="Tech to avoid (comma-separated)">
+          <Field label="Tech to avoid" hint="(comma-separated)">
             <input className={inputClass} value={prefs.techAvoid}
               onChange={e => updatePref('techAvoid', e.target.value)}
               placeholder="PHP, WordPress, Salesforce" />
           </Field>
         </div>
 
-        {/* Search terms */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="LinkedIn search terms (one per line)">
+          <Field label="LinkedIn search terms" hint="(one per line)">
             <textarea className={inputClass} style={{ height: '80px', resize: 'vertical' }}
               value={prefs.linkedinSearchTerms}
               onChange={e => updatePref('linkedinSearchTerms', e.target.value)}
               placeholder={"frontend developer\nweb developer"} />
           </Field>
-          <Field label="Jobindex search terms (one per line)">
+          <Field label="Jobindex search terms" hint="(one per line)">
             <textarea className={inputClass} style={{ height: '80px', resize: 'vertical' }}
               value={prefs.jobindexSearchTerms}
               onChange={e => updatePref('jobindexSearchTerms', e.target.value)}
@@ -341,9 +458,8 @@ export default function SettingsView() {
           </Field>
         </div>
 
-        {/* Blacklist + notes */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Company blacklist (one per line)">
+          <Field label="Company blacklist" hint="(one per line)">
             <textarea className={inputClass} style={{ height: '80px', resize: 'vertical' }}
               value={prefs.companyBlacklist}
               onChange={e => updatePref('companyBlacklist', e.target.value)}
@@ -356,14 +472,36 @@ export default function SettingsView() {
               placeholder="Looking for product companies, not consulting" />
           </Field>
         </div>
-      </div>
+      </Accordion>
+
+      {/* App config */}
+      <Accordion title="App config" defaultOpen={true} action={saveBtn(prefsDirty, savingPrefs, savePrefs)}>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <Field label="Low score threshold" hint="(0–100)">
+            <NumberInput
+              value={prefs.lowScoreThreshold}
+              onChange={v => updatePref('lowScoreThreshold', v ?? 20)}
+              min={0} max={100} step={1} placeholder="20"
+            />
+          </Field>
+          <Field label="Fetch interval" hint="(hours, 1–24)">
+            <NumberInput
+              value={prefs.fetchIntervalHours}
+              onChange={v => updatePref('fetchIntervalHours', v ?? 2)}
+              min={1} max={24} step={1} placeholder="2"
+            />
+          </Field>
+          <Field label="Ollama model">
+            <input className={inputClass}
+              value={prefs.ollamaModel}
+              onChange={e => updatePref('ollamaModel', e.target.value)}
+              placeholder="gemma4:26b" />
+          </Field>
+        </div>
+      </Accordion>
 
       {/* Resume */}
-      <div className="bg-surface rounded border border-border p-4 flex flex-col gap-4">
-        <div className="flex items-center justify-between">
-          <h2 className={sectionHeadingClass} style={{ marginBottom: 0 }}>Resume</h2>
-          {saveBtn(resumeDirty, savingResume, saveResume)}
-        </div>
+      <Accordion title="Resume" action={saveBtn(resumeDirty, savingResume, saveResume)}>
         <textarea
           aria-label="Resume"
           value={resume}
@@ -373,7 +511,6 @@ export default function SettingsView() {
           placeholder="Paste your resume in markdown, or use 'Ingest resume' below to parse it from raw text…"
         />
 
-        {/* Ingest section */}
         <div className="border-t border-border pt-4 flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <p className="text-[0.8125rem] text-text-2 font-medium">Ingest resume</p>
@@ -387,6 +524,7 @@ export default function SettingsView() {
             placeholder="Paste raw CV text here (copied from PDF, Word, LinkedIn, etc.)…"
           />
           <button
+            type="button"
             onClick={ingestResume}
             disabled={ingesting || ingestText.trim().length < 50}
             className={[
@@ -404,16 +542,12 @@ export default function SettingsView() {
               <p className="text-[0.75rem] text-text-3">Preview — looks right?</p>
               <pre className="bg-surface-deep border border-border rounded-sm p-3 text-xs text-text-2 overflow-auto max-h-[200px] whitespace-pre-wrap">{ingestResult}</pre>
               <div className="flex gap-2">
-                <button
-                  onClick={useIngestResult}
-                  className="px-4 py-1.5 text-[0.8125rem] font-medium rounded-sm border border-border-accent bg-accent-bg text-accent cursor-pointer"
-                >
+                <button type="button" onClick={applyIngestResult}
+                  className="px-4 py-1.5 text-[0.8125rem] font-medium rounded-sm border border-border-accent bg-accent-bg text-accent cursor-pointer">
                   Use this
                 </button>
-                <button
-                  onClick={() => setIngestResult('')}
-                  className="px-4 py-1.5 text-[0.8125rem] font-medium rounded-sm border border-border text-text-3 bg-transparent cursor-pointer btn-ghost"
-                >
+                <button type="button" onClick={() => setIngestResult('')}
+                  className="px-4 py-1.5 text-[0.8125rem] font-medium rounded-sm border border-border text-text-3 bg-transparent cursor-pointer btn-ghost">
                   Discard
                 </button>
               </div>
@@ -421,21 +555,16 @@ export default function SettingsView() {
           )}
         </div>
 
-        {/* LinkedIn import */}
         <div className="border-t border-border pt-4 flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <p className="text-[0.8125rem] text-text-2 font-medium">Import from LinkedIn</p>
             <p className="text-[0.75rem] text-text-3">Public profiles only — may not work if login is required</p>
           </div>
           <div className="flex gap-2">
-            <input
-              type="url"
-              value={linkedinUrl}
-              onChange={e => setLinkedinUrl(e.target.value)}
-              className={inputClass}
-              placeholder="https://www.linkedin.com/in/your-profile/"
-            />
+            <input type="url" value={linkedinUrl} onChange={e => setLinkedinUrl(e.target.value)}
+              className={inputClass} placeholder="https://www.linkedin.com/in/your-profile/" />
             <button
+              type="button"
               onClick={ingestLinkedin}
               disabled={ingestingLinkedin || !linkedinUrl.trim()}
               className={[
@@ -449,25 +578,24 @@ export default function SettingsView() {
             </button>
           </div>
         </div>
-      </div>
+      </Accordion>
 
       {/* Backups */}
-      <div className="bg-surface rounded border border-border p-4 flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <h2 className={sectionHeadingClass} style={{ marginBottom: 0 }}>Database Backups</h2>
-          <button
-            onClick={createBackup}
-            disabled={backingUp}
-            className={[
-              "px-4 py-1.5 text-[0.8125rem] font-medium rounded-sm border",
-              backingUp
-                ? "bg-transparent text-text-3 border-border cursor-not-allowed"
-                : "bg-surface-raised text-text-2 border-border cursor-pointer btn-ghost",
-            ].join(" ")}
-          >
-            {backingUp ? "Backing up…" : "Back up now"}
-          </button>
-        </div>
+      <Accordion title="Database backups" defaultOpen={false} action={
+        <button
+          type="button"
+          onClick={createBackup}
+          disabled={backingUp}
+          className={[
+            "px-4 py-1.5 text-[0.8125rem] font-medium rounded-sm border border-border",
+            backingUp
+              ? "bg-transparent text-text-3 cursor-not-allowed"
+              : "bg-surface-raised text-text-2 cursor-pointer btn-ghost",
+          ].join(" ")}
+        >
+          {backingUp ? "Backing up…" : "Back up now"}
+        </button>
+      }>
         <p className="text-[0.75rem] text-text-3 m-0">
           Automatic backups run every 6 hours. Last {Math.min(backups.length, 10)} kept.
         </p>
@@ -479,35 +607,28 @@ export default function SettingsView() {
               <div key={b.name} className="flex items-center gap-3 text-xs py-1 border-b border-border last:border-0">
                 <span className="text-text-2 font-mono flex-1">{b.name}</span>
                 <span className="text-text-3 shrink-0">{(b.size / 1024).toFixed(1)} KB</span>
-                <a
-                  href={`/api/backups/${b.name}`}
-                  download={b.name}
-                  className="text-accent no-underline shrink-0"
-                >
+                <a href={`/api/backups/${b.name}`} download={b.name} className="text-accent no-underline shrink-0">
                   ↓ Download
                 </a>
-                <button
-                  onClick={() => deleteBackup(b.name)}
-                  className="text-red bg-transparent border-none cursor-pointer text-xs shrink-0 p-0"
-                >
+                <button type="button" onClick={() => deleteBackup(b.name)}
+                  className="text-red bg-transparent border-none cursor-pointer text-xs shrink-0 p-0">
                   Delete
                 </button>
               </div>
             ))}
           </div>
         )}
-      </div>
+      </Accordion>
 
       {/* System */}
-      <div className="bg-surface rounded border border-border p-4 flex flex-col gap-3">
-        <h2 className={sectionHeadingClass}>System</h2>
+      <Accordion title="System" defaultOpen={false}>
         {system && (
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-2 text-xs">
               <span className={`w-2 h-2 rounded-full shrink-0 ${system.ollama_available ? "bg-green" : "bg-red"}`} />
               <span className="text-text-2">Ollama {system.ollama_available ? "Connected" : "Unavailable"}</span>
             </div>
-            <p className="text-xs text-text-3">
+            <p className="text-xs text-text-3 m-0">
               {system.unscored_jobs > 0
                 ? `${system.unscored_jobs} job${system.unscored_jobs === 1 ? "" : "s"} pending LLM analysis`
                 : "All jobs scored"}
@@ -515,10 +636,11 @@ export default function SettingsView() {
           </div>
         )}
         <button
+          type="button"
           onClick={rescore}
           disabled={rescoring}
           className={[
-            "mt-1 w-fit px-4 py-1.5 text-[0.8125rem] font-medium rounded-sm border",
+            "w-fit px-4 py-1.5 text-[0.8125rem] font-medium rounded-sm border",
             rescoring
               ? "bg-transparent text-text-3 border-border cursor-not-allowed"
               : "bg-surface-raised text-amber border-[#3a2200] cursor-pointer hover:bg-amber-bg",
@@ -526,7 +648,7 @@ export default function SettingsView() {
         >
           {rescoring ? "Re-scoring…" : "Re-score all jobs"}
         </button>
-      </div>
+      </Accordion>
     </div>
   );
 }

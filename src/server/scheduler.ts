@@ -4,6 +4,7 @@ import { analyzeJob } from './llm';
 import db from './db';
 import { randomUUID } from 'crypto';
 import type { Job } from './types';
+import { getPreferences, getResume } from './settings';
 
 let lastFetchAt: string | null = null;
 let isFetching = false;
@@ -106,7 +107,6 @@ export async function fetchJobs(): Promise<number> {
 }
 
 export async function analyzeUnscoredJobs(): Promise<void> {
-  const { getResume } = await import('./routes/settings');
   if (!getResume()) return;
 
   const unscoredJobs = db.query(`
@@ -135,9 +135,15 @@ export async function analyzeUnscoredJobs(): Promise<void> {
   }
 }
 
-const INTERVAL_MS = 2 * 60 * 60 * 1000;
+function scheduleNextFetch() {
+  const { fetchIntervalHours } = getPreferences();
+  const ms = Math.max(1, fetchIntervalHours) * 60 * 60 * 1000;
+  setTimeout(() => {
+    fetchJobs().catch(console.error).finally(scheduleNextFetch);
+  }, ms);
+}
 
 export function startScheduler(): void {
   fetchJobs().catch(console.error);
-  setInterval(() => fetchJobs().catch(console.error), INTERVAL_MS);
+  scheduleNextFetch();
 }
