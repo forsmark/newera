@@ -137,7 +137,7 @@ export async function analyzeUnscoredJobs(): Promise<void> {
   }
 }
 
-function maybeAutoReject(jobId: string, score: number) {
+export function maybeAutoReject(jobId: string, score: number) {
   const { autoRejectLowScore, lowScoreThreshold } = getPreferences();
   if (autoRejectLowScore && score < lowScoreThreshold) {
     db.run("UPDATE jobs SET status = 'rejected' WHERE id = ? AND status = 'new'", [jobId]);

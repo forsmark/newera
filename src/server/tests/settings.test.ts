@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
 import app from '../routes/settings';
 import db from '../db';
+import { clearDb, seedJob } from './helpers/db';
 
 function clearSettings() {
   db.run('DELETE FROM settings');
@@ -14,7 +15,7 @@ describe('GET /', () => {
     expect(res.status).toBe(200);
     const data = await res.json() as { resume: string; preferences: Record<string, unknown> };
     expect(data.resume).toBe('');
-    expect(data.preferences.remote).toBe('any');
+    expect(data.preferences.remote).toEqual([]);
     expect(data.preferences.seniority).toBe('any');
   });
 });
@@ -54,14 +55,14 @@ describe('PUT /preferences', () => {
     const res = await app.request('/preferences', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ location: 'Copenhagen', remote: 'hybrid', seniority: 'senior' }),
+      body: JSON.stringify({ location: 'Copenhagen', remote: ['hybrid'], seniority: 'senior' }),
     });
     expect(res.status).toBe(200);
 
     const get = await app.request('/');
     const data = await get.json() as { preferences: Record<string, unknown> };
     expect(data.preferences.location).toBe('Copenhagen');
-    expect(data.preferences.remote).toBe('hybrid');
+    expect(data.preferences.remote).toEqual(['hybrid']);
     expect(data.preferences.seniority).toBe('senior');
     // Other fields should still have defaults
     expect(data.preferences.techInterests).toBe('');
@@ -74,6 +75,52 @@ describe('PUT /preferences', () => {
       body: 'not json',
     });
     expect(res.status).toBe(400);
+  });
+});
+
+describe('POST /reject-low-score', () => {
+  beforeEach(() => {
+    clearSettings();
+    clearDb();
+  });
+
+  it('rejects new jobs scored below the threshold and returns count', async () => {
+    db.run("INSERT INTO settings (key, value, updated_at) VALUES ('preferences', '{\"lowScoreThreshold\":50}', datetime('now'))");
+    seedJob({ match_score: 30, status: 'new' });
+    seedJob({ match_score: 70, status: 'new' });
+
+    const res = await app.request('/reject-low-score', { method: 'POST' });
+    expect(res.status).toBe(200);
+    const body = await res.json() as { rejected: number };
+    expect(body.rejected).toBe(1);
+  });
+
+  it('does not reject saved or applied jobs even if below threshold', async () => {
+    db.run("INSERT INTO settings (key, value, updated_at) VALUES ('preferences', '{\"lowScoreThreshold\":50}', datetime('now'))");
+    seedJob({ match_score: 10, status: 'saved' });
+    seedJob({ match_score: 10, status: 'applied' });
+
+    const res = await app.request('/reject-low-score', { method: 'POST' });
+    const body = await res.json() as { rejected: number };
+    expect(body.rejected).toBe(0);
+  });
+
+  it('does not reject unscored jobs', async () => {
+    db.run("INSERT INTO settings (key, value, updated_at) VALUES ('preferences', '{\"lowScoreThreshold\":50}', datetime('now'))");
+    seedJob({ match_score: null, status: 'new' });
+
+    const res = await app.request('/reject-low-score', { method: 'POST' });
+    const body = await res.json() as { rejected: number };
+    expect(body.rejected).toBe(0);
+  });
+
+  it('returns 0 when no jobs are below threshold', async () => {
+    db.run("INSERT INTO settings (key, value, updated_at) VALUES ('preferences', '{\"lowScoreThreshold\":20}', datetime('now'))");
+    seedJob({ match_score: 80, status: 'new' });
+
+    const res = await app.request('/reject-low-score', { method: 'POST' });
+    const body = await res.json() as { rejected: number };
+    expect(body.rejected).toBe(0);
   });
 });
 
