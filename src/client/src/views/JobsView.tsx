@@ -93,8 +93,12 @@ function FirstTimeSetup({ status }: { status: AppStatus | null }) {
 export default function JobsView({ refreshKey, isFetching, status }: Props) {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [totalJobs, setTotalJobs] = useState(0);
-  const [offset, setOffset] = useState(0);
+  const offsetRef = useRef(0);
+  const loadingMoreRef = useRef(false);
+  const [sentinelVisible, setSentinelVisible] = useState(false);
+  const sentinelRef = useRef<HTMLDivElement>(null);
   const [hideWeakMatches, setHideWeakMatches] = useState(true);
   const [hideUnscored, setHideUnscored] = useState(false);
   const [lowScoreThreshold, setLowScoreThreshold] = useState(20);
@@ -124,33 +128,40 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
   const filterKey = `${filterStatus}|${filterSource}|${activeTag}|${searchQuery}|${postedWithin}|${sortBy}`;
   const prevFilterKey = useRef(filterKey);
 
-  const fetchJobs = useCallback(async (resetOffset?: number) => {
-    const useOffset = resetOffset ?? offset;
-    const isReset = resetOffset !== undefined;
-    if (isReset) setLoading(true);
+  const fetchJobs = useCallback(async (reset?: boolean) => {
+    const isReset = reset === true;
+    if (!isReset && loadingMoreRef.current) return;
+    if (!isReset) {
+      loadingMoreRef.current = true;
+      setLoadingMore(true);
+    } else {
+      offsetRef.current = 0;
+      setLoading(true);
+    }
     try {
-      const res = await fetch(`/api/jobs?limit=100&offset=${useOffset}`);
+      const res = await fetch(`/api/jobs?limit=100&offset=${offsetRef.current}`);
       if (!res.ok) {
         toast('Failed to load jobs');
       } else {
         const data = await res.json();
         if (isReset) {
           setJobs(data.jobs);
-          setOffset(100);
+          offsetRef.current = data.jobs.length;
         } else {
           setJobs(prev => [...prev, ...data.jobs]);
-          setOffset(prev => prev + data.jobs.length);
+          offsetRef.current += data.jobs.length;
         }
         setTotalJobs(data.total);
       }
     } finally {
       if (isReset) setLoading(false);
+      else { loadingMoreRef.current = false; setLoadingMore(false); }
     }
-  }, [offset]);
+  }, []);
 
   useEffect(() => {
     setPinnedIds(null);
-    fetchJobs(0);
+    fetchJobs(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshKey]);
 
@@ -168,6 +179,27 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
       })
       .catch(() => {});
   }, []);
+
+  // Infinite scroll: watch sentinel visibility
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setSentinelVisible(entry.isIntersecting),
+      { rootMargin: '200px' }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  // Trigger load-more when sentinel is visible and there are more jobs
+  useEffect(() => {
+    if (!sentinelVisible) return;
+    if (pinnedIds) return;
+    if (filterStatus === 'rejected') return;
+    if (jobs.length >= totalJobs) return;
+    fetchJobs(false);
+  }, [sentinelVisible, jobs.length, totalJobs, pinnedIds, filterStatus, fetchJobs]);
 
   // Filters that persist in-view even as items change state (sticky snapshot)
   const STICKY_FILTERS: FilterStatus[] = ['unread', 'saved'];
@@ -235,7 +267,7 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
     }
   }
 
-  async function bulkSetStatus(status: 'saved' | 'rejected') {
+  async function bulkSetStatus(status: 'new' | 'saved' | 'rejected') {
     if (selectedIds.size === 0) return;
     setBulkLoading(true);
     try {
@@ -638,15 +670,9 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
             </AnimatePresence>
           </motion.div>
 
-          {!pinnedIds && filterStatus !== 'rejected' && jobs.length < totalJobs && (
-            <div className="text-center py-5">
-              <button
-                onClick={() => fetchJobs()}
-                className="px-5 py-[0.4375rem] rounded border border-border bg-transparent text-text-2 cursor-pointer text-sm btn-ghost"
-              >
-                Load more ({totalJobs - jobs.length} remaining)
-              </button>
-            </div>
+          <div ref={sentinelRef} style={{ height: 1 }} />
+          {loadingMore && (
+            <div className="text-center py-5 text-text-3 text-sm">Loading…</div>
           )}
         </>
       )}
@@ -730,6 +756,13 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
               className="px-3.5 py-1.5 rounded-sm border border-border-red bg-transparent text-red cursor-pointer text-[0.8125rem] font-medium"
             >
               Reject all
+            </button>
+            <button
+              onClick={() => bulkSetStatus('new')}
+              disabled={bulkLoading}
+              className="px-3.5 py-1.5 rounded-sm border border-border bg-transparent text-text-3 cursor-pointer text-[0.8125rem] font-medium"
+            >
+              Unreject all
             </button>
             <button
               onClick={() => setSelectedIds(new Set())}

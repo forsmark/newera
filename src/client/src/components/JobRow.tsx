@@ -34,8 +34,7 @@ function inferWorkType(location: string | null): 'remote' | 'hybrid' | 'onsite' 
 }
 
 function WorkTypeBadge({ job }: { job: Job }) {
-  const wt = job.work_type ?? inferWorkType(job.location);
-  if (!wt) return null;
+  const wt = job.work_type ?? inferWorkType(job.location) ?? 'onsite';
   const s = WORK_TYPE_STYLES[wt];
   return (
     <span style={{ color: s.color, background: s.bg, border: `1px solid ${s.border}`, borderRadius: 'var(--radius-sm)', padding: '0.1875rem 0.4375rem', fontSize: '0.6875rem', fontWeight: 600, whiteSpace: 'nowrap', letterSpacing: '0.02em' }}>
@@ -177,6 +176,13 @@ export default function JobRow({ job, onStatusChange, onSeenChange, compact, sel
         <button onClick={() => patchStatus("rejected")} disabled={loading}
           className="px-3 py-1.5 text-[0.75rem] rounded-sm border border-border-red text-red font-medium leading-none bg-transparent cursor-pointer">
           Reject
+        </button>
+      )}
+
+      {job.status === "rejected" && (
+        <button onClick={() => patchStatus("new")} disabled={loading}
+          className="px-3 py-1.5 text-[0.75rem] rounded-sm border border-border text-text-3 font-medium leading-none bg-transparent cursor-pointer">
+          Unreject
         </button>
       )}
 
