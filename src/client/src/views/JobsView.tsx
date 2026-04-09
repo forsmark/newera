@@ -490,7 +490,7 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
             </button>
             <button
               onClick={handleRescoreAll}
-              disabled={rescoring}
+              disabled={rescoring || hasPendingScores}
               title="Re-score all jobs"
               className="shrink-0 px-2.5 py-2 rounded-sm border border-border bg-transparent text-text-3 cursor-pointer text-[0.8125rem] disabled:opacity-40 disabled:cursor-not-allowed"
             >
@@ -662,6 +662,7 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
                     onSeenChange={handleSeenChange}
                     onRescore={handleRescore}
                     isFetching={isFetching}
+                    isScoring={hasPendingScores}
                     onTagClick={tag => setActiveTag(prev => prev === tag ? null : tag)}
                     activeTag={activeTag ?? undefined}
                   />
@@ -726,47 +727,52 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 12 }}
             transition={{ duration: 0.15 }}
-            className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-surface border border-border rounded px-4 py-[0.625rem] flex items-center gap-[0.625rem] shadow-[0_8px_32px_rgba(0,0,0,0.5)] z-[100]"
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-surface border border-border rounded px-3 py-2 flex flex-wrap items-center gap-x-2 gap-y-2 shadow-[0_8px_32px_rgba(0,0,0,0.5)] z-[100] max-w-[calc(100vw-2rem)]"
           >
-            <span className="text-text-2 text-sm font-medium">{selectedIds.size} selected</span>
+            <span className="text-text-2 text-sm font-medium mr-1">{selectedIds.size} selected</span>
             <button
               onClick={bulkMarkRead}
               disabled={bulkLoading}
-              className="px-3.5 py-1.5 rounded-sm border border-border bg-transparent text-text-2 cursor-pointer text-[0.8125rem] font-medium"
+              className="px-2.5 py-1.5 rounded-sm border border-border bg-transparent text-text-2 cursor-pointer text-[0.8125rem] font-medium disabled:opacity-40"
             >
-              Mark read
+              <span className="sm:hidden">Read</span>
+              <span className="hidden sm:inline">Mark read</span>
             </button>
             <button
               onClick={bulkMarkUnread}
               disabled={bulkLoading}
-              className="px-3.5 py-1.5 rounded-sm border border-border bg-transparent text-text-2 cursor-pointer text-[0.8125rem] font-medium"
+              className="px-2.5 py-1.5 rounded-sm border border-border bg-transparent text-text-2 cursor-pointer text-[0.8125rem] font-medium disabled:opacity-40"
             >
-              Mark unread
+              <span className="sm:hidden">Unread</span>
+              <span className="hidden sm:inline">Mark unread</span>
             </button>
             <button
               onClick={() => bulkSetStatus('saved')}
               disabled={bulkLoading}
-              className="px-3.5 py-1.5 rounded-sm border border-border-accent bg-transparent text-accent cursor-pointer text-[0.8125rem] font-medium"
+              className="px-2.5 py-1.5 rounded-sm border border-border-accent bg-transparent text-accent cursor-pointer text-[0.8125rem] font-medium disabled:opacity-40"
             >
-              Save all
+              <span className="sm:hidden">Save</span>
+              <span className="hidden sm:inline">Save all</span>
             </button>
             <button
               onClick={() => bulkSetStatus('rejected')}
               disabled={bulkLoading}
-              className="px-3.5 py-1.5 rounded-sm border border-border-red bg-transparent text-red cursor-pointer text-[0.8125rem] font-medium"
+              className="px-2.5 py-1.5 rounded-sm border border-border-red bg-transparent text-red cursor-pointer text-[0.8125rem] font-medium disabled:opacity-40"
             >
-              Reject all
+              <span className="sm:hidden">Reject</span>
+              <span className="hidden sm:inline">Reject all</span>
             </button>
             <button
               onClick={() => bulkSetStatus('new')}
               disabled={bulkLoading}
-              className="px-3.5 py-1.5 rounded-sm border border-border bg-transparent text-text-3 cursor-pointer text-[0.8125rem] font-medium"
+              className="px-2.5 py-1.5 rounded-sm border border-border bg-transparent text-text-3 cursor-pointer text-[0.8125rem] font-medium disabled:opacity-40"
             >
-              Unreject all
+              <span className="sm:hidden">Restore</span>
+              <span className="hidden sm:inline">Unreject all</span>
             </button>
             <button
               onClick={() => setSelectedIds(new Set())}
-              className="px-2 py-1.5 rounded-sm border-none bg-transparent text-text-3 cursor-pointer text-sm"
+              className="px-2 py-1.5 rounded-sm border-none bg-transparent text-text-3 cursor-pointer text-sm ml-1"
             >
               ✕
             </button>

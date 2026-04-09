@@ -5,10 +5,11 @@ interface Props {
   job: Job;
   onRescore?: (id: string) => void;
   isFetching?: boolean;
+  isScoring?: boolean;
 }
 
 
-export default function JobDetail({ job, onRescore, isFetching }: Props) {
+export default function JobDetail({ job, onRescore, isFetching, isScoring }: Props) {
   const [copied, setCopied] = useState(false);
 
   async function handleCopy() {
@@ -89,7 +90,7 @@ export default function JobDetail({ job, onRescore, isFetching }: Props) {
       {/* Actions */}
       <div className="px-4 py-3 border-t border-border flex gap-2">
         <button
-          disabled={isFetching}
+          disabled={isFetching || isScoring}
           onClick={async () => {
             const res = await fetch(`/api/jobs/${job.id}/analyze`, { method: 'POST' });
             if (res.ok) onRescore?.(job.id);

@@ -16,6 +16,7 @@ interface Props {
   onTagClick?: (tag: string) => void;
   activeTag?: string;
   isFetching?: boolean;
+  isScoring?: boolean;
 }
 
 const WORK_TYPE_STYLES: Record<string, { label: string; color: string; bg: string; border: string }> = {
@@ -60,7 +61,7 @@ function formatDate(dateStr: string | null): string {
   return date.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
-export default function JobRow({ job, onStatusChange, onSeenChange, compact, selected, onToggleSelect, onRescore, focused, onFocusRequest, onTagClick, activeTag, isFetching }: Props) {
+export default function JobRow({ job, onStatusChange, onSeenChange, compact, selected, onToggleSelect, onRescore, focused, onFocusRequest, onTagClick, activeTag, isFetching, isScoring }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [scope, animate] = useAnimate();
@@ -304,7 +305,7 @@ export default function JobRow({ job, onStatusChange, onSeenChange, compact, sel
             transition={{ duration: 0.22, ease: "easeInOut" }}
             style={{ overflow: "hidden" }}
           >
-            <JobDetail job={job} onRescore={onRescore} isFetching={isFetching} />
+            <JobDetail job={job} onRescore={onRescore} isFetching={isFetching} isScoring={isScoring} />
           </motion.div>
         )}
       </AnimatePresence>
