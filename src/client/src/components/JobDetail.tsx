@@ -9,11 +9,8 @@ interface Props {
 }
 
 
-const DESCRIPTION_LIMIT = 500;
-
 export default function JobDetail({ job, onRescore, isFetching, isScoring }: Props) {
   const [copied, setCopied] = useState(false);
-  const [descExpanded, setDescExpanded] = useState(false);
 
   async function handleCopy() {
     const text = [`${job.title} — ${job.company}`, job.url, `Match score: ${job.match_score ?? 'pending'}`].join('\n');
@@ -78,26 +75,6 @@ export default function JobDetail({ job, onRescore, isFetching, isScoring }: Pro
           )}
         </div>
       ) : null}
-
-      {/* Description */}
-      {job.description && (
-        <div className="px-4 pb-3">
-          <div className={sectionLabel}>Description</div>
-          <div className="text-text-2 text-sm leading-[1.6] whitespace-pre-wrap">
-            {job.description.length > DESCRIPTION_LIMIT && !descExpanded
-              ? job.description.slice(0, DESCRIPTION_LIMIT) + '…'
-              : job.description}
-          </div>
-          {job.description.length > DESCRIPTION_LIMIT && (
-            <button
-              onClick={() => setDescExpanded(e => !e)}
-              className="mt-1 text-[0.75rem] text-accent bg-transparent border-0 cursor-pointer p-0"
-            >
-              {descExpanded ? 'Show less' : 'Show full description'}
-            </button>
-          )}
-        </div>
-      )}
 
       {/* Tags */}
       {job.tags && job.tags.length > 0 && (

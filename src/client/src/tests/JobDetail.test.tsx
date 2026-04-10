@@ -36,25 +36,6 @@ describe('JobDetail', () => {
     expect(container.querySelectorAll('.bg-bg.border').length).toBe(0);
   });
 
-  it('truncates long descriptions and shows "Show full description" button', () => {
-    const longDesc = 'x'.repeat(600);
-    render(<JobDetail job={makeJob({ description: longDesc })} />);
-    expect(screen.getByRole('button', { name: 'Show full description' })).toBeInTheDocument();
-  });
-
-  it('does not show expand button for short descriptions', () => {
-    render(<JobDetail job={makeJob({ description: 'Short description.' })} />);
-    expect(screen.queryByRole('button', { name: 'Show full description' })).not.toBeInTheDocument();
-  });
-
-  it('clicking "Show full description" expands the text', () => {
-    const longDesc = 'A'.repeat(600);
-    render(<JobDetail job={makeJob({ description: longDesc })} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Show full description' }));
-    expect(screen.getByRole('button', { name: 'Show less' })).toBeInTheDocument();
-    expect(screen.getByText(longDesc)).toBeInTheDocument();
-  });
-
   it('shows Re-score and Copy buttons', () => {
     render(<JobDetail job={makeJob()} />);
     expect(screen.getByRole('button', { name: /Re-score/ })).toBeInTheDocument();
