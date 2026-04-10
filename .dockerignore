@@ -1,0 +1,14 @@
+node_modules/
+dist/
+db/
+backups/
+data/
+.env
+.git/
+graphify-out/
+test-results/
+*.png
+src/server/mobile-before.png
+.superpowers/
+.worktrees/
+.playwright-cli/
