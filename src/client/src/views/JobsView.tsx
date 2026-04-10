@@ -524,7 +524,7 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
                     fontWeight: isActive ? 600 : 400,
                   }}
                 >
-                  {s.charAt(0).toUpperCase() + s.slice(1)}
+                  {s === "rejected" ? "Discarded" : s.charAt(0).toUpperCase() + s.slice(1)}
                   {count !== null && count > 0 && (
                     <span className="ml-[0.3rem] rounded-full px-[0.3rem] text-[0.6875rem] font-semibold"
                       style={{
@@ -704,7 +704,7 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
                 ["Enter", "Expand/collapse"],
                 ["s", "Save job"],
                 ["n", "Un-save job"],
-                ["r", "Reject job"],
+                ["r", "Discard job"],
                 ["u", "Open URL"],
                 ["?", "This help"],
               ].map(([key, desc]) => (
@@ -759,8 +759,8 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
               disabled={bulkLoading}
               className="px-2.5 py-1.5 rounded-sm border border-border-red bg-transparent text-red cursor-pointer text-[0.8125rem] font-medium disabled:opacity-40"
             >
-              <span className="sm:hidden">Reject</span>
-              <span className="hidden sm:inline">Reject all</span>
+              <span className="sm:hidden">Discard</span>
+              <span className="hidden sm:inline">Discard all</span>
             </button>
             <button
               onClick={() => bulkSetStatus('new')}
@@ -768,7 +768,7 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
               className="px-2.5 py-1.5 rounded-sm border border-border bg-transparent text-text-3 cursor-pointer text-[0.8125rem] font-medium disabled:opacity-40"
             >
               <span className="sm:hidden">Restore</span>
-              <span className="hidden sm:inline">Unreject all</span>
+              <span className="hidden sm:inline">Restore all</span>
             </button>
             <button
               onClick={() => setSelectedIds(new Set())}

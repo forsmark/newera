@@ -1,4 +1,10 @@
 import { useEffect, useState } from "react";
+
+const TrashIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+    <path d="M2 3.5h10M5.5 3.5V2.5a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v1M6 6.5v3M8 6.5v3M3 3.5l.7 7a1 1 0 0 0 1 .9h4.6a1 1 0 0 0 1-.9l.7-7" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
 import { motion, AnimatePresence, useAnimate, useReducedMotion } from "framer-motion";
 import { Job } from "../types";
 import JobDetail from "./JobDetail";
@@ -175,15 +181,16 @@ export default function JobRow({ job, onStatusChange, onSeenChange, compact, sel
 
       {(job.status === "new" || job.status === "saved") && (
         <button onClick={() => patchStatus("rejected")} disabled={loading}
-          className="px-3 py-1.5 text-[0.75rem] rounded-sm border border-border-red text-red font-medium leading-none bg-transparent cursor-pointer">
-          Reject
+          title="Discard"
+          className="px-2 py-1.5 text-[0.75rem] rounded-sm border border-border-red text-red font-medium leading-none bg-transparent cursor-pointer flex items-center">
+          <TrashIcon />
         </button>
       )}
 
       {job.status === "rejected" && (
         <button onClick={() => patchStatus("new")} disabled={loading}
           className="px-3 py-1.5 text-[0.75rem] rounded-sm border border-border text-text-3 font-medium leading-none bg-transparent cursor-pointer">
-          Unreject
+          Restore
         </button>
       )}
 

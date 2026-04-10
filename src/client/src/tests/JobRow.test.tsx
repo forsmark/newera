@@ -68,10 +68,10 @@ describe('JobRow', () => {
     expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
   });
 
-  it('shows Applied and Reject buttons for new jobs', () => {
+  it('shows Applied and Discard buttons for new jobs', () => {
     render(<JobRow job={makeJob({ status: 'new' })} onStatusChange={vi.fn()} />);
     expect(screen.getByRole('button', { name: /Applied/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Reject' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Discard' })).toBeInTheDocument();
   });
 
   it('shows Saved toggle button for saved jobs', () => {
@@ -93,10 +93,10 @@ describe('JobRow', () => {
     await vi.waitFor(() => expect(onStatusChange).toHaveBeenCalledWith('job-1', 'saved'));
   });
 
-  it('calls onStatusChange with rejected when Reject is clicked', async () => {
+  it('calls onStatusChange with rejected when Discard is clicked', async () => {
     const onStatusChange = vi.fn();
     render(<JobRow job={makeJob({ status: 'new' })} onStatusChange={onStatusChange} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Reject' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
     await vi.waitFor(() => expect(onStatusChange).toHaveBeenCalledWith('job-1', 'rejected'));
   });
 
