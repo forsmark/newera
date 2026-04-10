@@ -51,16 +51,14 @@ describe('JobRow', () => {
     expect(container.querySelector('.bg-amber-bg')).toBeInTheDocument();
   });
 
-  it('shows unseen dot when seen_at is null', () => {
-    const { container } = render(<JobRow job={makeJob({ seen_at: null })} onStatusChange={vi.fn()} />);
-    expect(container.querySelector('.bg-amber.rounded-full')).toBeInTheDocument();
+  it('shows unseen indicator when seen_at is null', () => {
+    render(<JobRow job={makeJob({ seen_at: null })} onStatusChange={vi.fn()} />);
+    expect(screen.getByTitle('Mark as read')).toBeInTheDocument();
   });
 
-  it('does not show unseen dot when seen_at is set', () => {
-    const { container } = render(
-      <JobRow job={makeJob({ seen_at: '2026-04-05T10:00:00Z' })} onStatusChange={vi.fn()} />
-    );
-    expect(container.querySelector('.bg-amber.rounded-full')).not.toBeInTheDocument();
+  it('does not show unseen indicator when seen_at is set', () => {
+    render(<JobRow job={makeJob({ seen_at: '2026-04-05T10:00:00Z' })} onStatusChange={vi.fn()} />);
+    expect(screen.queryByTitle('Mark as read')).not.toBeInTheDocument();
   });
 
   it('shows Save button for new jobs', () => {

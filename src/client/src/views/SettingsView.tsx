@@ -235,7 +235,7 @@ export default function SettingsView({ staleCount = 0 }: { staleCount?: number }
 
     fetch("/api/backups")
       .then(r => r.json())
-      .then((d: { backups: BackupInfo[] }) => setBackups(d.backups))
+      .then((d: { backups: BackupInfo[] }) => setBackups(d.backups ?? []))
       .catch(() => {});
   }, []);
 

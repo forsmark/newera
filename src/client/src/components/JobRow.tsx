@@ -187,6 +187,13 @@ export default function JobRow({ job, onStatusChange, onSeenChange, compact, sel
         </button>
       )}
 
+      {job.status === "new" && (
+        <button onClick={() => patchStatus("applied")} disabled={loading}
+          className="px-3 py-1.5 text-[0.75rem] rounded-sm border border-border text-text-3 font-medium leading-none bg-transparent cursor-pointer">
+          Applied →
+        </button>
+      )}
+
       {job.status === "rejected" && (
         <button onClick={() => patchStatus("new")} disabled={loading}
           className="px-3 py-1.5 text-[0.75rem] rounded-sm border border-border text-text-3 font-medium leading-none bg-transparent cursor-pointer">

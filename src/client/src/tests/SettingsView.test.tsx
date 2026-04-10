@@ -30,6 +30,12 @@ beforeEach(() => {
         json: async () => ({ ollama_available: true, unscored_jobs: 3 }),
       });
     }
+    if (url === '/api/backups') {
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ backups: [] }),
+      });
+    }
     return Promise.resolve({ ok: true, json: async () => ({ queued: 5, parsed: '# Parsed Resume' }) });
   }));
 });
@@ -38,7 +44,7 @@ describe('SettingsView', () => {
   it('renders section headings', async () => {
     render(<SettingsView />);
     await waitFor(() => {
-      expect(screen.getByText('Preferences')).toBeInTheDocument();
+      expect(screen.getByText('Job preferences')).toBeInTheDocument();
       expect(screen.getByText('Resume')).toBeInTheDocument();
       expect(screen.getByText('System')).toBeInTheDocument();
     });
@@ -88,6 +94,8 @@ describe('SettingsView', () => {
 
   it('shows Ollama Connected when ollama_available is true', async () => {
     render(<SettingsView />);
+    await waitFor(() => screen.getByText('System'));
+    fireEvent.click(screen.getByText('System'));
     await waitFor(() => {
       expect(screen.getByText('Ollama Connected')).toBeInTheDocument();
     });
@@ -95,6 +103,8 @@ describe('SettingsView', () => {
 
   it('shows unscored jobs count', async () => {
     render(<SettingsView />);
+    await waitFor(() => screen.getByText('System'));
+    fireEvent.click(screen.getByText('System'));
     await waitFor(() => {
       expect(screen.getByText('3 jobs pending LLM analysis')).toBeInTheDocument();
     });
@@ -119,6 +129,8 @@ describe('SettingsView', () => {
 
   it('calls POST /api/settings/rescore when Re-score button clicked', async () => {
     render(<SettingsView />);
+    await waitFor(() => screen.getByText('System'));
+    fireEvent.click(screen.getByText('System'));
     await waitFor(() => screen.getByRole('button', { name: 'Re-score all jobs' }));
     fireEvent.click(screen.getByRole('button', { name: 'Re-score all jobs' }));
     await waitFor(() => {
