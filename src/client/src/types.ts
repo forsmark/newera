@@ -13,6 +13,8 @@ export interface Job {
   match_summary: string | null;
   tags: string[] | null;
   work_type: 'remote' | 'hybrid' | 'onsite' | null;
+  duplicate_of: string | null;
+  link_status: 'unchecked' | 'active' | 'expired' | 'unknown';
   status: 'new' | 'saved' | 'applied' | 'rejected';
   seen_at: string | null;
   fetched_at: string;

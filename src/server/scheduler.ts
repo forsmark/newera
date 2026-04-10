@@ -5,6 +5,7 @@ import db from './db';
 import { randomUUID } from 'crypto';
 import type { Job } from './types';
 import { getPreferences, getResume } from './settings';
+import { contentFingerprint } from './utils/normalize';
 
 let lastFetchAt: string | null = null;
 let isFetching = false;
@@ -16,6 +17,59 @@ export function getLastFetchAt(): string | null {
 
 export function getIsFetching(): boolean { return isFetching; }
 export function getLastFetchNewJobs(): number { return lastFetchNewJobs; }
+
+type JobPartial = {
+  source: string;
+  external_id: string;
+  title: string;
+  company: string;
+  location?: string | null;
+  url: string;
+  description?: string | null;
+  posted_at?: string | null;
+  fetched_at: string;
+};
+
+export function ingestJob(job: JobPartial): { isNew: boolean } {
+  const fp = contentFingerprint(job.title, job.company);
+
+  // Check for existing job with same fingerprint but different identity
+  const duplicate = db.query<{ id: string }, [string, string, string]>(
+    `SELECT id FROM jobs
+     WHERE content_fingerprint = ?
+     AND NOT (source = ? AND external_id = ?)
+     AND duplicate_of IS NULL
+     LIMIT 1`
+  ).get(fp, job.source, job.external_id);
+
+  const existingRow = db.query<{ id: string }, [string, string]>(
+    'SELECT id FROM jobs WHERE source = ? AND external_id = ?'
+  ).get(job.source, job.external_id);
+
+  const id = existingRow?.id ?? randomUUID();
+
+  db.run(
+    `INSERT INTO jobs (id, source, external_id, title, company, location, url, description, posted_at, fetched_at, content_fingerprint)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(source, external_id) DO UPDATE SET
+       description = CASE WHEN jobs.description IS NULL AND excluded.description IS NOT NULL
+                          THEN excluded.description ELSE jobs.description END,
+       url = CASE WHEN jobs.url LIKE '%/vis-job/%' AND excluded.url NOT LIKE '%/vis-job/%'
+                  THEN excluded.url ELSE jobs.url END,
+       content_fingerprint = excluded.content_fingerprint`,
+    [id, job.source, job.external_id, job.title, job.company,
+     job.location ?? null, job.url, job.description ?? null, job.posted_at ?? null,
+     job.fetched_at, fp]
+  );
+
+  if (duplicate) {
+    db.run('UPDATE jobs SET duplicate_of = ? WHERE source = ? AND external_id = ?',
+      [duplicate.id, job.source, job.external_id]);
+    return { isNew: false };
+  }
+
+  return { isNew: existingRow === null };
+}
 
 export async function fetchJobs(): Promise<number> {
   if (isFetching) {
@@ -40,34 +94,15 @@ export async function fetchJobs(): Promise<number> {
     console.log(`[scheduler] Fetched ${allJobs.length} jobs`);
 
     // 2. Insert new jobs; backfill description/url for existing rows that were stored without them
-    const existsStmt = db.prepare('SELECT id FROM jobs WHERE source = ? AND external_id = ?');
-    const upsertStmt = db.prepare(`
-      INSERT INTO jobs (id, source, external_id, title, company, location, url, description, posted_at, fetched_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(source, external_id) DO UPDATE SET
-        description = CASE WHEN jobs.description IS NULL AND excluded.description IS NOT NULL THEN excluded.description ELSE jobs.description END,
-        url         = CASE WHEN jobs.url LIKE '%/vis-job/%' AND excluded.url NOT LIKE '%/vis-job/%' THEN excluded.url ELSE jobs.url END
-    `);
-
     const newJobIds: string[] = [];
 
     for (const job of allJobs) {
-      const existing = existsStmt.get(job.source, job.external_id) as { id: string } | null;
-      const id = existing?.id ?? randomUUID();
-      upsertStmt.run(
-        id,
-        job.source,
-        job.external_id,
-        job.title,
-        job.company,
-        job.location,
-        job.url,
-        job.description,
-        job.posted_at,
-        job.fetched_at,
-      );
-      if (!existing) {
-        newJobIds.push(id);
+      const { isNew } = ingestJob(job);
+      if (isNew) {
+        const row = db.query<{ id: string }, [string, string]>(
+          'SELECT id FROM jobs WHERE source = ? AND external_id = ?'
+        ).get(job.source, job.external_id);
+        if (row) newJobIds.push(row.id);
       }
     }
 

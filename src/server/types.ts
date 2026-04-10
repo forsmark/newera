@@ -13,6 +13,11 @@ export interface Job {
   match_summary: string | null; // factual role overview, null until analyzed
   tags: string[] | null;        // tech stack tags, null until analyzed
   work_type: 'remote' | 'hybrid' | 'onsite' | null; // work arrangement, null until analyzed
+  prefs_hash: string | null;
+  content_fingerprint: string | null;
+  duplicate_of: string | null;
+  link_status: 'unchecked' | 'active' | 'expired' | 'unknown';
+  link_checked_at: string | null;
   status: 'new' | 'saved' | 'applied' | 'rejected';
   seen_at: string | null;
   fetched_at: string;

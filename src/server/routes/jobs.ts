@@ -12,12 +12,13 @@ const app = new Hono();
 const VALID_STATUSES = new Set(['new', 'saved', 'applied', 'rejected']);
 
 // GET /api/jobs
-// Query params: status (filter by status), q (text search in title+company), limit, offset
+// Query params: status, q, limit, offset, include_duplicates
 app.get('/', (c) => {
   const status = c.req.query('status');
   const q = c.req.query('q');
   const limitParam = c.req.query('limit');
   const offsetParam = c.req.query('offset');
+  const includeDuplicates = c.req.query('include_duplicates') === '1';
   const limit = Math.min(parseInt(limitParam ?? '100', 10) || 100, 200); // cap at 200
   const offset = parseInt(offsetParam ?? '0', 10) || 0;
 
@@ -37,6 +38,10 @@ app.get('/', (c) => {
     conditions.push('(title LIKE ? OR company LIKE ?)');
     const like = `%${q}%`;
     countParams.push(like, like);
+  }
+
+  if (!includeDuplicates) {
+    conditions.push('duplicate_of IS NULL');
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';

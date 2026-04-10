@@ -262,6 +262,25 @@ export default function JobRow({ job, onStatusChange, onSeenChange, compact, sel
               </span>
               {job.posted_at && <span className="text-text-3 text-[0.75rem]">{formatDate(job.posted_at)}</span>}
               <WorkTypeBadge job={job} />
+              {job.duplicate_of && (
+                <span style={{
+                  color: '#6b8aa3', background: '#0b1628', border: '1px solid #1a2840',
+                  borderRadius: 'var(--radius-sm)', padding: '0.1875rem 0.4375rem',
+                  fontSize: '0.6875rem', fontWeight: 600, whiteSpace: 'nowrap',
+                }}>
+                  Duplicate
+                </span>
+              )}
+              {job.link_status === 'expired' && job.status !== 'rejected' && (
+                <span style={{
+                  color: '#f87171', background: '#450a0a', border: '1px solid #7f1d1d',
+                  borderRadius: 'var(--radius-sm)', padding: '0.1875rem 0.4375rem',
+                  fontSize: '0.6875rem', fontWeight: 600, whiteSpace: 'nowrap',
+                }}
+                  title="This job posting appears to be no longer available">
+                  Link dead
+                </span>
+              )}
               {job.tags && job.tags.length > 0 && job.tags.map(tag => (
                 <span
                   key={tag}

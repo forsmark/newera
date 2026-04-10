@@ -4,6 +4,9 @@ import jobsRoute from '../../routes/jobs';
 import { clearDb, seedJob, seedApplication } from '../helpers/db';
 import { computePrefsHash } from '../../utils/hash';
 import { setSetting } from '../../settings';
+import { contentFingerprint } from '../../utils/normalize';
+import { ingestJob } from '../../scheduler';
+import db from '../../db';
 
 const app = new Hono().route('/api/jobs', jobsRoute);
 
@@ -246,5 +249,80 @@ describe('POST /api/jobs/rescore-stale', () => {
     const res = await app.request('/api/jobs/rescore-stale', { method: 'POST' });
     const body = await res.json() as { queued: number };
     expect(body.queued).toBe(0);
+  });
+});
+
+// ─── Deduplication at ingest ──────────────────────────────────────────────────
+
+describe('deduplication at ingest', () => {
+  it('marks a cross-source duplicate with duplicate_of', () => {
+    const existing = seedJob({
+      source: 'jobindex',
+      external_id: 'ji-123',
+      title: 'React Developer',
+      company: 'Maersk A/S',
+      content_fingerprint: contentFingerprint('React Developer', 'Maersk A/S'),
+    });
+
+    ingestJob({
+      source: 'linkedin',
+      external_id: 'li-456',
+      title: 'Senior React Developer',
+      company: 'Maersk',
+      url: 'https://linkedin.com/jobs/li-456',
+      fetched_at: new Date().toISOString(),
+    });
+
+    const dupeRow = db.query<{ duplicate_of: string | null }, [string]>(
+      'SELECT duplicate_of FROM jobs WHERE external_id = ?'
+    ).get('li-456');
+    expect(dupeRow?.duplicate_of).toBe(existing.id);
+  });
+
+  it('does not mark as duplicate when companies differ', () => {
+    seedJob({
+      source: 'jobindex',
+      external_id: 'ji-789',
+      title: 'React Developer',
+      company: 'Maersk A/S',
+      content_fingerprint: contentFingerprint('React Developer', 'Maersk A/S'),
+    });
+
+    ingestJob({
+      source: 'linkedin',
+      external_id: 'li-999',
+      title: 'React Developer',
+      company: 'Novo Nordisk',
+      url: 'https://linkedin.com/jobs/li-999',
+      fetched_at: new Date().toISOString(),
+    });
+
+    const row = db.query<{ duplicate_of: string | null }, [string]>(
+      'SELECT duplicate_of FROM jobs WHERE external_id = ?'
+    ).get('li-999');
+    expect(row?.duplicate_of).toBeNull();
+  });
+});
+
+// ─── GET /api/jobs duplicate filtering ───────────────────────────────────────
+
+describe('GET /api/jobs duplicate filtering', () => {
+  it('excludes duplicates by default', async () => {
+    const orig = seedJob({ title: 'React Dev', content_fingerprint: contentFingerprint('React Dev', 'Maersk') });
+    seedJob({ title: 'React Dev', duplicate_of: orig.id });
+
+    const res = await app.request('/api/jobs');
+    const { jobs } = await res.json() as { jobs: any[] };
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0].id).toBe(orig.id);
+  });
+
+  it('includes duplicates when include_duplicates=1', async () => {
+    const orig = seedJob({ title: 'React Dev', content_fingerprint: contentFingerprint('React Dev', 'Maersk') });
+    seedJob({ title: 'React Dev', duplicate_of: orig.id });
+
+    const res = await app.request('/api/jobs?include_duplicates=1');
+    const { jobs } = await res.json() as { jobs: any[] };
+    expect(jobs).toHaveLength(2);
   });
 });
