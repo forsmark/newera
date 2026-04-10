@@ -124,13 +124,16 @@ export default function JobRow({ job, onStatusChange, onSeenChange, compact, sel
   async function patchStatus(status: string) {
     setLoading(true);
     try {
+      const markRead = job.seen_at === null && (status === "saved" || status === "rejected");
+      const seen_at = markRead ? new Date().toISOString() : undefined;
       const res = await fetch(`/api/jobs/${job.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify(seen_at !== undefined ? { status, seen_at } : { status }),
       });
       if (res.ok) {
         onStatusChange(job.id, status);
+        if (seen_at !== undefined) onSeenChange?.(job.id, seen_at);
         if (!prefersReducedMotion && scope.current) {
           animate(scope.current, { scale: [1, 1.015, 1] }, { duration: 0.15 });
         }
@@ -184,13 +187,6 @@ export default function JobRow({ job, onStatusChange, onSeenChange, compact, sel
           title="Discard"
           className="px-2 py-1.5 text-[0.75rem] rounded-sm border border-border-red text-red font-medium leading-none bg-transparent cursor-pointer flex items-center">
           <TrashIcon />
-        </button>
-      )}
-
-      {job.status === "new" && (
-        <button onClick={() => patchStatus("applied")} disabled={loading}
-          className="px-3 py-1.5 text-[0.75rem] rounded-sm border border-border text-text-3 font-medium leading-none bg-transparent cursor-pointer">
-          Applied →
         </button>
       )}
 

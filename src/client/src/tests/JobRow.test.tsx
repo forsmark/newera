@@ -66,9 +66,8 @@ describe('JobRow', () => {
     expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
   });
 
-  it('shows Applied and Discard buttons for new jobs', () => {
+  it('shows Discard button for new jobs', () => {
     render(<JobRow job={makeJob({ status: 'new' })} onStatusChange={vi.fn()} />);
-    expect(screen.getByRole('button', { name: /Applied/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Discard' })).toBeInTheDocument();
   });
 
