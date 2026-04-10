@@ -6,6 +6,7 @@ import { randomUUID } from 'crypto';
 import type { Job } from './types';
 import { getPreferences, getResume } from './settings';
 import { contentFingerprint } from './utils/normalize';
+import { classifyLiveness } from './utils/liveness';
 
 let lastFetchAt: string | null = null;
 let isFetching = false;
@@ -138,6 +139,9 @@ export async function fetchJobs(): Promise<number> {
       console.log('[scheduler] Done');
     })().catch((err) => console.error('[scheduler] Background analysis failed:', err));
 
+    // Check link liveness for a batch of older jobs (fire-and-forget)
+    checkStaleLinksBatch().catch(console.error);
+
     return newJobIds.length;
   } finally {
     isFetching = false;
@@ -180,6 +184,39 @@ export function maybeAutoReject(jobId: string, score: number) {
   const { autoRejectLowScore, lowScoreThreshold } = getPreferences();
   if (autoRejectLowScore && score < lowScoreThreshold) {
     db.run("UPDATE jobs SET status = 'rejected' WHERE id = ? AND status = 'new'", [jobId]);
+  }
+}
+
+const LIVENESS_CHECK_INTERVAL_DAYS = 7;
+const LIVENESS_MIN_AGE_DAYS = 3;
+const LIVENESS_BATCH_SIZE = 10;
+
+async function checkStaleLinksBatch(): Promise<void> {
+  const cutoffAge = new Date(Date.now() - LIVENESS_MIN_AGE_DAYS * 86400000).toISOString();
+  const cutoffCheck = new Date(Date.now() - LIVENESS_CHECK_INTERVAL_DAYS * 86400000).toISOString();
+
+  const jobs = db.query<{ id: string; url: string }, [string, string, number]>(
+    `SELECT id, url FROM jobs
+     WHERE status IN ('new', 'saved')
+     AND link_status != 'expired'
+     AND fetched_at < ?
+     AND (link_checked_at IS NULL OR link_checked_at < ?)
+     AND duplicate_of IS NULL
+     LIMIT ?`
+  ).all(cutoffAge, cutoffCheck, LIVENESS_BATCH_SIZE);
+
+  for (const job of jobs) {
+    const result = await classifyLiveness(job.url);
+    db.run(
+      'UPDATE jobs SET link_status = ?, link_checked_at = ? WHERE id = ?',
+      [result, new Date().toISOString(), job.id]
+    );
+    // Small delay to avoid hammering job boards
+    await new Promise(r => setTimeout(r, 500));
+  }
+
+  if (jobs.length > 0) {
+    console.log(`[scheduler] Link liveness: checked ${jobs.length} jobs`);
   }
 }
 

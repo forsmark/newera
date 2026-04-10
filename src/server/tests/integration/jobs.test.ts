@@ -252,6 +252,17 @@ describe('POST /api/jobs/rescore-stale', () => {
   });
 });
 
+// ─── GET /api/jobs includes link_status ──────────────────────────────────────
+
+describe('GET /api/jobs includes link_status', () => {
+  it('returns link_status field on each job', async () => {
+    seedJob({ title: 'Test', link_status: 'expired' });
+    const res = await app.request('/api/jobs');
+    const { jobs } = await res.json() as { jobs: any[] };
+    expect(jobs[0].link_status).toBe('expired');
+  });
+});
+
 // ─── Deduplication at ingest ──────────────────────────────────────────────────
 
 describe('deduplication at ingest', () => {

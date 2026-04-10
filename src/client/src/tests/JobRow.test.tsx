@@ -113,4 +113,10 @@ describe('JobRow', () => {
     fireEvent.click(screen.getByText('Frontend Developer'));
     expect(screen.getByText('Fit Analysis')).toBeInTheDocument();
   });
+
+  it('shows Link dead badge when link_status is expired', () => {
+    render(<JobRow job={makeJob({ link_status: 'expired' })} onStatusChange={vi.fn()} />);
+    fireEvent.click(screen.getByText('Frontend Developer'));
+    expect(screen.getByText('Link dead')).toBeInTheDocument();
+  });
 });
