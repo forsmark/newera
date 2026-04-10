@@ -184,7 +184,7 @@ function Accordion({
   );
 }
 
-export default function SettingsView() {
+export default function SettingsView({ staleCount = 0 }: { staleCount?: number }) {
   const [prefs, setPrefs] = useState<Preferences>(EMPTY_PREFS);
   const [savedPrefs, setSavedPrefs] = useState<Preferences>(EMPTY_PREFS);
   const [savingPrefs, setSavingPrefs] = useState(false);
@@ -735,7 +735,7 @@ export default function SettingsView() {
                 : "bg-surface-raised text-amber border-[#3a2200] cursor-pointer hover:bg-amber-bg",
             ].join(" ")}
           >
-            {rescoring ? "Re-scoring…" : "Re-score all jobs"}
+            {rescoring ? "Re-scoring…" : staleCount > 0 ? `Re-score (${staleCount} stale)` : "Re-score all jobs"}
           </button>
 
           <div className="flex items-center gap-2">

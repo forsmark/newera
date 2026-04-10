@@ -201,7 +201,7 @@ function AnimatedRoutes({ jobsRefreshKey, isFetching, status }: { jobsRefreshKey
           <Route path="/" element={<Navigate to="/jobs" replace />} />
           <Route path="/jobs" element={<JobsView refreshKey={jobsRefreshKey} isFetching={isFetching} status={status} />} />
           <Route path="/kanban" element={<KanbanView refreshKey={jobsRefreshKey} />} />
-          <Route path="/settings" element={<SettingsView />} />
+          <Route path="/settings" element={<SettingsView staleCount={status?.stale_count ?? 0} />} />
           <Route path="/logs" element={<LogsView />} />
         </Routes>
       </motion.div>

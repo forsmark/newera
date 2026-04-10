@@ -120,6 +120,8 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
   const [rescoring, setRescoring] = useState(false);
+  const [staleBannerDismissed, setStaleBannerDismissed] = useState(false);
+  const [rescoringStale, setRescoringStale] = useState(false);
   const [focusedIndex, setFocusedIndex] = useState<number>(-1);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const prefersReducedMotion = useReducedMotion();
@@ -353,6 +355,22 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
     }
   }
 
+  async function rescoreStale() {
+    if (rescoringStale) return;
+    setRescoringStale(true);
+    try {
+      const res = await fetch('/api/jobs/rescore-stale', { method: 'POST' });
+      if (res.ok) {
+        setStaleBannerDismissed(true);
+        fetchJobs(true);
+      } else {
+        toast('Re-score failed — please try again');
+      }
+    } finally {
+      setRescoringStale(false);
+    }
+  }
+
   function toggleCompact() {
     setCompact(v => {
       const next = !v;
@@ -449,6 +467,30 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
 
   return (
     <div className="max-w-[940px] mx-auto px-3 sm:px-4 py-4 sm:py-6">
+
+      {/* Stale-scores banner */}
+      {!staleBannerDismissed && (status?.stale_count ?? 0) > 0 && (
+        <div className="flex items-center gap-3 px-4 py-2.5 mb-4 bg-surface-raised border border-border rounded-sm text-[0.8125rem]">
+          <span className="text-text-2">
+            <span className="font-medium" style={{ color: 'var(--color-amber)' }}>{status!.stale_count}</span>
+            {' '}job{status!.stale_count === 1 ? '' : 's'} scored with old preferences
+          </span>
+          <button
+            onClick={rescoreStale}
+            disabled={rescoringStale}
+            className="px-2.5 py-1 rounded-sm border border-border text-text-2 bg-transparent cursor-pointer font-medium disabled:opacity-40"
+          >
+            {rescoringStale ? 'Re-scoring…' : 'Re-score now'}
+          </button>
+          <button
+            onClick={() => setStaleBannerDismissed(true)}
+            className="ml-auto px-2 py-1 text-text-3 bg-transparent border-none cursor-pointer"
+            title="Dismiss"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Filter bar */}
       <div className="mb-4 sm:mb-5 flex flex-col gap-2 sm:gap-3">

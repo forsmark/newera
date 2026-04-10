@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach } from 'bun:test';
 import { Hono } from 'hono';
 import jobsRoute from '../../routes/jobs';
 import { clearDb, seedJob, seedApplication } from '../helpers/db';
+import { computePrefsHash } from '../../utils/hash';
+import { setSetting } from '../../settings';
 
 const app = new Hono().route('/api/jobs', jobsRoute);
 
@@ -205,5 +207,44 @@ describe('POST /api/jobs/bulk-status', () => {
     });
     const body = await res.json() as { updated: number };
     expect(body.updated).toBe(1);
+  });
+});
+
+// ─── POST /api/jobs/rescore-stale ─────────────────────────────────────────────
+
+describe('POST /api/jobs/rescore-stale', () => {
+  it('returns 202 with queued count for stale jobs', async () => {
+    setSetting('preferences', '{"location":"Copenhagen"}');
+    setSetting('resume', 'some resume');
+    const oldHash = computePrefsHash('old resume', '{"location":"Copenhagen"}');
+    seedJob({ title: 'Stale Job', match_score: 70, prefs_hash: oldHash });
+    seedJob({ title: 'Fresh Job', match_score: 80, prefs_hash: computePrefsHash('some resume', '{"location":"Copenhagen"}') });
+
+    const res = await app.request('/api/jobs/rescore-stale', { method: 'POST' });
+    expect(res.status).toBe(202);
+    const body = await res.json() as { queued: number };
+    expect(body.queued).toBe(1);
+  });
+
+  it('returns queued: 0 when all jobs are fresh', async () => {
+    setSetting('preferences', '{"location":"Copenhagen"}');
+    setSetting('resume', 'some resume');
+    const hash = computePrefsHash('some resume', '{"location":"Copenhagen"}');
+    seedJob({ match_score: 70, prefs_hash: hash });
+
+    const res = await app.request('/api/jobs/rescore-stale', { method: 'POST' });
+    const body = await res.json() as { queued: number };
+    expect(body.queued).toBe(0);
+  });
+
+  it('does not queue rejected jobs', async () => {
+    setSetting('preferences', '{"location":"Copenhagen"}');
+    setSetting('resume', 'some resume');
+    const oldHash = computePrefsHash('old resume', '{"location":"Copenhagen"}');
+    seedJob({ title: 'Rejected Stale', match_score: 40, prefs_hash: oldHash, status: 'rejected' });
+
+    const res = await app.request('/api/jobs/rescore-stale', { method: 'POST' });
+    const body = await res.json() as { queued: number };
+    expect(body.queued).toBe(0);
   });
 });

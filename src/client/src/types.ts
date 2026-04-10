@@ -31,6 +31,7 @@ export interface AppStatus {
   };
   ollama_available?: boolean | null;
   last_fetch_new_jobs?: number;
+  stale_count?: number;
   data_files?: { resume: boolean; preferences: boolean };
 }
 

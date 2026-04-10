@@ -78,5 +78,11 @@ try { db.run('ALTER TABLE jobs ADD COLUMN match_summary TEXT'); } catch { /* alr
 try { db.run('ALTER TABLE jobs ADD COLUMN work_type TEXT'); } catch { /* already exists */ }
 try { db.run('ALTER TABLE applications ADD COLUMN archived_description TEXT'); } catch { /* already exists */ }
 try { db.run('ALTER TABLE applications ADD COLUMN cover_letter TEXT'); } catch { /* already exists */ }
+try { db.run('ALTER TABLE jobs ADD COLUMN prefs_hash TEXT'); } catch { /* already exists */ }
+try { db.run('ALTER TABLE jobs ADD COLUMN content_fingerprint TEXT'); } catch { /* already exists */ }
+try { db.run('ALTER TABLE jobs ADD COLUMN duplicate_of TEXT'); } catch { /* already exists */ }
+try { db.run(`ALTER TABLE jobs ADD COLUMN link_status TEXT NOT NULL DEFAULT 'unchecked'`); } catch { /* already exists */ }
+try { db.run('ALTER TABLE jobs ADD COLUMN link_checked_at TEXT'); } catch { /* already exists */ }
+db.run('CREATE INDEX IF NOT EXISTS idx_jobs_fingerprint ON jobs(content_fingerprint)');
 
 export default db;

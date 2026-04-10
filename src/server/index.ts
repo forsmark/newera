@@ -13,6 +13,8 @@ import { isAuthEnabled, validateSession } from './auth';
 import { startBackupScheduler } from './backup';
 import { startScheduler, getLastFetchAt, getIsFetching, getLastFetchNewJobs } from './scheduler';
 import { checkOllamaHealth, getOllamaAvailable } from './llm';
+import { computePrefsHash } from './utils/hash';
+import { getSetting } from './settings';
 import { getCookie } from 'hono/cookie';
 import db from './db';
 
@@ -52,6 +54,18 @@ app.get('/api/status', (c) => {
     FROM jobs
     WHERE status != 'rejected'
   `).get() as { green: number; amber: number; grey: number; pending: number };
+
+  const resume = getResume();
+  const prefsJson = getSetting('preferences') ?? '{}';
+  const currentHash = computePrefsHash(resume, prefsJson);
+  const staleRow = db.query<{ n: number }, [string]>(
+    `SELECT COUNT(*) as n FROM jobs
+     WHERE match_score IS NOT NULL
+     AND status NOT IN ('rejected')
+     AND (prefs_hash IS NULL OR prefs_hash != ?)`
+  ).get(currentHash);
+  const stale_count = staleRow?.n ?? 0;
+
   return c.json({
     last_fetch_at: getLastFetchAt(),
     counts,
@@ -60,6 +74,7 @@ app.get('/api/status', (c) => {
     score_distribution: scoreDist,
     ollama_available: getOllamaAvailable(),
     last_fetch_new_jobs: getLastFetchNewJobs(),
+    stale_count,
     data_files: {
       resume: getResume().length > 0,
       preferences: (() => {

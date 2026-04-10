@@ -1,6 +1,7 @@
 import type { Job, Preferences } from './types';
 import { OLLAMA_BASE_URL } from './config';
-import { getPreferences } from './settings';
+import { getPreferences, getSetting } from './settings';
+import { computePrefsHash } from './utils/hash';
 
 const OLLAMA_URL = `${OLLAMA_BASE_URL}/api/generate`;
 const OLLAMA_HEALTH_URL = `${OLLAMA_BASE_URL}/api/tags`;
@@ -34,6 +35,7 @@ export interface AnalysisResult {
   match_summary: string;    // 2-3 sentence factual overview of the role
   tags: string[];           // tech stack tags extracted from the job posting
   work_type: 'remote' | 'hybrid' | 'onsite' | null;
+  prefs_hash: string;       // hash of resume+prefs at time of scoring
 }
 
 function formatPreferences(p: Preferences): string {
@@ -125,7 +127,7 @@ export function extractJson(raw: string): AnalysisResult {
     throw new Error('Empty match_reasoning');
   }
 
-  return { match_score, match_reasoning, match_summary, tags, work_type };
+  return { match_score, match_reasoning, match_summary, tags, work_type, prefs_hash: '' };
 }
 
 /** Focused second-pass tag extraction when the main analysis returned no tags. */
@@ -322,6 +324,9 @@ export async function analyzeJob(job: Job): Promise<AnalysisResult | null> {
     return null;
   }
 
+  const prefsJson = getSetting('preferences') ?? '{}';
+  const prefs_hash = computePrefsHash(resume, prefsJson);
+
   const prompt = buildPrompt(resume, preferences, job);
 
   const controller = new AbortController();
@@ -352,6 +357,7 @@ export async function analyzeJob(job: Job): Promise<AnalysisResult | null> {
     }
 
     const result = extractJson(raw);
+    result.prefs_hash = prefs_hash;
 
     // Second pass: if no tags were extracted but description exists, try a focused extraction
     if (result.tags.length === 0 && job.description && job.description.length > 50) {

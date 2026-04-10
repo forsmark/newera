@@ -4,6 +4,7 @@ import db from '../../db';
 export function clearDb() {
   db.run('DELETE FROM applications');
   db.run('DELETE FROM jobs');
+  db.run('DELETE FROM settings');
 }
 
 type JobSeed = {
@@ -20,9 +21,15 @@ type JobSeed = {
   match_reasoning?: string | null;
   match_summary?: string | null;
   tags?: string[] | null;
+  work_type?: string | null;
   status?: 'new' | 'saved' | 'applied' | 'rejected';
   seen_at?: string | null;
   fetched_at?: string;
+  prefs_hash?: string | null;
+  content_fingerprint?: string | null;
+  duplicate_of?: string | null;
+  link_status?: 'unchecked' | 'active' | 'expired' | 'unknown';
+  link_checked_at?: string | null;
 };
 
 export function seedJob(overrides: JobSeed = {}) {
@@ -40,22 +47,31 @@ export function seedJob(overrides: JobSeed = {}) {
     match_reasoning: null as string | null,
     match_summary: null as string | null,
     tags: null as string[] | null,
+    work_type: null as string | null,
     status: 'new' as const,
     seen_at: null as string | null,
     fetched_at: '2026-04-05T00:00:00.000Z',
+    prefs_hash: null as string | null,
+    content_fingerprint: null as string | null,
+    duplicate_of: null as string | null,
+    link_status: 'unchecked' as const,
+    link_checked_at: null as string | null,
     ...overrides,
   };
 
   db.run(
     `INSERT INTO jobs
        (id, source, external_id, title, company, location, url, description,
-        posted_at, match_score, match_reasoning, match_summary, tags, status, seen_at, fetched_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        posted_at, match_score, match_reasoning, match_summary, tags, work_type,
+        status, seen_at, fetched_at, prefs_hash, content_fingerprint, duplicate_of,
+        link_status, link_checked_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       job.id, job.source, job.external_id, job.title, job.company, job.location,
       job.url, job.description, job.posted_at, job.match_score, job.match_reasoning,
-      job.match_summary, job.tags ? JSON.stringify(job.tags) : null,
-      job.status, job.seen_at, job.fetched_at,
+      job.match_summary, job.tags ? JSON.stringify(job.tags) : null, job.work_type,
+      job.status, job.seen_at, job.fetched_at, job.prefs_hash, job.content_fingerprint,
+      job.duplicate_of, job.link_status, job.link_checked_at,
     ],
   );
 

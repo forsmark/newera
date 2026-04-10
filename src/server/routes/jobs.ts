@@ -4,6 +4,8 @@ import type { Job } from '../types';
 import { analyzeJob } from '../llm';
 import { analyzeUnscoredJobs } from '../scheduler';
 import { fetchPageText } from '../utils/fetchPageText';
+import { computePrefsHash } from '../utils/hash';
+import { getSetting, getResume } from '../settings';
 
 const app = new Hono();
 
@@ -243,6 +245,47 @@ app.post('/rescore-all', (c) => {
   })().catch(console.error);
 
   return c.json({ queued }, 202);
+});
+
+// POST /api/jobs/rescore-stale
+// Re-scores only jobs whose prefs_hash doesn't match the current resume+prefs hash
+app.post('/rescore-stale', (c) => {
+  const resume = getResume();
+  const prefsJson = getSetting('preferences') ?? '{}';
+  const currentHash = computePrefsHash(resume, prefsJson);
+
+  const staleJobs = db.query<{ id: string }, [string]>(
+    `SELECT id FROM jobs
+     WHERE match_score IS NOT NULL
+     AND status NOT IN ('rejected')
+     AND (prefs_hash IS NULL OR prefs_hash != ?)
+     AND description IS NOT NULL`
+  ).all(currentHash);
+
+  if (staleJobs.length === 0) return c.json({ queued: 0 }, 202);
+
+  const ids = staleJobs.map(j => j.id);
+  db.run(
+    `UPDATE jobs SET match_score = NULL, match_reasoning = NULL, match_summary = NULL
+     WHERE id IN (${ids.map(() => '?').join(',')})`,
+    ids
+  );
+
+  (async () => {
+    for (const { id } of staleJobs) {
+      const job = db.query('SELECT * FROM jobs WHERE id = ?').get(id) as Job | null;
+      if (!job) continue;
+      const result = await analyzeJob(job);
+      if (!result) continue;
+      db.run(
+        `UPDATE jobs SET match_score=?, match_reasoning=?, match_summary=?, tags=?, work_type=?, prefs_hash=? WHERE id=?`,
+        [result.match_score, result.match_reasoning, result.match_summary,
+         JSON.stringify(result.tags), result.work_type, result.prefs_hash, id]
+      );
+    }
+  })().catch(console.error);
+
+  return c.json({ queued: staleJobs.length }, 202);
 });
 
 // POST /api/jobs/:id/analyze
