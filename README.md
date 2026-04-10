@@ -4,24 +4,38 @@ Personal job aggregation and tracking app. Fetches jobs from LinkedIn and Jobind
 
 ## Prerequisites
 
-- [Bun](https://bun.sh) ≥ 1.1
-- [Ollama](https://ollama.com) running locally with `gemma4:26b` pulled
+- [Docker](https://docs.docker.com/get-docker/) + Docker Compose v2
+- [Ollama](https://ollama.com) running on the host with `gemma4:26b` pulled
 
-## Quick Start
+For local development only:
+- [Bun](https://bun.sh) ≥ 1.1
+
+## Quick Start (Docker — recommended)
 
 ```bash
-# 1. Install dependencies
-bun install
-
-# 2. Copy the example env file and fill it in
+# 1. Copy the example env file and fill it in
 cp .env.example .env
 
-# 3. Start in development mode (server + Vite dev server)
-bun run dev
+# 2. Create runtime directories if they don't exist
+mkdir -p db backups data
+
+# 3. Add your resume and preferences
+cp data/resume.example.md data/resume.md        # edit to match your CV
+cp data/preferences.example.md data/preferences.md  # edit your preferences
+
+# 4. Start
+docker compose up -d
 ```
 
-- Frontend (Vite): http://localhost:5173
-- API server: http://localhost:3000
+App is at **http://localhost:3000**.
+
+## Deploying Latest Master
+
+```bash
+./scripts/deploy.sh
+```
+
+Pulls latest master, rebuilds the image, and restarts the container. Data is untouched.
 
 ## Environment Variables
 
@@ -32,11 +46,11 @@ Create a `.env` file in the project root (see `.env.example`):
 # If not set, the app is accessible without a password (fine for local-only use)
 AUTH_SECRET=choose_a_strong_password
 
-# Optional overrides (defaults shown)
-# OLLAMA_BASE_URL=http://localhost:11434
-# DB_PATH=./db/jobs.db
-# BACKUP_DIR=./backups
+# JSearch API key (for additional job sources)
+JSEARCH_API_KEY=your_key_here
 ```
+
+`OLLAMA_BASE_URL` is set automatically by Docker Compose to reach Ollama on the host via `host.docker.internal`. You only need to override it if Ollama is running somewhere else.
 
 ## Ollama Setup
 
@@ -54,15 +68,69 @@ The navbar shows an `ollama ✗` badge if Ollama is unreachable. Job scoring is 
 
 Set `AUTH_SECRET` in `.env` to enable password protection. A login screen appears on first load and sessions last 30 days (in-memory — server restart requires re-login).
 
-Without `AUTH_SECRET`, the app is unprotected. Fine for local use, but **do not expose it to the internet without setting a password**.
+Without `AUTH_SECRET`, the app is unprotected. Fine for local/VPN use, but **do not expose it to the internet without setting a password**.
 
 ## First-Time Setup
 
-1. Open http://localhost:5173
+1. Open http://localhost:3000
 2. Go to **Settings**
 3. Fill in your **Preferences** — location, tech stack, salary floor, and search terms for each source
 4. Add your **Resume** — paste it as markdown, or use "Ingest resume" to have the AI parse raw text from a PDF/Word copy-paste
 5. Click **Fetch now** in the navbar to pull the first batch of jobs
+
+## Data & Persistence
+
+Runtime data lives on the host and is bind-mounted into the container — it survives image rebuilds and container restarts:
+
+| Host path   | Mount             | Notes                              |
+|-------------|-------------------|------------------------------------|
+| `./db/`     | `/app/db`         | SQLite database (read-write)       |
+| `./data/`   | `/app/data`       | resume.md + preferences.md (read-only) |
+| `./backups/`| `/app/backups`    | Automatic backups (read-write)     |
+
+Automatic backups run every 6 hours to `backups/` (last 10 kept). Trigger a manual backup or download/delete individual backups from **Settings → Database Backups**.
+
+To reset the database:
+
+```bash
+docker compose down
+rm db/jobs.db db/jobs.db-wal db/jobs.db-shm 2>/dev/null; true
+docker compose up -d
+```
+
+> **Warning:** this deletes all jobs, applications, settings, resume, and preferences.
+
+## Docker Reference
+
+```bash
+# Start
+docker compose up -d
+
+# Stop
+docker compose down
+
+# View logs
+docker compose logs -f
+
+# Deploy latest master
+./scripts/deploy.sh
+
+# Rebuild without pulling (local changes)
+docker compose up -d --build
+```
+
+## Local Development (without Docker)
+
+```bash
+# Install dependencies
+bun install
+
+# Start dev server (server + Vite hot-reload)
+bun run dev
+```
+
+- Frontend (Vite): http://localhost:5173
+- API server: http://localhost:3000
 
 ## Project Structure
 
@@ -71,68 +139,19 @@ src/server/       Hono API, scheduler, scrapers, Ollama client
 src/client/       React frontend (Vite)
 db/               SQLite database (gitignored)
 backups/          Automatic database backups (gitignored)
+data/             resume.md + preferences.md (gitignored)
+scripts/          deploy.sh
 e2e/              Playwright end-to-end tests
 ```
-
-## Running in Production
-
-```bash
-# Build the React frontend
-bun run build
-
-# Start the production server (serves built assets + API on port 3000)
-bun run start
-```
-
-Point a reverse proxy at port 3000. Example Caddyfile:
-
-```
-yourdomain.com {
-    reverse_proxy localhost:3000
-}
-```
-
-For systemd, create `/etc/systemd/system/new-era.service`:
-
-```ini
-[Unit]
-Description=New Era Job Aggregator
-After=network.target
-
-[Service]
-Type=simple
-User=youruser
-WorkingDirectory=/path/to/new-era
-EnvironmentFile=/path/to/new-era/.env
-ExecStart=/home/youruser/.bun/bin/bun run start
-Restart=on-failure
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-```
-
-```bash
-sudo systemctl enable --now new-era
-```
-
-## Database
-
-SQLite at `db/jobs.db`. Automatic backups run every 6 hours to `backups/` (last 10 kept). Trigger a manual backup from **Settings → Database Backups**, or download/delete individual backups from there.
-
-To reset the database entirely:
-
-```bash
-bun run db:reset
-```
-
-> **Warning:** this deletes all jobs, applications, settings, resume, and preferences.
 
 ## Testing
 
 ```bash
-# Unit + integration tests (uses in-memory DB — safe to run anytime)
+# Server unit + integration tests (uses in-memory DB)
 bun run test
+
+# Client component tests
+cd src/client && bun run test
 
 # End-to-end tests (requires dev server running)
 bun run dev         # in one terminal
@@ -146,8 +165,8 @@ bun run test:e2e    # in another
 | LinkedIn | Guest API (no auth) | Rate-limited — 3–5s delay per keyword   |
 | Jobindex | HTML scraping       | Danish job board (jobindex.dk)          |
 
-Search terms are configured per-source in **Settings → Preferences**. The LLM scores each job 0–100 based on your resume and preferences. Jobs scoring below 20 are hidden by default.
+Search terms are configured per-source in **Settings → Preferences**. The LLM scores each job 0–100 based on your resume and preferences.
 
 ## Logs
 
-Server logs (timestamped, with levels) are persisted to the database and viewable at **/logs**. Filter by level, search by text, export to a file, or archive-and-clear from there. Logs are also printed to the terminal as usual.
+Server logs are persisted to the database and viewable at **/logs**. Filter by level, search by text, export to a file, or archive-and-clear from there.
