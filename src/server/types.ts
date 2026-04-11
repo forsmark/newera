@@ -41,6 +41,11 @@ export interface Preferences {
   autoRejectLowScore: boolean;     // automatically reject new jobs that score below the threshold
   ollamaModel: string;         // Ollama model used for scoring/analysis
   fetchIntervalHours: number;  // how often to auto-fetch jobs (hours)
+  telegramBotToken: string;
+  telegramChatId: string;
+  telegramEnabled: boolean;
+  telegramNotifyThreshold: number;  // minimum score to include in Telegram notification
+  appBaseUrl: string;               // base URL for links in notifications (e.g. Tailscale IP)
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
@@ -61,6 +66,11 @@ export const DEFAULT_PREFERENCES: Preferences = {
   autoRejectLowScore: false,
   ollamaModel: 'gemma4:26b',
   fetchIntervalHours: 2,
+  telegramBotToken: '',
+  telegramChatId: '',
+  telegramEnabled: false,
+  telegramNotifyThreshold: 80,
+  appBaseUrl: 'http://localhost:3000',
 };
 
 export interface Application {

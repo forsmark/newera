@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, NavLink, useLocation } from "re
 import { AnimatePresence, motion } from "framer-motion";
 import JobsView from "./views/JobsView";
 import KanbanView from "./views/KanbanView";
+import PreferencesView from "./views/PreferencesView";
 import SettingsView from "./views/SettingsView";
 import LogsView from "./views/LogsView";
 import LoginView from "./views/LoginView";
@@ -66,6 +67,13 @@ const IconWrench = () => (
   </svg>
 );
 
+const IconUser = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <circle cx="8" cy="5" r="2.5" stroke="currentColor" strokeWidth="1.5"/>
+    <path d="M3 13.5c0-2.5 2.24-4.5 5-4.5s5 2 5 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+  </svg>
+);
+
 const IconTerminal = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
     <rect x="1" y="2.5" width="14" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.5"/>
@@ -98,6 +106,10 @@ function Nav({ status, onFetchNow, fetching, onLogout, authEnabled }: NavProps) 
       <NavLink to="/kanban" className="nav-link shrink-0 py-1.5 px-2 sm:px-3" style={navLinkStyle} title="Applications">
         <IconKanban />
         <span className="hidden sm:inline">Applications</span>
+      </NavLink>
+      <NavLink to="/preferences" className="nav-link shrink-0 py-1.5 px-2 sm:px-3" style={navLinkStyle} title="Preferences">
+        <IconUser />
+        <span className="hidden sm:inline">Preferences</span>
       </NavLink>
       <NavLink to="/settings" className="nav-link shrink-0 py-1.5 px-2 sm:px-3" style={navLinkStyle} title="Settings">
         <IconWrench />
@@ -201,6 +213,7 @@ function AnimatedRoutes({ jobsRefreshKey, isFetching, status }: { jobsRefreshKey
           <Route path="/" element={<Navigate to="/jobs" replace />} />
           <Route path="/jobs" element={<JobsView refreshKey={jobsRefreshKey} isFetching={isFetching} status={status} />} />
           <Route path="/kanban" element={<KanbanView refreshKey={jobsRefreshKey} />} />
+          <Route path="/preferences" element={<PreferencesView />} />
           <Route path="/settings" element={<SettingsView staleCount={status?.stale_count ?? 0} />} />
           <Route path="/logs" element={<LogsView />} />
         </Routes>

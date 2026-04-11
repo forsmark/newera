@@ -5,6 +5,7 @@ import { parseResume } from '../llm';
 import { fetchPageText } from '../utils/fetchPageText';
 import type { Preferences } from '../types';
 import { getSetting, setSetting, getPreferences, getResume } from '../settings';
+import { sendTestMessage } from '../telegram';
 
 export { getPreferences, getResume };
 
@@ -91,6 +92,12 @@ app.post('/rescore', (c) => {
   );
   analyzeUnscoredJobs().catch((err) => console.error('[settings] rescore failed:', err));
   return c.json({ queued: result.changes });
+});
+
+// POST /api/settings/telegram-test
+app.post('/telegram-test', async (c) => {
+  const result = await sendTestMessage();
+  return c.json(result, result.ok ? 200 : 400);
 });
 
 export default app;

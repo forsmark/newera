@@ -1,7 +1,9 @@
-import { describe, it, expect, beforeEach } from 'bun:test';
+import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
 import app from '../routes/settings';
 import db from '../db';
 import { clearDb, seedJob } from './helpers/db';
+
+const originalFetch = globalThis.fetch;
 
 function clearSettings() {
   db.run('DELETE FROM settings');
@@ -145,5 +147,35 @@ describe('POST /rescore', () => {
     expect(j1.match_score).toBeNull();
     const j2 = db.query('SELECT match_score FROM jobs WHERE id = ?').get('j2') as { match_score: number | null };
     expect(j2.match_score).toBe(70);
+  });
+});
+
+describe('POST /telegram-test', () => {
+  beforeEach(clearSettings);
+  afterEach(() => { globalThis.fetch = originalFetch; });
+
+  it('returns 400 when no credentials are configured', async () => {
+    const res = await app.request('/telegram-test', { method: 'POST' });
+    expect(res.status).toBe(400);
+    const data = await res.json() as { ok: boolean; error: string };
+    expect(data.ok).toBe(false);
+    expect(data.error).toContain('required');
+  });
+
+  it('returns 200 when credentials are set and Telegram API responds ok', async () => {
+    const fetchMock = mock(() =>
+      Promise.resolve(new Response(JSON.stringify({ ok: true }))),
+    );
+    globalThis.fetch = fetchMock as any;
+    db.run(
+      "INSERT INTO settings (key, value, updated_at) VALUES ('preferences', ?, datetime('now'))",
+      [JSON.stringify({ telegramBotToken: 'tok', telegramChatId: '123' })],
+    );
+
+    const res = await app.request('/telegram-test', { method: 'POST' });
+    expect(res.status).toBe(200);
+    const data = await res.json() as { ok: boolean };
+    expect(data.ok).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

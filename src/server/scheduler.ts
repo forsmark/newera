@@ -7,6 +7,7 @@ import type { Job } from './types';
 import { getPreferences, getResume } from './settings';
 import { contentFingerprint } from './utils/normalize';
 import { classifyLiveness } from './utils/liveness';
+import { sendFetchSummary, type ScoredJob } from './telegram';
 
 let lastFetchAt: string | null = null;
 let isFetching = false;
@@ -113,6 +114,8 @@ export async function fetchJobs(): Promise<number> {
 
     // 3. Analyze new jobs with LLM in the background (don't await — return count immediately)
     (async () => {
+      const scoredResults: ScoredJob[] = [];
+
       for (const jobId of newJobIds) {
         const job = db.query('SELECT * FROM jobs WHERE id = ?').get(jobId) as Job | null;
         if (!job) continue;
@@ -129,9 +132,13 @@ export async function fetchJobs(): Promise<number> {
             jobId,
           ]);
           maybeAutoReject(jobId, result.match_score);
+          scoredResults.push({ job, score: result.match_score, matchSummary: result.match_summary });
           console.log(`[scheduler] Analyzed job ${jobId}: score=${result.match_score} tags=${result.tags.join(',')}`);
         }
       }
+
+      // Send Telegram notification with batch summary (fire-and-forget)
+      await sendFetchSummary(scoredResults);
 
       // Also retry any existing jobs that weren't scored yet (e.g. Ollama was unavailable)
       await analyzeUnscoredJobs();
