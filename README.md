@@ -46,7 +46,7 @@ Create a `.env` file in the project root (see `.env.example`):
 # If not set, the app is accessible without a password (fine for local-only use)
 AUTH_SECRET=choose_a_strong_password
 
-# JSearch API key (for additional job sources)
+# RapidAPI key for LinkedIn scraping
 JSEARCH_API_KEY=your_key_here
 ```
 

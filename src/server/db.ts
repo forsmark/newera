@@ -3,8 +3,13 @@ import { mkdirSync } from 'fs';
 import { dirname } from 'path';
 import { DB_PATH } from './config';
 
-mkdirSync(dirname(DB_PATH), { recursive: true });
-const db = new Database(DB_PATH, { create: true });
+const isTest = typeof process !== 'undefined' && process.env.NODE_ENV === 'test';
+const effectivePath = isTest ? ':memory:' : DB_PATH;
+
+if (!isTest) {
+  mkdirSync(dirname(DB_PATH), { recursive: true });
+}
+const db = new Database(effectivePath, { create: true });
 
 db.run('PRAGMA journal_mode = WAL;');
 db.run('PRAGMA foreign_keys = ON;');
@@ -84,5 +89,8 @@ try { db.run('ALTER TABLE jobs ADD COLUMN duplicate_of TEXT'); } catch { /* alre
 try { db.run(`ALTER TABLE jobs ADD COLUMN link_status TEXT NOT NULL DEFAULT 'unchecked'`); } catch { /* already exists */ }
 try { db.run('ALTER TABLE jobs ADD COLUMN link_checked_at TEXT'); } catch { /* already exists */ }
 db.run('CREATE INDEX IF NOT EXISTS idx_jobs_fingerprint ON jobs(content_fingerprint)');
+
+// Rename legacy 'jsearch' source to 'linkedin'
+db.run(`UPDATE jobs SET source = 'linkedin' WHERE source = 'jsearch'`);
 
 export default db;

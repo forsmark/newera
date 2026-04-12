@@ -3,7 +3,7 @@ import type { Job, Application } from '../types';
 export function makeJob(overrides: Partial<Job> = {}): Job {
   return {
     id: 'job-1',
-    source: 'jsearch',
+    source: 'linkedin',
     external_id: 'ext-1',
     title: 'Frontend Developer',
     company: 'Acme Corp',

@@ -12,7 +12,7 @@ interface Props {
 }
 
 type FilterStatus = "all" | "unread" | "unsaved" | "saved" | "applied" | "rejected";
-type FilterSource = "all" | "jsearch" | "jobindex";
+type FilterSource = "all" | "linkedin" | "jobindex";
 type PostedWithin = 'any' | '7d' | '30d';
 type SortBy = 'score' | 'posted' | 'fetched';
 
@@ -452,7 +452,7 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
     return () => document.removeEventListener('keydown', onKey);
   }, [filtered.length]);
 
-  const jsearchCount = jobs.filter(j => j.source === 'jsearch').length;
+  const linkedinCount = jobs.filter(j => j.source === 'linkedin').length;
   const jobindexCount = jobs.filter(j => j.source === 'jobindex').length;
   const unreadCount = jobs.filter(j => j.seen_at === null && j.status !== 'rejected').length;
   const unsavedCount = jobs.filter(j => j.status === 'new').length;
@@ -586,9 +586,9 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
           {/* Source pills + active tag + show rejected — second line on mobile */}
           <div className="flex gap-2 items-center flex-wrap w-full sm:w-auto sm:contents">
             {/* Source pills */}
-            {jsearchCount > 0 && jobindexCount > 0 && (
+            {linkedinCount > 0 && jobindexCount > 0 && (
               <div className="flex gap-1">
-                {(["all", "jsearch", "jobindex"] as FilterSource[]).map(key => (
+                {(["all", "linkedin", "jobindex"] as FilterSource[]).map(key => (
                   <button
                     key={key}
                     onClick={() => setFilterSource(key)}
@@ -599,7 +599,7 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
                       color: filterSource === key ? '#7a95b0' : '#6b8aa3',
                     }}
                   >
-                    {key === 'all' ? 'All sources' : key === 'jsearch' ? 'JSearch' : 'Jobindex'}
+                    {key === 'all' ? 'All sources' : key === 'linkedin' ? 'LinkedIn' : 'Jobindex'}
                   </button>
                 ))}
               </div>

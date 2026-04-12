@@ -1,6 +1,6 @@
 # New Era — Job Aggregator
 
-Personal job aggregation and tracking app. Fetches jobs from JSearch API + jobindex.dk,
+Personal job aggregation and tracking app. Fetches jobs from LinkedIn (via RapidAPI) + jobindex.dk,
 scores them with a local LLM, and tracks applications via a kanban board.
 
 ## Tech Stack
@@ -24,11 +24,15 @@ bun run dev
 ```
 Server at http://localhost:3000, Vite dev server at http://localhost:5173
 
+## Testing
+- Tests MUST use in-memory SQLite, never the production DB. `db.ts` switches to `:memory:` when `NODE_ENV=test` (set automatically by `bunfig.toml`). If you add a new DB module or change the db import path, verify tests still hit `:memory:`.
+- When writing new test files that touch the database, import `db` from `../../db` — it will automatically use the in-memory instance during `bun test`.
+
 ## Key Decisions
 - Monolith architecture with SQLite
 - Jobs deduplicated by source + external_id
 - LLM analysis is async — jobs appear immediately with a pending score, scores fill in after
-- JSearch API key in .env (JSEARCH_API_KEY)
+- RapidAPI key for LinkedIn scraping in .env (JSEARCH_API_KEY)
 - Ollama runs locally at http://localhost:11434
 
 ## Data Files (user-provided, not committed)
