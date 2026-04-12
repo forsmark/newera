@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { resolve } from 'path';
-import { createBackup, listBackups, deleteBackup } from '../backup';
+import { createBackup, listBackups, deleteBackup, restoreBackup } from '../backup';
 
 const app = new Hono();
 
@@ -35,6 +35,13 @@ app.get('/:name', (c) => {
       'Content-Disposition': `attachment; filename="${name}"`,
     },
   });
+});
+
+// POST /api/backups/:name/restore — restore from a backup
+app.post('/:name/restore', (c) => {
+  const name = c.req.param('name');
+  const result = restoreBackup(name);
+  return c.json(result, result.ok ? 200 : 400);
 });
 
 // DELETE /api/backups/:name

@@ -26,6 +26,8 @@ export default function SettingsView({ staleCount = 0 }: { staleCount?: number }
 
   const [backups, setBackups] = useState<BackupInfo[]>([]);
   const [backingUp, setBackingUp] = useState(false);
+  const [restoringBackup, setRestoringBackup] = useState<string | null>(null);
+  const [restoreConfirm, setRestoreConfirm] = useState<string | null>(null);
   const [rejectingLow, setRejectingLow] = useState(false);
   const [clearConfirm, setClearConfirm] = useState(false);
   const [clearing, setClearing] = useState(false);
@@ -125,10 +127,23 @@ export default function SettingsView({ staleCount = 0 }: { staleCount?: number }
     }
   }
 
-  async function deleteBackup(name: string) {
-    const res = await fetch(`/api/backups/${encodeURIComponent(name)}`, { method: "DELETE" });
-    if (res.ok) setBackups(prev => prev.filter(b => b.name !== name));
-    else toast("Failed to delete backup");
+  async function doRestore(name: string) {
+    setRestoringBackup(name);
+    setRestoreConfirm(null);
+    try {
+      const res = await fetch(`/api/backups/${encodeURIComponent(name)}/restore`, { method: "POST" });
+      const data = await res.json() as { ok: boolean; error?: string };
+      if (data.ok) {
+        toast("Backup restored — reloading…", "info");
+        setTimeout(() => window.location.reload(), 1000);
+      } else {
+        toast(data.error ?? "Restore failed");
+      }
+    } catch {
+      toast("Restore failed");
+    } finally {
+      setRestoringBackup(null);
+    }
   }
 
   async function clearAllJobs() {
@@ -319,19 +334,46 @@ export default function SettingsView({ staleCount = 0 }: { staleCount?: number }
           <p className="text-[0.75rem] text-text-3">No backups yet.</p>
         ) : (
           <div className="flex flex-col gap-1">
-            {backups.map(b => (
-              <div key={b.name} className="flex items-center gap-3 text-xs py-1 border-b border-border last:border-0">
-                <span className="text-text-2 font-mono flex-1">{b.name}</span>
-                <span className="text-text-3 shrink-0">{(b.size / 1024).toFixed(1)} KB</span>
-                <a href={`/api/backups/${b.name}`} download={b.name} className="text-accent no-underline shrink-0">
-                  ↓ Download
-                </a>
-                <button type="button" onClick={() => deleteBackup(b.name)}
-                  className="text-red bg-transparent border-none cursor-pointer text-xs shrink-0 p-0">
-                  Delete
-                </button>
-              </div>
-            ))}
+            {backups.map(b => {
+              const date = new Date(b.created_at);
+              const time = date.toLocaleString(undefined, {
+                month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+              });
+              const isConfirming = restoreConfirm === b.name;
+              const isRestoring = restoringBackup === b.name;
+              return (
+                <div key={b.name} className="flex items-center gap-3 text-xs py-1.5 border-b border-border last:border-0">
+                  <span className="text-text-2 flex-1">{time}</span>
+                  <span className="text-text-3 shrink-0">{(b.size / 1024).toFixed(0)} KB</span>
+                  {isConfirming ? (
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-text-3">Restore this backup?</span>
+                      <button type="button" onClick={() => doRestore(b.name)}
+                        className="px-2 py-0.5 text-xs font-medium rounded-sm border border-border-red bg-transparent text-red cursor-pointer">
+                        Yes
+                      </button>
+                      <button type="button" onClick={() => setRestoreConfirm(null)}
+                        className="px-2 py-0.5 text-xs rounded-sm border border-border bg-transparent text-text-3 cursor-pointer">
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button type="button"
+                      onClick={() => setRestoreConfirm(b.name)}
+                      disabled={isRestoring}
+                      className={[
+                        "shrink-0 px-3 py-0.5 text-xs font-medium rounded-sm border",
+                        isRestoring
+                          ? "bg-transparent text-text-3 border-border cursor-not-allowed"
+                          : "bg-transparent text-accent border-border cursor-pointer btn-ghost",
+                      ].join(" ")}
+                    >
+                      {isRestoring ? "Restoring…" : "Restore"}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </Accordion>

@@ -1,2 +1,5 @@
 [test]
 root = "src/server"
+
+[test.env]
+NODE_ENV = "test"
