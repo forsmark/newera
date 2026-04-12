@@ -99,6 +99,20 @@ checkOllamaHealth().catch(console.error);
 startScheduler();
 startBackupScheduler();
 
+function shutdown() {
+  console.log('[server] Shutting down — checkpointing WAL…');
+  try {
+    db.run('PRAGMA wal_checkpoint(TRUNCATE)');
+    db.close();
+  } catch (err) {
+    console.error('[server] Shutdown error:', err);
+  }
+  process.exit(0);
+}
+
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
+
 export default {
   port: 3000,
   fetch: app.fetch,
