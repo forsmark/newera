@@ -73,6 +73,55 @@ export function ingestJob(job: JobPartial): { isNew: boolean } {
   return { isNew: existingRow === null };
 }
 
+function ingestBatch(jobs: JobPartial[]): string[] {
+  const newIds: string[] = [];
+  for (const job of jobs) {
+    const { isNew } = ingestJob(job);
+    if (isNew) {
+      const row = db.query<{ id: string }, [string, string]>(
+        'SELECT id FROM jobs WHERE source = ? AND external_id = ?'
+      ).get(job.source, job.external_id);
+      if (row) newIds.push(row.id);
+    }
+  }
+  return newIds;
+}
+
+function scoreBatchInBackground(jobIds: string[]) {
+  (async () => {
+    const scoredResults: ScoredJob[] = [];
+
+    for (const jobId of jobIds) {
+      const job = db.query('SELECT * FROM jobs WHERE id = ?').get(jobId) as Job | null;
+      if (!job) continue;
+
+      const result = await analyzeJob(job);
+      if (result) {
+        db.run('UPDATE jobs SET match_score = ?, match_reasoning = ?, match_summary = ?, tags = ?, work_type = ?, prefs_hash = ? WHERE id = ?', [
+          result.match_score,
+          result.match_reasoning,
+          result.match_summary,
+          JSON.stringify(result.tags),
+          result.work_type,
+          result.prefs_hash,
+          jobId,
+        ]);
+        maybeAutoReject(jobId, result.match_score);
+        scoredResults.push({ job, score: result.match_score, matchSummary: result.match_summary });
+        console.log(`[scheduler] Analyzed job ${jobId}: score=${result.match_score} tags=${result.tags.join(',')}`);
+      }
+    }
+
+    // Send Telegram notification with batch summary
+    await sendFetchSummary(scoredResults);
+
+    // Retry any existing jobs that weren't scored yet
+    await analyzeUnscoredJobs();
+
+    console.log('[scheduler] Done scoring batch');
+  })().catch((err) => console.error('[scheduler] Background analysis failed:', err));
+}
+
 export async function fetchJobs(): Promise<number> {
   if (isFetching) {
     console.log('[scheduler] Fetch already in progress, skipping');
@@ -82,74 +131,45 @@ export async function fetchJobs(): Promise<number> {
   try {
     console.log('[scheduler] Fetching jobs...');
 
-    // 1. Fetch from all sources in parallel
-    const [jobindexResult, linkedinResult] = await Promise.allSettled([
-      fetchJobindex(),
-      fetchLinkedIn(),
-    ]);
-    const jobindexJobs = jobindexResult.status === 'fulfilled' ? jobindexResult.value : [];
-    const linkedinJobs = linkedinResult.status === 'fulfilled' ? linkedinResult.value : [];
-    if (jobindexResult.status === 'rejected') console.error('[scheduler] Jobindex failed:', jobindexResult.reason);
-    if (linkedinResult.status === 'rejected') console.error('[scheduler] LinkedIn failed:', linkedinResult.reason);
+    let totalNew = 0;
 
-    const allJobs = [...jobindexJobs, ...linkedinJobs];
-    console.log(`[scheduler] Fetched ${allJobs.length} jobs`);
-
-    // 2. Insert new jobs; backfill description/url for existing rows that were stored without them
-    const newJobIds: string[] = [];
-
-    for (const job of allJobs) {
-      const { isNew } = ingestJob(job);
-      if (isNew) {
-        const row = db.query<{ id: string }, [string, string]>(
-          'SELECT id FROM jobs WHERE source = ? AND external_id = ?'
-        ).get(job.source, job.external_id);
-        if (row) newJobIds.push(row.id);
+    // 1. Fetch jobindex first
+    try {
+      const jobindexJobs = await fetchJobindex();
+      console.log(`[scheduler] Jobindex: ${jobindexJobs.length} jobs`);
+      const batch1Ids = ingestBatch(jobindexJobs);
+      totalNew += batch1Ids.length;
+      if (batch1Ids.length > 0) {
+        scoreBatchInBackground(batch1Ids);
       }
+    } catch (err) {
+      console.error('[scheduler] Jobindex failed:', err);
     }
 
-    console.log(`[scheduler] ${newJobIds.length} new jobs inserted`);
-    lastFetchAt = new Date().toISOString();
-    lastFetchNewJobs = newJobIds.length;
+    // 2. Wait 30 seconds to spread Ollama load
+    await new Promise(r => setTimeout(r, 30_000));
 
-    // 3. Analyze new jobs with LLM in the background (don't await — return count immediately)
-    (async () => {
-      const scoredResults: ScoredJob[] = [];
-
-      for (const jobId of newJobIds) {
-        const job = db.query('SELECT * FROM jobs WHERE id = ?').get(jobId) as Job | null;
-        if (!job) continue;
-
-        const result = await analyzeJob(job);
-        if (result) {
-          db.run('UPDATE jobs SET match_score = ?, match_reasoning = ?, match_summary = ?, tags = ?, work_type = ?, prefs_hash = ? WHERE id = ?', [
-            result.match_score,
-            result.match_reasoning,
-            result.match_summary,
-            JSON.stringify(result.tags),
-            result.work_type,
-            result.prefs_hash,
-            jobId,
-          ]);
-          maybeAutoReject(jobId, result.match_score);
-          scoredResults.push({ job, score: result.match_score, matchSummary: result.match_summary });
-          console.log(`[scheduler] Analyzed job ${jobId}: score=${result.match_score} tags=${result.tags.join(',')}`);
-        }
+    // 3. Fetch LinkedIn
+    try {
+      const linkedinJobs = await fetchLinkedIn();
+      console.log(`[scheduler] LinkedIn: ${linkedinJobs.length} jobs`);
+      const batch2Ids = ingestBatch(linkedinJobs);
+      totalNew += batch2Ids.length;
+      if (batch2Ids.length > 0) {
+        scoreBatchInBackground(batch2Ids);
       }
+    } catch (err) {
+      console.error('[scheduler] LinkedIn failed:', err);
+    }
 
-      // Send Telegram notification with batch summary (fire-and-forget)
-      await sendFetchSummary(scoredResults);
-
-      // Also retry any existing jobs that weren't scored yet (e.g. Ollama was unavailable)
-      await analyzeUnscoredJobs();
-
-      console.log('[scheduler] Done');
-    })().catch((err) => console.error('[scheduler] Background analysis failed:', err));
+    console.log(`[scheduler] ${totalNew} new jobs total`);
+    lastFetchAt = new Date().toISOString();
+    lastFetchNewJobs = totalNew;
 
     // Check link liveness for a batch of older jobs (fire-and-forget)
     checkStaleLinksBatch().catch(console.error);
 
-    return newJobIds.length;
+    return totalNew;
   } finally {
     isFetching = false;
   }
