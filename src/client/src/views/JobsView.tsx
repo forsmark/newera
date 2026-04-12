@@ -112,7 +112,16 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
     (localStorage.getItem('jobs-sort-by') as SortBy | null) ?? 'score'
   );
   const [filterSource, setFilterSource] = useState<FilterSource>("all");
-  const [activeTag, setActiveTag] = useState<string | null>(null);
+  const [activeTags, setActiveTags] = useState<string[]>(() => {
+    try {
+      const stored = localStorage.getItem('jobs-active-tags');
+      return stored ? JSON.parse(stored) : [];
+    } catch { return []; }
+  });
+  useEffect(() => {
+    localStorage.setItem('jobs-active-tags', JSON.stringify(activeTags));
+  }, [activeTags]);
+
   const [compact, setCompact] = useState<boolean>(() =>
     localStorage.getItem("jobs-compact-view") === "true"
   );
@@ -127,7 +136,7 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
   const prefersReducedMotion = useReducedMotion();
 
   // Track filter identity to re-trigger list animation
-  const filterKey = `${filterStatus}|${filterSource}|${activeTag}|${searchQuery}|${postedWithin}|${sortBy}`;
+  const filterKey = `${filterStatus}|${filterSource}|${activeTags.join(',')}|${searchQuery}|${postedWithin}|${sortBy}`;
   const prevFilterKey = useRef(filterKey);
 
   const fetchJobs = useCallback(async (reset?: boolean) => {
@@ -396,7 +405,7 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
         if (filterStatus === "rejected" && j.status !== "rejected") return false;
       }
       if (filterSource !== "all" && j.source !== filterSource) return false;
-      if (activeTag && !(j.tags?.includes(activeTag))) return false;
+      if (activeTags.length > 0 && !activeTags.every(tag => j.tags?.includes(tag))) return false;
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
         if (!(j.title.toLowerCase().includes(q) || j.company.toLowerCase().includes(q))) return false;
@@ -427,7 +436,7 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
   useEffect(() => {
     setSelectedIds(new Set());
     setFocusedIndex(-1);
-  }, [filterStatus, filterSource, activeTag, searchQuery, postedWithin]);
+  }, [filterStatus, filterSource, activeTags, searchQuery, postedWithin]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -617,16 +626,24 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
               </div>
             )}
 
-            {/* Active tag chip */}
-            {activeTag && (
-              <div className="flex items-center gap-1">
-                <span className="bg-accent-bg border border-border-2 text-accent rounded-sm px-2 py-[0.125rem] text-[0.75rem] font-medium">
-                  {activeTag}
-                </span>
-                <button onClick={() => setActiveTag(null)}
-                  className="px-[0.375rem] py-[0.125rem] rounded-sm border border-border bg-transparent text-text-3 cursor-pointer text-[0.75rem]">
-                  ✕
-                </button>
+            {/* Active tag chips */}
+            {activeTags.length > 0 && (
+              <div className="flex items-center gap-1 flex-wrap">
+                {activeTags.map(tag => (
+                  <span key={tag} className="flex items-center gap-1 bg-accent-bg border border-border-2 text-accent rounded-sm px-2 py-[0.125rem] text-[0.75rem] font-medium">
+                    {tag}
+                    <button onClick={() => setActiveTags(prev => prev.filter(t => t !== tag))}
+                      className="p-0 border-none bg-transparent text-accent cursor-pointer text-[0.75rem] leading-none ml-0.5">
+                      ✕
+                    </button>
+                  </span>
+                ))}
+                {activeTags.length >= 2 && (
+                  <button onClick={() => setActiveTags([])}
+                    className="px-2 py-[0.125rem] border-none bg-transparent text-text-3 cursor-pointer text-[0.75rem]">
+                    Clear
+                  </button>
+                )}
               </div>
             )}
 
@@ -719,8 +736,10 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
                     onRescore={handleRescore}
                     isFetching={isFetching}
                     isScoring={hasPendingScores}
-                    onTagClick={tag => setActiveTag(prev => prev === tag ? null : tag)}
-                    activeTag={activeTag ?? undefined}
+                    onTagClick={tag => setActiveTags(prev =>
+                      prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
+                    )}
+                    activeTags={activeTags}
                   />
                 </motion.div>
               ))}

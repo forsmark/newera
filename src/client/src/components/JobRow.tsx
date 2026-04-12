@@ -20,7 +20,7 @@ interface Props {
   focused?: boolean;
   onFocusRequest?: () => void;
   onTagClick?: (tag: string) => void;
-  activeTag?: string;
+  activeTags?: string[];
   isFetching?: boolean;
   isScoring?: boolean;
 }
@@ -67,7 +67,7 @@ function formatDate(dateStr: string | null): string {
   return date.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
-export default function JobRow({ job, onStatusChange, onSeenChange, compact, selected, onToggleSelect, onRescore, focused, onFocusRequest, onTagClick, activeTag, isFetching, isScoring }: Props) {
+export default function JobRow({ job, onStatusChange, onSeenChange, compact, selected, onToggleSelect, onRescore, focused, onFocusRequest, onTagClick, activeTags, isFetching, isScoring }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [scope, animate] = useAnimate();
@@ -284,26 +284,29 @@ export default function JobRow({ job, onStatusChange, onSeenChange, compact, sel
                   Link dead
                 </span>
               )}
-              {job.tags && job.tags.length > 0 && job.tags.map(tag => (
-                <span
-                  key={tag}
-                  onClick={e => { e.stopPropagation(); onTagClick?.(tag); }}
-                  className={onTagClick ? "tag-btn" : ""}
-                  style={{
-                    background: activeTag === tag ? '#0d1e38' : '#030b17',
-                    border: `1px solid ${activeTag === tag ? '#243653' : '#1a2840'}`,
-                    color: activeTag === tag ? '#3b82f6' : '#6b8aa3',
-                    borderRadius: "var(--radius-sm)",
-                    padding: "0.1875rem 0.4375rem",
-                    fontSize: "0.6875rem",
-                    fontWeight: 500,
-                    whiteSpace: "nowrap",
-                    cursor: onTagClick ? "pointer" : "default",
-                  }}
-                >
-                  {tag}
-                </span>
-              ))}
+              {job.tags && job.tags.length > 0 && job.tags.map(tag => {
+                const isActive = activeTags?.includes(tag) ?? false;
+                return (
+                  <span
+                    key={tag}
+                    onClick={e => { e.stopPropagation(); onTagClick?.(tag); }}
+                    className={onTagClick ? "tag-btn" : ""}
+                    style={{
+                      background: isActive ? '#0d1e38' : '#030b17',
+                      border: `1px solid ${isActive ? '#243653' : '#1a2840'}`,
+                      color: isActive ? '#3b82f6' : '#6b8aa3',
+                      borderRadius: "var(--radius-sm)",
+                      padding: "0.1875rem 0.4375rem",
+                      fontSize: "0.6875rem",
+                      fontWeight: 500,
+                      whiteSpace: "nowrap",
+                      cursor: onTagClick ? "pointer" : "default",
+                    }}
+                  >
+                    {tag}
+                  </span>
+                );
+              })}
             </div>
           </div>
           {actionButtons}
