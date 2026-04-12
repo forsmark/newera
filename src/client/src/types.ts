@@ -48,6 +48,14 @@ export interface Artifact {
   created_at: string;
 }
 
+export interface ApplicationEvent {
+  id: number;
+  job_id: string;
+  from_column: string | null;
+  to_column: string;
+  created_at: string;
+}
+
 export interface Application {
   job_id: string;
   kanban_column: 'saved' | 'applied' | 'interview' | 'offer' | 'rejected';
@@ -58,4 +66,5 @@ export interface Application {
   archived_description: string | null;
   cover_letter: string | null;
   job: Job;
+  events: ApplicationEvent[];
 }

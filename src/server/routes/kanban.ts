@@ -62,7 +62,17 @@ app.get('/', (c) => {
     ORDER BY a.updated_at DESC
   `).all() as Record<string, unknown>[];
 
-  return c.json(rows.map(reshapeRow));
+  const applications = rows.map(reshapeRow);
+
+  // Attach events to each application
+  const eventStmt = db.query(
+    'SELECT id, job_id, from_column, to_column, created_at FROM application_events WHERE job_id = ? ORDER BY created_at ASC'
+  );
+  for (const app of applications) {
+    (app as any).events = eventStmt.all(app.job_id);
+  }
+
+  return c.json(applications);
 });
 
 // PATCH /api/kanban/:id  (id is job_id)
@@ -92,6 +102,15 @@ app.patch('/:id', async (c) => {
   const params: unknown[] = [];
 
   if (body.kanban_column !== undefined) {
+    const old = (existing as { kanban_column: string }).kanban_column;
+    if (old !== body.kanban_column) {
+      const now = new Date().toISOString();
+      db.run(
+        `INSERT INTO application_events (job_id, from_column, to_column, created_at)
+         VALUES (?, ?, ?, ?)`,
+        [jobId, old, body.kanban_column, now],
+      );
+    }
     fields.push('kanban_column = ?');
     params.push(body.kanban_column);
   }
@@ -125,7 +144,11 @@ app.patch('/:id', async (c) => {
     WHERE a.job_id = ?
   `).get(jobId) as Record<string, unknown>;
 
-  return c.json(reshapeRow(updated));
+  const result = reshapeRow(updated);
+  (result as any).events = db.query(
+    'SELECT id, job_id, from_column, to_column, created_at FROM application_events WHERE job_id = ? ORDER BY created_at ASC'
+  ).all(jobId);
+  return c.json(result);
 });
 
 // POST /api/kanban/:id/cover-letter

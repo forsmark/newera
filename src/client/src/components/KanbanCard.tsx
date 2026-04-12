@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Application, Artifact } from "../types";
+import { Application, ApplicationEvent, Artifact } from "../types";
 
 interface Props {
   application: Application;
@@ -218,6 +218,26 @@ export default function KanbanCard({ application, onUpdate, columnColor = "#2436
         <div className="text-[#a855f7] text-[0.75rem] font-semibold mb-1">
           Interview: {formatInterviewDate(application.interview_at)}
         </div>
+      )}
+
+      {/* Timeline */}
+      {application.events && application.events.length > 0 && (
+        <details className="mb-1">
+          <summary className="text-[0.6875rem] text-text-3 cursor-pointer select-none">
+            Timeline ({application.events.length})
+          </summary>
+          <div className="mt-1 flex flex-col gap-0.5 pl-1 border-l border-border ml-1">
+            {application.events.map((evt, i) => {
+              const label = evt.to_column.charAt(0).toUpperCase() + evt.to_column.slice(1);
+              const date = new Date(evt.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+              return (
+                <div key={evt.id} className="text-[0.6875rem] text-text-3 py-0.5 pl-2">
+                  {i > 0 ? '→ ' : ''}{label} — {date}
+                </div>
+              );
+            })}
+          </div>
+        </details>
       )}
 
       {/* Summary */}

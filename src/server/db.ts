@@ -77,6 +77,16 @@ db.run(`
   )
 `);
 
+db.run(`
+  CREATE TABLE IF NOT EXISTS application_events (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id      TEXT NOT NULL REFERENCES applications(job_id) ON DELETE CASCADE,
+    from_column TEXT,
+    to_column   TEXT NOT NULL,
+    created_at  TEXT NOT NULL
+  )
+`);
+
 // Migrate existing DBs — ignore error if column already exists
 try { db.run('ALTER TABLE jobs ADD COLUMN tags TEXT'); } catch { /* already exists */ }
 try { db.run('ALTER TABLE jobs ADD COLUMN match_summary TEXT'); } catch { /* already exists */ }

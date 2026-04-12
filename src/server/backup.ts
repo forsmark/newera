@@ -1,4 +1,4 @@
-import { mkdirSync, readdirSync, statSync, unlinkSync } from 'fs';
+import { existsSync, mkdirSync, readdirSync, statSync, unlinkSync } from 'fs';
 import { resolve } from 'path';
 import db from './db';
 import { BACKUP_DIR as DEFAULT_BACKUP_DIR } from './config';
@@ -74,6 +74,47 @@ function pruneBackups() {
   for (const b of toDelete) {
     deleteBackup(b.name);
     console.log(`[backup] Pruned ${b.name}`);
+  }
+}
+
+export function restoreBackup(name: string): { ok: boolean; error?: string } {
+  // Validate name to prevent path traversal
+  if (!/^jobs-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.db$/.test(name)) {
+    return { ok: false, error: 'Invalid backup name' };
+  }
+
+  const backupPath = resolve(getBackupDir(), name);
+  if (!existsSync(backupPath)) {
+    return { ok: false, error: 'Backup file not found' };
+  }
+
+  // Create a safety backup before restoring
+  try { createBackup(); } catch { /* best effort */ }
+
+  // Attach the backup DB and copy all data over
+  try {
+    db.run('PRAGMA foreign_keys = OFF');
+    db.run(`ATTACH DATABASE '${backupPath}' AS backup`);
+
+    const tables = ['application_events', 'application_artifacts', 'applications', 'jobs', 'settings', 'logs'];
+    db.run('BEGIN TRANSACTION');
+    for (const table of tables) {
+      db.run(`DELETE FROM main.${table}`);
+      db.run(`INSERT INTO main.${table} SELECT * FROM backup.${table}`);
+    }
+    db.run('COMMIT');
+    db.run('DETACH DATABASE backup');
+    db.run('PRAGMA foreign_keys = ON');
+
+    console.log(`[backup] Restored from ${name}`);
+    return { ok: true };
+  } catch (err) {
+    try { db.run('ROLLBACK'); } catch { /* ignore */ }
+    try { db.run('DETACH DATABASE backup'); } catch { /* ignore */ }
+    try { db.run('PRAGMA foreign_keys = ON'); } catch { /* ignore */ }
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[backup] Restore failed:', msg);
+    return { ok: false, error: `Restore failed: ${msg}` };
   }
 }
 

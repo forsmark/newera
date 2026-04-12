@@ -95,6 +95,11 @@ app.patch('/:id', async (c) => {
          VALUES (?, 'saved', ?, ?)`,
         [id, now, now],
       );
+      db.run(
+        `INSERT INTO application_events (job_id, from_column, to_column, created_at)
+         VALUES (?, NULL, 'saved', ?)`,
+        [id, now],
+      );
     }
 
     if (status === 'applied') {
@@ -113,6 +118,12 @@ app.patch('/:id', async (c) => {
           [id, now, now],
         );
       }
+      const fromColumn = existing ? 'saved' : null;
+      db.run(
+        `INSERT INTO application_events (job_id, from_column, to_column, created_at)
+         VALUES (?, ?, 'applied', ?)`,
+        [id, fromColumn, now],
+      );
       // Fire-and-forget: fetch and archive the full job posting
       (async () => {
         const text = await fetchPageText(job.url);
