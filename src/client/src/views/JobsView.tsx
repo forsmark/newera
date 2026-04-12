@@ -499,13 +499,25 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
 
         {/* Row 1: search + view controls */}
         <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-          <input
-            type="text"
-            placeholder="Search jobs…"
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            className="w-full sm:flex-1 px-3 py-2 rounded-sm border border-border bg-surface text-text text-sm outline-none"
-          />
+          <div className="relative w-full sm:flex-1">
+            <input
+              type="text"
+              placeholder="Search jobs…"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="w-full px-3 py-2 pr-8 rounded-sm border border-border bg-surface text-text text-sm outline-none"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-0 border-none bg-transparent text-text-3 cursor-pointer text-sm leading-none"
+                aria-label="Clear search"
+              >
+                ✕
+              </button>
+            )}
+          </div>
           <div className="flex gap-2 items-center">
             <select
               value={postedWithin}

@@ -77,13 +77,25 @@ export default function KanbanView({ refreshKey }: Props) {
   return (
     <div className="px-3 sm:px-4 py-4 sm:py-6">
       <div className="max-w-full sm:max-w-[320px] mb-4">
-        <input
-          type="text"
-          placeholder="Search applications…"
-          value={searchQuery}
-          onChange={e => setSearchQuery(e.target.value)}
-          className="w-full px-3 py-[0.375rem] rounded-sm border border-border bg-surface text-text text-sm outline-none"
-        />
+        <div className="relative w-full">
+          <input
+            type="text"
+            placeholder="Search applications…"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="w-full px-3 py-[0.375rem] pr-8 rounded-sm border border-border bg-surface text-text text-sm outline-none"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-0 border-none bg-transparent text-text-3 cursor-pointer text-sm leading-none"
+              aria-label="Clear search"
+            >
+              ✕
+            </button>
+          )}
+        </div>
       </div>
       <div className="flex gap-4 overflow-x-auto items-stretch min-h-[calc(100vh_-_130px)]">
         {COLUMNS.map(col => (
