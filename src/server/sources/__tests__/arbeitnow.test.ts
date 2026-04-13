@@ -28,8 +28,7 @@ const SAMPLE_API_RESPONSE = {
       created_at: 1776004228,
     },
   ],
-  links: { next: null, prev: null },
-  meta: { current_page: 1, last_page: 1 },
+  links: { first: null, last: null, prev: null, next: null },
 };
 
 describe('parseArbeitnowJobs', () => {
@@ -86,8 +85,7 @@ describe('parseArbeitnowJobs', () => {
   test('handles empty data array', () => {
     const jobs = parseArbeitnowJobs({
       data: [],
-      links: { next: null, prev: null },
-      meta: { current_page: 1, last_page: 1 },
+      links: { first: null, last: null, prev: null, next: null },
     });
     expect(jobs).toHaveLength(0);
   });
