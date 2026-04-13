@@ -1,6 +1,7 @@
 import { fetchJobindex } from './sources/jobindex';
 import { fetchLinkedIn } from './sources/linkedin';
 import { fetchRemotive } from './sources/remotive';
+import { fetchArbeitnow } from './sources/arbeitnow';
 import { analyzeJob } from './llm';
 import db from './db';
 import { randomUUID } from 'crypto';
@@ -180,6 +181,22 @@ export async function fetchJobs(): Promise<number> {
       }
     } catch (err) {
       console.error('[scheduler] Remotive failed:', err);
+    }
+
+    // 6. Wait 30 seconds to spread Ollama load
+    await new Promise(r => setTimeout(r, 30_000));
+
+    // 7. Fetch Arbeitnow
+    try {
+      const arbeitnowJobs = await fetchArbeitnow();
+      console.log(`[scheduler] Arbeitnow: ${arbeitnowJobs.length} jobs`);
+      const batch4Ids = ingestBatch(arbeitnowJobs);
+      totalNew += batch4Ids.length;
+      if (batch4Ids.length > 0) {
+        scoreBatchInBackground(batch4Ids);
+      }
+    } catch (err) {
+      console.error('[scheduler] Arbeitnow failed:', err);
     }
 
     console.log(`[scheduler] ${totalNew} new jobs total`);
