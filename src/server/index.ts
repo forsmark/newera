@@ -115,7 +115,7 @@ process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
 export default {
-  port: 3000,
+  port: parseInt(process.env.PORT ?? '3000', 10),
   fetch: app.fetch,
   idleTimeout: 0, // disable idle timeout — cover letter generation can take several minutes
 };
