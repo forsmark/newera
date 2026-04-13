@@ -4,6 +4,14 @@ import { generateCoverLetter } from '../llm';
 import type { Application, ApplicationWithJob } from '../types';
 import { randomUUID } from 'crypto';
 
+interface ApplicationEvent {
+  id: number;
+  job_id: string;
+  from_column: string | null;
+  to_column: string;
+  created_at: string;
+}
+
 const app = new Hono();
 
 const VALID_COLUMNS = new Set(['saved', 'applied', 'interview', 'offer', 'rejected']);
@@ -64,15 +72,15 @@ app.get('/', (c) => {
 
   const applications = rows.map(reshapeRow);
 
-  // Attach events to each application
-  const eventStmt = db.query(
+  const eventStmt = db.query<ApplicationEvent, [string]>(
     'SELECT id, job_id, from_column, to_column, created_at FROM application_events WHERE job_id = ? ORDER BY created_at ASC'
   );
-  for (const app of applications) {
-    (app as any).events = eventStmt.all(app.job_id);
-  }
+  const withEvents = applications.map(app => ({
+    ...app,
+    events: eventStmt.all(app.job_id),
+  }));
 
-  return c.json(applications);
+  return c.json(withEvents);
 });
 
 // PATCH /api/kanban/:id  (id is job_id)
