@@ -99,6 +99,8 @@ try { db.run('ALTER TABLE jobs ADD COLUMN duplicate_of TEXT'); } catch { /* alre
 try { db.run(`ALTER TABLE jobs ADD COLUMN link_status TEXT NOT NULL DEFAULT 'unchecked'`); } catch { /* already exists */ }
 try { db.run('ALTER TABLE jobs ADD COLUMN link_checked_at TEXT'); } catch { /* already exists */ }
 db.run('CREATE INDEX IF NOT EXISTS idx_jobs_fingerprint ON jobs(content_fingerprint)');
+db.run('CREATE INDEX IF NOT EXISTS idx_events_job_id ON application_events(job_id)');
+db.run('CREATE INDEX IF NOT EXISTS idx_artifacts_job_id ON application_artifacts(job_id)');
 
 // Rename legacy 'jsearch' source to 'linkedin'
 db.run(`UPDATE jobs SET source = 'linkedin' WHERE source = 'jsearch'`);
