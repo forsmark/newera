@@ -18,7 +18,7 @@ function writeLog(level: string, args: unknown[]) {
   try {
     db.run('INSERT INTO logs (level, message, created_at) VALUES (?, ?, ?)', [level, message, created_at]);
     // Prune oldest entries when over limit
-    db.run(`DELETE FROM logs WHERE id NOT IN (SELECT id FROM logs ORDER BY id DESC LIMIT ${MAX_LOGS})`);
+    db.run('DELETE FROM logs WHERE id NOT IN (SELECT id FROM logs ORDER BY id DESC LIMIT ?)', [MAX_LOGS]);
   } catch { /* never crash on log write */ }
 }
 
