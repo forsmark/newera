@@ -35,42 +35,45 @@ type JobPartial = {
 export function ingestJob(job: JobPartial): { isNew: boolean } {
   const fp = contentFingerprint(job.title, job.company);
 
-  // Check for existing job with same fingerprint but different identity
-  const duplicate = db.query<{ id: string }, [string, string, string]>(
-    `SELECT id FROM jobs
-     WHERE content_fingerprint = ?
-     AND NOT (source = ? AND external_id = ?)
-     AND duplicate_of IS NULL
-     LIMIT 1`
-  ).get(fp, job.source, job.external_id);
+  const result = db.transaction(() => {
+    const duplicate = db.query<{ id: string }, [string, string, string]>(
+      `SELECT id FROM jobs
+       WHERE content_fingerprint = ?
+       AND NOT (source = ? AND external_id = ?)
+       AND duplicate_of IS NULL
+       LIMIT 1`
+    ).get(fp, job.source, job.external_id);
 
-  const existingRow = db.query<{ id: string }, [string, string]>(
-    'SELECT id FROM jobs WHERE source = ? AND external_id = ?'
-  ).get(job.source, job.external_id);
+    const existingRow = db.query<{ id: string }, [string, string]>(
+      'SELECT id FROM jobs WHERE source = ? AND external_id = ?'
+    ).get(job.source, job.external_id);
 
-  const id = existingRow?.id ?? randomUUID();
+    const id = existingRow?.id ?? randomUUID();
 
-  db.run(
-    `INSERT INTO jobs (id, source, external_id, title, company, location, url, description, posted_at, fetched_at, content_fingerprint)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT(source, external_id) DO UPDATE SET
-       description = CASE WHEN jobs.description IS NULL AND excluded.description IS NOT NULL
-                          THEN excluded.description ELSE jobs.description END,
-       url = CASE WHEN jobs.url LIKE '%/vis-job/%' AND excluded.url NOT LIKE '%/vis-job/%'
-                  THEN excluded.url ELSE jobs.url END,
-       content_fingerprint = excluded.content_fingerprint`,
-    [id, job.source, job.external_id, job.title, job.company,
-     job.location ?? null, job.url, job.description ?? null, job.posted_at ?? null,
-     job.fetched_at, fp]
-  );
+    db.run(
+      `INSERT INTO jobs (id, source, external_id, title, company, location, url, description, posted_at, fetched_at, content_fingerprint)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(source, external_id) DO UPDATE SET
+         description = CASE WHEN jobs.description IS NULL AND excluded.description IS NOT NULL
+                            THEN excluded.description ELSE jobs.description END,
+         url = CASE WHEN jobs.url LIKE '%/vis-job/%' AND excluded.url NOT LIKE '%/vis-job/%'
+                    THEN excluded.url ELSE jobs.url END,
+         content_fingerprint = excluded.content_fingerprint`,
+      [id, job.source, job.external_id, job.title, job.company,
+       job.location ?? null, job.url, job.description ?? null, job.posted_at ?? null,
+       job.fetched_at, fp]
+    );
 
-  if (duplicate) {
-    db.run('UPDATE jobs SET duplicate_of = ? WHERE source = ? AND external_id = ?',
-      [duplicate.id, job.source, job.external_id]);
-    return { isNew: false };
-  }
+    if (duplicate) {
+      db.run('UPDATE jobs SET duplicate_of = ? WHERE source = ? AND external_id = ?',
+        [duplicate.id, job.source, job.external_id]);
+      return { isNew: false };
+    }
 
-  return { isNew: existingRow === null };
+    return { isNew: existingRow === null };
+  })();
+
+  return result;
 }
 
 function ingestBatch(jobs: JobPartial[]): string[] {
