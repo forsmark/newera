@@ -463,6 +463,7 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
 
   const linkedinCount = jobs.filter(j => j.source === 'linkedin').length;
   const jobindexCount = jobs.filter(j => j.source === 'jobindex').length;
+  const remotiveCount = jobs.filter(j => j.source === 'remotive').length;
   const unreadCount = jobs.filter(j => j.seen_at === null && j.status !== 'rejected').length;
   const unsavedCount = jobs.filter(j => j.status === 'new').length;
   const savedCount = jobs.filter(j => j.status === 'saved').length;
@@ -607,9 +608,11 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
           {/* Source pills + active tag + show rejected — second line on mobile */}
           <div className="flex gap-2 items-center flex-wrap w-full sm:w-auto sm:contents">
             {/* Source pills */}
-            {linkedinCount > 0 && jobindexCount > 0 && (
+            {[linkedinCount, jobindexCount, remotiveCount].filter(c => c > 0).length > 1 && (
               <div className="flex gap-1">
-                {(["all", "linkedin", "jobindex"] as FilterSource[]).map(key => (
+                {(["all", "linkedin", "jobindex", "remotive"] as FilterSource[]).filter(key =>
+                  key === "all" || (key === "linkedin" && linkedinCount > 0) || (key === "jobindex" && jobindexCount > 0) || (key === "remotive" && remotiveCount > 0)
+                ).map(key => (
                   <button
                     key={key}
                     onClick={() => setFilterSource(key)}
@@ -620,7 +623,7 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
                       color: filterSource === key ? '#7a95b0' : '#6b8aa3',
                     }}
                   >
-                    {key === 'all' ? 'All sources' : key === 'linkedin' ? 'LinkedIn' : 'Jobindex'}
+                    {key === 'all' ? 'All sources' : key === 'linkedin' ? 'LinkedIn' : key === 'jobindex' ? 'Jobindex' : 'Remotive'}
                   </button>
                 ))}
               </div>
