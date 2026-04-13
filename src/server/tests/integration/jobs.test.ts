@@ -113,6 +113,21 @@ describe('PATCH /api/jobs/:id', () => {
     expect(apps.some(a => a.job_id === id)).toBe(true);
   });
 
+  it('creates application and event when marking as applied', async () => {
+    const job = seedJob({ status: 'saved' });
+    const res = await app.request(`/api/jobs/${job.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'applied' }),
+    });
+    expect(res.status).toBe(200);
+
+    const appRow = db.query('SELECT * FROM applications WHERE job_id = ?').get(job.id);
+    const eventRow = db.query('SELECT * FROM application_events WHERE job_id = ?').get(job.id);
+    expect(appRow).toBeTruthy();
+    expect(eventRow).toBeTruthy();
+  });
+
   it('returns 400 for invalid status', async () => {
     const { id } = seedJob();
     const res = await app.request(`/api/jobs/${id}`, {
