@@ -186,6 +186,26 @@ describe('sendFetchSummary', () => {
     expect(sentBody.text).toContain('2 other new jobs below threshold');
   });
 
+  it('does not send when all jobs are below threshold', async () => {
+    const fetchMock = mock(() =>
+      Promise.resolve(new Response(JSON.stringify({ ok: true }))),
+    );
+    globalThis.fetch = fetchMock as any;
+    setPrefs({
+      telegramEnabled: true,
+      telegramBotToken: 'tok',
+      telegramChatId: '123',
+      telegramNotifyThreshold: 80,
+    });
+
+    await sendFetchSummary([
+      makeScoredJob({ id: 'j1', title: 'Meh Job' }, 50),
+      makeScoredJob({ id: 'j2', title: 'Bad Job' }, 30),
+    ]);
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('does not crash on Telegram API failure', async () => {
     const fetchMock = mock(() => Promise.reject(new Error('network')));
     globalThis.fetch = fetchMock as any;
