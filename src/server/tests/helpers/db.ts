@@ -2,6 +2,8 @@ import { randomUUID } from 'crypto';
 import db from '../../db';
 
 export function clearDb() {
+  db.run('DELETE FROM application_events');
+  db.run('DELETE FROM application_artifacts');
   db.run('DELETE FROM applications');
   db.run('DELETE FROM jobs');
   db.run('DELETE FROM settings');
