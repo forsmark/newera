@@ -330,6 +330,31 @@ describe('deduplication at ingest', () => {
   });
 });
 
+// ─── GET /api/jobs/:id ───────────────────────────────────────────────────────
+
+describe('GET /api/jobs/:id', () => {
+  it('returns a single job by id', async () => {
+    seedJob({ title: 'Test Job' });
+    const listRes = await app.request('/api/jobs');
+    const { jobs } = await listRes.json() as { jobs: { id: string }[] };
+    expect(jobs.length).toBeGreaterThan(0);
+    const jobId = jobs[0].id;
+
+    const res = await app.request(`/api/jobs/${jobId}`);
+    expect(res.status).toBe(200);
+    const body = await res.json() as { id: string; title: string; tags: string[] | null };
+    expect(body.id).toBe(jobId);
+    expect(body.title).toBeDefined();
+  });
+
+  it('returns 404 for non-existent id', async () => {
+    const res = await app.request('/api/jobs/non-existent-id-123');
+    expect(res.status).toBe(404);
+    const body = await res.json() as { error: string };
+    expect(body.error).toBe('Job not found');
+  });
+});
+
 // ─── GET /api/jobs duplicate filtering ───────────────────────────────────────
 
 describe('GET /api/jobs duplicate filtering', () => {
