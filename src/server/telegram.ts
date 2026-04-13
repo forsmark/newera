@@ -31,8 +31,8 @@ export async function sendFetchSummary(scoredJobs: ScoredJob[]): Promise<void> {
       .sort((a, b) => b.score - a.score);
     const belowCount = scoredJobs.length - above.length;
 
-    // Nothing noteworthy — only send if there are below-threshold jobs to mention
-    if (above.length === 0 && belowCount === 0) return;
+    // Only notify when at least one job is above the threshold
+    if (above.length === 0) return;
 
     const lines: string[] = [];
 
