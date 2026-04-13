@@ -28,6 +28,7 @@ export function createBackup(): BackupInfo {
   const backupPath = resolve(getBackupDir(), name);
 
   // VACUUM INTO creates an atomic, defragmented copy of the live DB
+  if (backupPath.includes("'")) throw new Error('Backup path contains invalid characters');
   db.run(`VACUUM INTO '${backupPath}'`);
 
   // Prune oldest backups beyond the limit
@@ -94,6 +95,7 @@ export function restoreBackup(name: string): { ok: boolean; error?: string } {
   // Attach the backup DB and copy all data over
   try {
     db.run('PRAGMA foreign_keys = OFF');
+    if (backupPath.includes("'")) throw new Error('Backup path contains invalid characters');
     db.run(`ATTACH DATABASE '${backupPath}' AS backup`);
 
     const tables = ['application_events', 'application_artifacts', 'applications', 'jobs', 'settings', 'logs'];
