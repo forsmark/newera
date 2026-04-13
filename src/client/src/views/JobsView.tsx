@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { Job, AppStatus } from "../types";
 import JobRow from "../components/JobRow";
 import { toast } from "../components/Toast";
+import SourceFilter from "../components/SourceFilter";
 
 interface Props {
   refreshKey?: number;
@@ -12,7 +13,6 @@ interface Props {
 }
 
 type FilterStatus = "all" | "unread" | "unsaved" | "saved" | "applied" | "rejected";
-type FilterSource = "all" | "linkedin" | "jobindex" | "remotive";
 type PostedWithin = 'any' | '7d' | '30d';
 type SortBy = 'score' | 'posted' | 'fetched';
 
@@ -111,7 +111,7 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
   const [sortBy, setSortBy] = useState<SortBy>(() =>
     (localStorage.getItem('jobs-sort-by') as SortBy | null) ?? 'score'
   );
-  const [filterSource, setFilterSource] = useState<FilterSource>("all");
+  const [selectedSources, setSelectedSources] = useState<Set<string>>(new Set());
   const [activeTags, setActiveTags] = useState<string[]>(() => {
     try {
       const stored = localStorage.getItem('jobs-active-tags');
@@ -136,7 +136,7 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
   const prefersReducedMotion = useReducedMotion();
 
   // Track filter identity to re-trigger list animation
-  const filterKey = `${filterStatus}|${filterSource}|${activeTags.join(',')}|${searchQuery}|${postedWithin}|${sortBy}`;
+  const filterKey = `${filterStatus}|${[...selectedSources].sort().join(',')}|${activeTags.join(',')}|${searchQuery}|${postedWithin}|${sortBy}`;
   const prevFilterKey = useRef(filterKey);
 
   const fetchJobs = useCallback(async (reset?: boolean) => {
@@ -404,7 +404,7 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
         if (filterStatus === "applied" && j.status !== "applied") return false;
         if (filterStatus === "rejected" && j.status !== "rejected") return false;
       }
-      if (filterSource !== "all" && j.source !== filterSource) return false;
+      if (selectedSources.size > 0 && !selectedSources.has(j.source)) return false;
       if (activeTags.length > 0 && !activeTags.every(tag => j.tags?.includes(tag))) return false;
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
@@ -436,7 +436,7 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
   useEffect(() => {
     setSelectedIds(new Set());
     setFocusedIndex(-1);
-  }, [filterStatus, filterSource, activeTags, searchQuery, postedWithin]);
+  }, [filterStatus, selectedSources, activeTags, searchQuery, postedWithin]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -464,6 +464,7 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
   const linkedinCount = jobs.filter(j => j.source === 'linkedin').length;
   const jobindexCount = jobs.filter(j => j.source === 'jobindex').length;
   const remotiveCount = jobs.filter(j => j.source === 'remotive').length;
+  const arbeitnowCount = jobs.filter(j => j.source === 'arbeitnow').length;
   const unreadCount = jobs.filter(j => j.seen_at === null && j.status !== 'rejected').length;
   const unsavedCount = jobs.filter(j => j.status === 'new').length;
   const savedCount = jobs.filter(j => j.status === 'saved').length;
@@ -605,28 +606,20 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
             })}
           </div>
 
-          {/* Source pills + active tag + show rejected — second line on mobile */}
+          {/* Source filter + active tag + show rejected — second line on mobile */}
           <div className="flex gap-2 items-center flex-wrap w-full sm:w-auto sm:contents">
-            {/* Source pills */}
-            {[linkedinCount, jobindexCount, remotiveCount].filter(c => c > 0).length > 1 && (
-              <div className="flex gap-1">
-                {(["all", "linkedin", "jobindex", "remotive"] as FilterSource[]).filter(key =>
-                  key === "all" || (key === "linkedin" && linkedinCount > 0) || (key === "jobindex" && jobindexCount > 0) || (key === "remotive" && remotiveCount > 0)
-                ).map(key => (
-                  <button
-                    key={key}
-                    onClick={() => setFilterSource(key)}
-                    className="px-3 py-1.5 rounded-full border cursor-pointer text-[0.75rem] font-medium"
-                    style={{
-                      borderColor: filterSource === key ? '#243653' : '#1a2840',
-                      background: filterSource === key ? '#1a2840' : 'transparent',
-                      color: filterSource === key ? '#7a95b0' : '#6b8aa3',
-                    }}
-                  >
-                    {key === 'all' ? 'All sources' : key === 'linkedin' ? 'LinkedIn' : key === 'jobindex' ? 'Jobindex' : 'Remotive'}
-                  </button>
-                ))}
-              </div>
+            {/* Source dropdown */}
+            {[linkedinCount, jobindexCount, remotiveCount, arbeitnowCount].filter(c => c > 0).length > 1 && (
+              <SourceFilter
+                sources={[
+                  { key: 'linkedin', label: 'LinkedIn', count: linkedinCount },
+                  { key: 'jobindex', label: 'Jobindex', count: jobindexCount },
+                  { key: 'remotive', label: 'Remotive', count: remotiveCount },
+                  { key: 'arbeitnow', label: 'Arbeitnow', count: arbeitnowCount },
+                ].filter(s => s.count > 0)}
+                selected={selectedSources}
+                onChange={setSelectedSources}
+              />
             )}
 
             {/* Active tag chips */}
