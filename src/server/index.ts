@@ -62,7 +62,8 @@ app.get('/api/status', (c) => {
     `SELECT COUNT(*) as n FROM jobs
      WHERE match_score IS NOT NULL
      AND status NOT IN ('rejected')
-     AND (prefs_hash IS NULL OR prefs_hash != ?)`
+     AND (prefs_hash IS NULL OR prefs_hash != ?)
+     AND description IS NOT NULL`
   ).get(currentHash);
   const stale_count = staleRow?.n ?? 0;
 
