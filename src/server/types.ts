@@ -81,6 +81,7 @@ export interface Application {
   applied_at: string;
   updated_at: string;
   cover_letter: string | null;
+  archived_description: string | null;
 }
 
 export interface ApplicationWithJob extends Application {
