@@ -2,7 +2,7 @@ import type { Job } from '../types';
 
 type JobPartial = Omit<Job, 'id' | 'match_score' | 'match_reasoning' | 'match_summary' | 'tags' | 'status' | 'seen_at'>;
 
-const ARBEITNOW_API = 'https://www.arbeitnow.com/api/jobs';
+const ARBEITNOW_API = 'https://www.arbeitnow.com/api/job-board-api';
 const MAX_PAGES = 5;
 
 interface ArbeitnowJob {
@@ -21,12 +21,10 @@ interface ArbeitnowJob {
 interface ArbeitnowResponse {
   data: ArbeitnowJob[];
   links: {
-    next: string | null;
+    first: string | null;
+    last: string | null;
     prev: string | null;
-  };
-  meta: {
-    current_page: number;
-    last_page: number;
+    next: string | null;
   };
 }
 
@@ -76,28 +74,12 @@ export async function fetchArbeitnow(): Promise<JobPartial[]> {
   console.log('[arbeitnow] Fetching remote jobs...');
 
   const allJobs: JobPartial[] = [];
-  let lastPage = 1;
+  let nextUrl: string | null = `${ARBEITNOW_API}?page=1`;
+  let page = 0;
 
-  // Fetch first page to get pagination info
-  const firstResponse = await fetch(`${ARBEITNOW_API}?page=1`, {
-    headers: {
-      'Accept': 'application/json',
-      'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36',
-    },
-    signal: AbortSignal.timeout(15_000),
-  });
-
-  if (!firstResponse.ok) {
-    throw new Error(`[arbeitnow] API returned ${firstResponse.status}`);
-  }
-
-  const firstData = (await firstResponse.json()) as ArbeitnowResponse;
-  allJobs.push(...parseArbeitnowJobs(firstData));
-  lastPage = Math.min(firstData.meta.last_page, MAX_PAGES);
-
-  // Fetch remaining pages
-  for (let page = 2; page <= lastPage; page++) {
-    const response = await fetch(`${ARBEITNOW_API}?page=${page}`, {
+  while (nextUrl && page < MAX_PAGES) {
+    page++;
+    const response = await fetch(nextUrl, {
       headers: {
         'Accept': 'application/json',
         'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36',
@@ -111,8 +93,9 @@ export async function fetchArbeitnow(): Promise<JobPartial[]> {
 
     const data = (await response.json()) as ArbeitnowResponse;
     allJobs.push(...parseArbeitnowJobs(data));
+    nextUrl = data.links.next;
   }
 
-  console.log(`[arbeitnow] Fetch complete — ${allJobs.length} jobs`);
+  console.log(`[arbeitnow] Fetch complete — ${allJobs.length} jobs (${page} pages)`);
   return allJobs;
 }
