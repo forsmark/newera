@@ -157,6 +157,7 @@ describe('sendFetchSummary', () => {
     expect(sentBody.text).toContain('Frontend Developer');
     expect(sentBody.text).toContain('92');
     expect(sentBody.text).toContain('100\\.1\\.2\\.3');
+    expect(sentBody.text).toContain('/jobs/job\\-1');
   });
 
   it('includes below-threshold count in footer', async () => {

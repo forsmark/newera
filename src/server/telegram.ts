@@ -43,7 +43,7 @@ export async function sendFetchSummary(scoredJobs: ScoredJob[]): Promise<void> {
       const summary = escapeMarkdownV2(matchSummary || '');
       lines.push(`🟢 *${title}* — ${company} \\(${score}\\)`);
       if (summary) lines.push(summary);
-      lines.push(`→ ${escapeMarkdownV2(prefs.appBaseUrl)}`);
+      lines.push(`→ [Open](${escapeMarkdownV2(`${prefs.appBaseUrl}/jobs/${job.id}`)})`);
       lines.push('');
     }
 
