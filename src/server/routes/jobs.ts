@@ -86,45 +86,52 @@ app.patch('/:id', async (c) => {
 
   if (hasStatus) {
     const { status } = body as { status: string };
-    db.run('UPDATE jobs SET status = ? WHERE id = ?', [status, id]);
 
-    if (status === 'saved') {
-      const now = new Date().toISOString();
-      db.run(
-        `INSERT OR IGNORE INTO applications (job_id, kanban_column, applied_at, updated_at)
-         VALUES (?, 'saved', ?, ?)`,
-        [id, now, now],
-      );
-      db.run(
-        `INSERT INTO application_events (job_id, from_column, to_column, created_at)
-         VALUES (?, NULL, 'saved', ?)`,
-        [id, now],
-      );
-    }
+    const applyStatusChange = db.transaction(() => {
+      db.run('UPDATE jobs SET status = ? WHERE id = ?', [status, id]);
 
-    if (status === 'applied') {
-      const now = new Date().toISOString();
-      // Move from saved column if already there, otherwise insert fresh
-      const existing = db.query('SELECT * FROM applications WHERE job_id = ?').get(id);
-      if (existing) {
-        db.run(
-          `UPDATE applications SET kanban_column = 'applied', updated_at = ? WHERE job_id = ? AND kanban_column = 'saved'`,
-          [now, id],
-        );
-      } else {
+      if (status === 'saved') {
+        const now = new Date().toISOString();
         db.run(
           `INSERT OR IGNORE INTO applications (job_id, kanban_column, applied_at, updated_at)
-           VALUES (?, 'applied', ?, ?)`,
+           VALUES (?, 'saved', ?, ?)`,
           [id, now, now],
         );
+        db.run(
+          `INSERT INTO application_events (job_id, from_column, to_column, created_at)
+           VALUES (?, NULL, 'saved', ?)`,
+          [id, now],
+        );
       }
-      const fromColumn = existing ? 'saved' : null;
-      db.run(
-        `INSERT INTO application_events (job_id, from_column, to_column, created_at)
-         VALUES (?, ?, 'applied', ?)`,
-        [id, fromColumn, now],
-      );
-      // Fire-and-forget: fetch and archive the full job posting
+
+      if (status === 'applied') {
+        const now = new Date().toISOString();
+        const existing = db.query('SELECT * FROM applications WHERE job_id = ?').get(id);
+        if (existing) {
+          db.run(
+            `UPDATE applications SET kanban_column = 'applied', updated_at = ? WHERE job_id = ? AND kanban_column = 'saved'`,
+            [now, id],
+          );
+        } else {
+          db.run(
+            `INSERT OR IGNORE INTO applications (job_id, kanban_column, applied_at, updated_at)
+             VALUES (?, 'applied', ?, ?)`,
+            [id, now, now],
+          );
+        }
+        const fromColumn = existing ? 'saved' : null;
+        db.run(
+          `INSERT INTO application_events (job_id, from_column, to_column, created_at)
+           VALUES (?, ?, 'applied', ?)`,
+          [id, fromColumn, now],
+        );
+      }
+    });
+
+    applyStatusChange();
+
+    // Fire-and-forget: archive posting (outside transaction — async network I/O)
+    if (status === 'applied') {
       (async () => {
         const text = await fetchPageText(job.url);
         const archived = text ?? job.description;
