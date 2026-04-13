@@ -46,8 +46,6 @@ Create a `.env` file in the project root (see `.env.example`):
 # If not set, the app is accessible without a password (fine for local-only use)
 AUTH_SECRET=choose_a_strong_password
 
-# RapidAPI key for LinkedIn scraping
-JSEARCH_API_KEY=your_key_here
 ```
 
 `OLLAMA_BASE_URL` is set automatically by Docker Compose to reach Ollama on the host via `host.docker.internal`. You only need to override it if Ollama is running somewhere else.

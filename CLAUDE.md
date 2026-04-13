@@ -28,11 +28,17 @@ Server at http://localhost:3000, Vite dev server at http://localhost:5173
 - Tests MUST use in-memory SQLite, never the production DB. `db.ts` switches to `:memory:` when `NODE_ENV=test` (set automatically by `bunfig.toml`). If you add a new DB module or change the db import path, verify tests still hit `:memory:`.
 - When writing new test files that touch the database, import `db` from `../../db` — it will automatically use the in-memory instance during `bun test`.
 
+## Deploying
+```
+bash scripts/deploy.sh
+```
+Pulls latest master, rebuilds the Docker image, and restarts the container via `docker compose`.
+
 ## Key Decisions
 - Monolith architecture with SQLite
 - Jobs deduplicated by source + external_id
 - LLM analysis is async — jobs appear immediately with a pending score, scores fill in after
-- RapidAPI key for LinkedIn scraping in .env (JSEARCH_API_KEY)
+- LinkedIn jobs fetched via guest API (no auth key needed)
 - Ollama runs locally at http://localhost:11434
 
 ## Data Files (user-provided, not committed)
