@@ -21,8 +21,8 @@ app.get('/', (c) => {
   const limitParam = c.req.query('limit');
   const offsetParam = c.req.query('offset');
   const includeDuplicates = c.req.query('include_duplicates') === '1';
-  const limit = Math.min(parseInt(limitParam ?? '100', 10) || 100, 200); // cap at 200
-  const offset = parseInt(offsetParam ?? '0', 10) || 0;
+  const limit = Math.max(1, Math.min(parseInt(limitParam ?? '100', 10) || 100, 200));
+  const offset = Math.max(0, parseInt(offsetParam ?? '0', 10) || 0);
 
   if (status !== undefined && !VALID_STATUSES.has(status)) {
     return c.json({ error: 'Invalid status' }, 400);
@@ -47,7 +47,7 @@ app.get('/', (c) => {
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-  const params = [...countParams, limit as unknown as string, offset as unknown as string];
+  const params = [...countParams, limit, offset];
 
   const sql = `SELECT * FROM jobs ${where} ORDER BY match_score DESC NULLS LAST, fetched_at DESC LIMIT ? OFFSET ?`;
   const countSql = `SELECT COUNT(*) as total FROM jobs ${where}`;
