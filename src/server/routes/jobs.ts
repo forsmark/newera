@@ -332,8 +332,8 @@ app.post('/:id/analyze', async (c) => {
 
     const result = await analyzeJob(freshJob);
     if (result) {
-      db.run('UPDATE jobs SET match_score = ?, match_reasoning = ?, match_summary = ?, tags = ? WHERE id = ?', [
-        result.match_score, result.match_reasoning, result.match_summary, JSON.stringify(result.tags), id,
+      db.run('UPDATE jobs SET match_score = ?, match_reasoning = ?, match_summary = ?, tags = ?, work_type = ?, prefs_hash = ? WHERE id = ?', [
+        result.match_score, result.match_reasoning, result.match_summary, JSON.stringify(result.tags), result.work_type, result.prefs_hash, id,
       ]);
     }
   })().catch(console.error);
