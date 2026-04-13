@@ -9,6 +9,8 @@ import { getSetting, getResume } from '../settings';
 
 const app = new Hono();
 
+let isRescoring = false;
+
 const VALID_STATUSES = new Set(['new', 'saved', 'applied', 'rejected']);
 
 // GET /api/jobs
@@ -252,12 +254,14 @@ app.post('/bulk-unseen', async (c) => {
 // POST /api/jobs/rescore-all
 // Resets match scores for all non-rejected jobs and re-queues analysis via the scheduler
 app.post('/rescore-all', (c) => {
+  if (isRescoring) return c.json({ error: 'Rescore already in progress' }, 409);
+
   const result = db.run(
     "UPDATE jobs SET match_score = NULL, match_reasoning = NULL, match_summary = NULL, tags = NULL, work_type = NULL WHERE status != 'rejected'"
   );
   const queued = result.changes;
 
-  // Fire-and-forget: loop until all jobs are scored (analyzeUnscoredJobs processes 20 at a time)
+  isRescoring = true;
   (async () => {
     for (let i = 0; i < 100; i++) {
       const row = db.query('SELECT COUNT(*) as c FROM jobs WHERE match_score IS NULL').get() as { c: number };
@@ -265,7 +269,7 @@ app.post('/rescore-all', (c) => {
       await analyzeUnscoredJobs();
     }
     console.log('[jobs] rescore-all complete');
-  })().catch(console.error);
+  })().catch(console.error).finally(() => { isRescoring = false; });
 
   return c.json({ queued }, 202);
 });
