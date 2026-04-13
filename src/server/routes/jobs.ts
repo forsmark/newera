@@ -58,6 +58,14 @@ app.get('/', (c) => {
   return c.json({ jobs, total: countRow?.total ?? 0, limit, offset });
 });
 
+// GET /api/jobs/:id
+app.get('/:id', (c) => {
+  const id = c.req.param('id');
+  const row = db.query('SELECT * FROM jobs WHERE id = ?').get(id) as (Job & { tags: string | null }) | null;
+  if (!row) return c.json({ error: 'Job not found' }, 404);
+  return c.json({ ...row, tags: row.tags ? JSON.parse(row.tags) as string[] : null });
+});
+
 // PATCH /api/jobs/:id
 // Body: { status?: string; seen_at?: string | null }
 app.patch('/:id', async (c) => {
