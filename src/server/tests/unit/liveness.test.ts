@@ -1,9 +1,16 @@
-import { describe, it, expect, mock, beforeEach } from 'bun:test';
+import { describe, it, expect, mock, beforeEach, afterAll } from 'bun:test';
 import { classifyLiveness } from '../../utils/liveness';
+
+const originalFetch = globalThis.fetch;
 
 beforeEach(() => {
   // Reset fetch mock between tests
   globalThis.fetch = undefined as any;
+});
+
+afterAll(() => {
+  // Restore original fetch so mocks don't leak into other test files
+  globalThis.fetch = originalFetch;
 });
 
 describe('classifyLiveness', () => {
