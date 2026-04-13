@@ -54,8 +54,8 @@ app.get('/', (c) => {
 
   const rawJobs = db.query(sql).all(...params) as (Job & { tags: string | null })[];
   const jobs = rawJobs.map(j => ({ ...j, tags: j.tags ? JSON.parse(j.tags) as string[] : null }));
-  const countRow = db.query(countSql).get(...countParams) as { total: number };
-  return c.json({ jobs, total: countRow.total, limit, offset });
+  const countRow = db.query(countSql).get(...countParams) as { total: number } | null;
+  return c.json({ jobs, total: countRow?.total ?? 0, limit, offset });
 });
 
 // PATCH /api/jobs/:id
