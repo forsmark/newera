@@ -12,7 +12,7 @@ interface Props {
 }
 
 type FilterStatus = "all" | "unread" | "unsaved" | "saved" | "applied" | "rejected";
-type FilterSource = "all" | "linkedin" | "jobindex";
+type FilterSource = "all" | "linkedin" | "jobindex" | "remotive";
 type PostedWithin = 'any' | '7d' | '30d';
 type SortBy = 'score' | 'posted' | 'fetched';
 

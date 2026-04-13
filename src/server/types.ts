@@ -1,6 +1,6 @@
 export interface Job {
   id: string;
-  source: 'jobindex' | 'linkedin';
+  source: 'jobindex' | 'linkedin' | 'remotive';
   external_id: string;
   title: string;
   company: string;
