@@ -6,6 +6,7 @@ import KanbanView from "./views/KanbanView";
 import PreferencesView from "./views/PreferencesView";
 import SettingsView from "./views/SettingsView";
 import LogsView from "./views/LogsView";
+import JobDetailView from "./views/JobDetailView";
 import LoginView from "./views/LoginView";
 import { AppStatus } from "./types";
 import ToastContainer from "./components/Toast";
@@ -211,6 +212,7 @@ function AnimatedRoutes({ jobsRefreshKey, isFetching, status }: { jobsRefreshKey
       >
         <Routes location={location}>
           <Route path="/" element={<Navigate to="/jobs" replace />} />
+          <Route path="/jobs/:id" element={<JobDetailView />} />
           <Route path="/jobs" element={<JobsView refreshKey={jobsRefreshKey} isFetching={isFetching} status={status} />} />
           <Route path="/kanban" element={<KanbanView refreshKey={jobsRefreshKey} />} />
           <Route path="/preferences" element={<PreferencesView />} />
