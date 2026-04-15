@@ -3,6 +3,7 @@ import { fetchLinkedIn } from './sources/linkedin';
 import { fetchRemotive } from './sources/remotive';
 import { fetchArbeitnow } from './sources/arbeitnow';
 import { fetchRemoteOK } from './sources/remoteok';
+import { fetchJobDescription } from './sources/linkedin';
 import { analyzeJob } from './llm';
 import db from './db';
 import { randomUUID } from 'crypto';
@@ -244,6 +245,17 @@ export async function analyzeUnscoredJobs(autoReject = true): Promise<void> {
   console.log(`[scheduler] Retrying analysis for ${unscoredJobs.length} unscored jobs`);
 
   for (const job of unscoredJobs) {
+    // Back-fill missing LinkedIn descriptions before scoring
+    if (job.source === 'linkedin' && !job.description) {
+      const linkedInId = job.external_id.replace(/^li_/, '');
+      console.log(`[scheduler] Re-fetching LinkedIn description for job ${job.id} (${linkedInId})`);
+      const desc = await fetchJobDescription(linkedInId);
+      if (desc) {
+        db.run('UPDATE jobs SET description = ? WHERE id = ?', [desc, job.id]);
+        job.description = desc;
+      }
+    }
+
     const result = await analyzeJob(job);
     if (result) {
       db.run('UPDATE jobs SET match_score = ?, match_reasoning = ?, match_summary = ?, tags = ?, work_type = ?, prefs_hash = ? WHERE id = ?', [
