@@ -294,7 +294,7 @@ app.post('/rescore-all', (c) => {
     for (let i = 0; i < 100; i++) {
       const row = db.query('SELECT COUNT(*) as c FROM jobs WHERE match_score IS NULL').get() as { c: number };
       if (row.c === 0) break;
-      await analyzeUnscoredJobs();
+      await analyzeUnscoredJobs(false); // don't auto-reject during explicit rescore
     }
     console.log('[jobs] rescore-all complete');
   })().catch(console.error).finally(() => { isRescoring = false; });

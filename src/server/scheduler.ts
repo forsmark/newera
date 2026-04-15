@@ -229,7 +229,7 @@ export async function fetchJobs(): Promise<number> {
   }
 }
 
-export async function analyzeUnscoredJobs(): Promise<void> {
+export async function analyzeUnscoredJobs(autoReject = true): Promise<void> {
   if (!getResume()) return;
 
   const unscoredJobs = db.query(`
@@ -255,7 +255,7 @@ export async function analyzeUnscoredJobs(): Promise<void> {
         result.prefs_hash,
         job.id,
       ]);
-      maybeAutoReject(job.id, result.match_score);
+      if (autoReject) maybeAutoReject(job.id, result.match_score);
       console.log(`[scheduler] Scored job ${job.id}: ${result.match_score}`);
     }
   }
