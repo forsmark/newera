@@ -96,29 +96,42 @@ export function extractJobId(url: string): string {
   return `li_${url.slice(-32).replace(/\W/g, '')}`;
 }
 
-/** Fetch the job description from LinkedIn's guest detail API. */
-async function fetchJobDescription(jobId: string): Promise<string | null> {
-  try {
-    const res = await fetch(`${LINKEDIN_JOB_API}/${jobId}`, {
-      headers: HEADERS,
-      signal: AbortSignal.timeout(10_000),
-    });
-    if (!res.ok) return null;
-    const html = await res.text();
-    const root = parse(html);
-    const descEl =
-      root.querySelector('.show-more-less-html__markup') ??
-      root.querySelector('.description__text--rich');
-    if (!descEl) return null;
-    const text = descEl.innerText
-      .replace(/[ \t]{2,}/g, ' ')
-      .replace(/\n{3,}/g, '\n\n')
-      .trim();
-    return text.length > 0 ? text : null;
-  } catch (err) {
-    console.warn(`[linkedin] fetchJobDescription failed for ${jobId}:`, (err as Error).message);
-    return null;
+/** Fetch the job description from LinkedIn's guest detail API. Retries on 429. */
+export async function fetchJobDescription(jobId: string): Promise<string | null> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) {
+      const backoff = attempt === 1 ? 10_000 : 30_000;
+      console.warn(`[linkedin] 429 for description ${jobId} — retrying in ${backoff / 1000}s`);
+      await sleep(backoff);
+    }
+    try {
+      const res = await fetch(`${LINKEDIN_JOB_API}/${jobId}`, {
+        headers: HEADERS,
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (res.status === 429) continue;
+      if (!res.ok) {
+        console.warn(`[linkedin] fetchJobDescription HTTP ${res.status} for ${jobId}`);
+        return null;
+      }
+      const html = await res.text();
+      const root = parse(html);
+      const descEl =
+        root.querySelector('.show-more-less-html__markup') ??
+        root.querySelector('.description__text--rich');
+      if (!descEl) return null;
+      const text = descEl.innerText
+        .replace(/[ \t]{2,}/g, ' ')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+      return text.length > 0 ? text : null;
+    } catch (err) {
+      console.warn(`[linkedin] fetchJobDescription failed for ${jobId}:`, (err as Error).message);
+      return null;
+    }
   }
+  console.warn(`[linkedin] fetchJobDescription giving up on ${jobId} after 3 attempts`);
+  return null;
 }
 
 /** Run promises with at most `limit` in parallel. */
