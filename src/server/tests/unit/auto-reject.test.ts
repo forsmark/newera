@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach } from 'bun:test';
+import { describe, it, expect, beforeEach, mock, afterEach } from 'bun:test';
 import db from '../../db';
 import { setSetting } from '../../settings';
-import { maybeAutoReject } from '../../scheduler';
+import { maybeAutoReject, analyzeUnscoredJobs } from '../../scheduler';
 import { clearDb, seedJob } from '../helpers/db';
 
 function clearSettings() {
@@ -95,5 +95,71 @@ describe('maybeAutoReject', () => {
     maybeAutoReject(id, 20);
 
     expect(jobStatus(id)).toBe('new');
+  });
+});
+
+// ─── analyzeUnscoredJobs — autoReject flag ────────────────────────────────────
+
+// Mocks the Ollama fetch response returning a score below the threshold.
+function ollamaResponse(score: number) {
+  const llmJson = JSON.stringify({
+    match_score: score,
+    match_reasoning: 'test reasoning',
+    match_summary: 'test summary',
+    tags: ['React', 'TypeScript'], // non-empty to skip second tag-extraction pass
+    work_type: null,
+  });
+  return Promise.resolve(
+    new Response(JSON.stringify({ response: llmJson, done: true }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }),
+  );
+}
+
+describe('analyzeUnscoredJobs — autoReject flag', () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it('regression: does not auto-reject new jobs when autoReject=false (rescore-all path)', async () => {
+    // This is the bug that was fixed: rescore-all called analyzeUnscoredJobs()
+    // without autoReject=false, causing all new-status jobs to be rejected whenever
+    // autoRejectLowScore was enabled and scores dropped below threshold on rescore.
+    setSetting('resume', 'Software engineer with 5 years experience');
+    setPrefs({ autoRejectLowScore: true, lowScoreThreshold: 50 });
+    const { id } = seedJob({ status: 'new', match_score: null });
+
+    globalThis.fetch = mock(() => ollamaResponse(5)) as typeof fetch;
+
+    await analyzeUnscoredJobs(false);
+
+    expect(jobStatus(id)).toBe('new'); // must NOT be auto-rejected
+  });
+
+  it('auto-rejects new jobs below threshold when autoReject=true (fresh-fetch path)', async () => {
+    setSetting('resume', 'Software engineer with 5 years experience');
+    setPrefs({ autoRejectLowScore: true, lowScoreThreshold: 50 });
+    const { id } = seedJob({ status: 'new', match_score: null });
+
+    globalThis.fetch = mock(() => ollamaResponse(5)) as typeof fetch;
+
+    await analyzeUnscoredJobs(true);
+
+    expect(jobStatus(id)).toBe('rejected');
+  });
+
+  it('never auto-rejects saved jobs regardless of autoReject flag', async () => {
+    setSetting('resume', 'Software engineer with 5 years experience');
+    setPrefs({ autoRejectLowScore: true, lowScoreThreshold: 50 });
+    const { id } = seedJob({ status: 'saved', match_score: null });
+
+    globalThis.fetch = mock(() => ollamaResponse(5)) as typeof fetch;
+
+    await analyzeUnscoredJobs(true);
+
+    expect(jobStatus(id)).toBe('saved');
   });
 });
