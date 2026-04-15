@@ -1,6 +1,6 @@
 export interface Job {
   id: string;
-  source: 'jobindex' | 'linkedin' | 'remotive' | 'arbeitnow';
+  source: 'jobindex' | 'linkedin' | 'remotive' | 'arbeitnow' | 'remoteok';
   external_id: string;
   title: string;
   company: string;
@@ -34,6 +34,7 @@ export interface Preferences {
   companyBlacklist: string;    // newline-separated
   linkedinSearchTerms: string; // newline-separated
   jobindexSearchTerms: string; // newline-separated
+  knownLanguages: string;       // comma-separated spoken languages (e.g. "English, Danish")
   notes: string;
   lowScoreThreshold: number;       // jobs below this score are considered "low score" (0-100)
   defaultHideLowScore: boolean;    // initial state of the "Hide <N" checkbox
@@ -59,6 +60,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   companyBlacklist: '',
   linkedinSearchTerms: '',
   jobindexSearchTerms: '',
+  knownLanguages: 'English',
   notes: '',
   lowScoreThreshold: 20,
   defaultHideLowScore: true,

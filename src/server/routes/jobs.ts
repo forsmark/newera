@@ -13,11 +13,14 @@ let isRescoring = false;
 
 const VALID_STATUSES = new Set(['new', 'saved', 'applied', 'rejected']);
 
+const VALID_WORK_TYPES = new Set(['remote', 'hybrid', 'onsite']);
+
 // GET /api/jobs
-// Query params: status, q, limit, offset, include_duplicates
+// Query params: status, q, limit, offset, include_duplicates, work_type (comma-separated)
 app.get('/', (c) => {
   const status = c.req.query('status');
   const q = c.req.query('q');
+  const workTypeParam = c.req.query('work_type');
   const limitParam = c.req.query('limit');
   const offsetParam = c.req.query('offset');
   const includeDuplicates = c.req.query('include_duplicates') === '1';
@@ -28,8 +31,12 @@ app.get('/', (c) => {
     return c.json({ error: 'Invalid status' }, 400);
   }
 
+  const workTypes = workTypeParam
+    ? workTypeParam.split(',').map(s => s.trim()).filter(s => VALID_WORK_TYPES.has(s))
+    : [];
+
   const conditions: string[] = [];
-  const countParams: string[] = [];
+  const countParams: (string | number)[] = [];
 
   if (status) {
     conditions.push('status = ?');
@@ -40,6 +47,11 @@ app.get('/', (c) => {
     conditions.push('(title LIKE ? OR company LIKE ?)');
     const like = `%${q}%`;
     countParams.push(like, like);
+  }
+
+  if (workTypes.length > 0) {
+    conditions.push(`work_type IN (${workTypes.map(() => '?').join(',')})`);
+    countParams.push(...workTypes);
   }
 
   if (!includeDuplicates) {

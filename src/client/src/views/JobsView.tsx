@@ -5,6 +5,7 @@ import { Job, AppStatus } from "../types";
 import JobRow from "../components/JobRow";
 import { toast } from "../components/Toast";
 import SourceFilter from "../components/SourceFilter";
+import WorkTypeFilter from "../components/WorkTypeFilter";
 
 interface Props {
   refreshKey?: number;
@@ -112,6 +113,15 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
     (localStorage.getItem('jobs-sort-by') as SortBy | null) ?? 'score'
   );
   const [selectedSources, setSelectedSources] = useState<Set<string>>(new Set());
+  const [selectedWorkTypes, setSelectedWorkTypes] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem('jobs-work-types');
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch { return new Set(); }
+  });
+  useEffect(() => {
+    localStorage.setItem('jobs-work-types', JSON.stringify([...selectedWorkTypes]));
+  }, [selectedWorkTypes]);
   const [activeTags, setActiveTags] = useState<string[]>(() => {
     try {
       const stored = localStorage.getItem('jobs-active-tags');
@@ -136,7 +146,7 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
   const prefersReducedMotion = useReducedMotion();
 
   // Track filter identity to re-trigger list animation
-  const filterKey = `${filterStatus}|${[...selectedSources].sort().join(',')}|${activeTags.join(',')}|${searchQuery}|${postedWithin}|${sortBy}`;
+  const filterKey = `${filterStatus}|${[...selectedSources].sort().join(',')}|${[...selectedWorkTypes].sort().join(',')}|${activeTags.join(',')}|${searchQuery}|${postedWithin}|${sortBy}`;
   const prevFilterKey = useRef(filterKey);
 
   const fetchJobs = useCallback(async (reset?: boolean) => {
@@ -405,6 +415,7 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
         if (filterStatus === "rejected" && j.status !== "rejected") return false;
       }
       if (selectedSources.size > 0 && !selectedSources.has(j.source)) return false;
+      if (selectedWorkTypes.size > 0 && (j.work_type === null || !selectedWorkTypes.has(j.work_type))) return false;
       if (activeTags.length > 0 && !activeTags.every(tag => j.tags?.includes(tag))) return false;
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
@@ -436,7 +447,7 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
   useEffect(() => {
     setSelectedIds(new Set());
     setFocusedIndex(-1);
-  }, [filterStatus, selectedSources, activeTags, searchQuery, postedWithin]);
+  }, [filterStatus, selectedSources, selectedWorkTypes, activeTags, searchQuery, postedWithin]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -465,6 +476,7 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
   const jobindexCount = jobs.filter(j => j.source === 'jobindex').length;
   const remotiveCount = jobs.filter(j => j.source === 'remotive').length;
   const arbeitnowCount = jobs.filter(j => j.source === 'arbeitnow').length;
+  const remoteokCount = jobs.filter(j => j.source === 'remoteok').length;
   const unreadCount = jobs.filter(j => j.seen_at === null && j.status !== 'rejected').length;
   const unsavedCount = jobs.filter(j => j.status === 'new').length;
   const savedCount = jobs.filter(j => j.status === 'saved').length;
@@ -606,21 +618,28 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
             })}
           </div>
 
-          {/* Source filter + active tag + show rejected — second line on mobile */}
+          {/* Source filter + work type + active tag + show rejected — second line on mobile */}
           <div className="flex gap-2 items-center flex-wrap w-full sm:w-auto sm:contents">
             {/* Source dropdown */}
-            {[linkedinCount, jobindexCount, remotiveCount, arbeitnowCount].filter(c => c > 0).length > 1 && (
+            {[linkedinCount, jobindexCount, remotiveCount, arbeitnowCount, remoteokCount].filter(c => c > 0).length > 1 && (
               <SourceFilter
                 sources={[
                   { key: 'linkedin', label: 'LinkedIn', count: linkedinCount },
                   { key: 'jobindex', label: 'Jobindex', count: jobindexCount },
                   { key: 'remotive', label: 'Remotive', count: remotiveCount },
                   { key: 'arbeitnow', label: 'Arbeitnow', count: arbeitnowCount },
+                  { key: 'remoteok', label: 'RemoteOK', count: remoteokCount },
                 ].filter(s => s.count > 0)}
                 selected={selectedSources}
                 onChange={setSelectedSources}
               />
             )}
+
+            {/* Work type dropdown */}
+            <WorkTypeFilter
+              selected={selectedWorkTypes}
+              onChange={setSelectedWorkTypes}
+            />
 
             {/* Active tag chips */}
             {activeTags.length > 0 && (

@@ -2,6 +2,7 @@ import { fetchJobindex } from './sources/jobindex';
 import { fetchLinkedIn } from './sources/linkedin';
 import { fetchRemotive } from './sources/remotive';
 import { fetchArbeitnow } from './sources/arbeitnow';
+import { fetchRemoteOK } from './sources/remoteok';
 import { analyzeJob } from './llm';
 import db from './db';
 import { randomUUID } from 'crypto';
@@ -197,6 +198,22 @@ export async function fetchJobs(): Promise<number> {
       }
     } catch (err) {
       console.error('[scheduler] Arbeitnow failed:', err);
+    }
+
+    // 8. Wait 30 seconds to spread Ollama load
+    await new Promise(r => setTimeout(r, 30_000));
+
+    // 9. Fetch RemoteOK
+    try {
+      const remoteokJobs = await fetchRemoteOK();
+      console.log(`[scheduler] RemoteOK: ${remoteokJobs.length} jobs`);
+      const batch5Ids = ingestBatch(remoteokJobs);
+      totalNew += batch5Ids.length;
+      if (batch5Ids.length > 0) {
+        scoreBatchInBackground(batch5Ids);
+      }
+    } catch (err) {
+      console.error('[scheduler] RemoteOK failed:', err);
     }
 
     console.log(`[scheduler] ${totalNew} new jobs total`);
