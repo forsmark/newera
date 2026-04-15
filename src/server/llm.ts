@@ -51,6 +51,7 @@ function formatPreferences(p: Preferences): string {
     const list = p.companyBlacklist.split('\n').map(s => s.trim()).filter(Boolean).join(', ');
     if (list) lines.push(`Blacklisted companies: ${list}`);
   }
+  if (p.knownLanguages) lines.push(`Spoken languages: ${p.knownLanguages}`);
   if (p.notes) lines.push(`Additional notes: ${p.notes}`);
   return lines.length > 0 ? lines.join('\n') : 'No specific preferences set.';
 }
@@ -82,6 +83,7 @@ Description: ${job.description ?? 'Not provided'}
 - Location is a hard constraint:
 ${buildLocationRules(preferences)}
 - Apply the location penalty first, then score skills and experience fit on the remainder.
+${preferences.knownLanguages ? `- Language: if the job clearly requires communication in a spoken language not in [${preferences.knownLanguages}], subtract 30–40 points.` : ''}
 ${preferences.companyBlacklist && preferences.companyBlacklist.includes(job.company) ? '- This company is on the candidate\'s blacklist — score must be 0.' : ''}
 
 ## Task

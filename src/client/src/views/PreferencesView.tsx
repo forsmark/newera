@@ -210,6 +210,14 @@ export default function PreferencesView() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field label="Known languages" hint="(comma-separated — jobs requiring others are penalised in scoring)">
+            <input className={inputClass} value={prefs.knownLanguages}
+              onChange={e => updatePref('knownLanguages', e.target.value)}
+              placeholder="English, Danish" />
+          </Field>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="LinkedIn search terms" hint="(one per line)">
             <textarea className={inputClass} style={{ height: '80px', resize: 'vertical' }}
               value={prefs.linkedinSearchTerms}
