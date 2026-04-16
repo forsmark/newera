@@ -33,8 +33,11 @@ export default function KanbanColumn({ title, column, color, cards, onDrop, onCa
         className="flex items-center justify-between px-4 py-3 rounded bg-surface border border-border"
         style={{ borderLeftWidth: "3px", borderLeftColor: color }}
       >
-        <span className="font-semibold text-sm text-text">{title}</span>
-        <span className="bg-bg text-text-3 rounded-full px-[0.4375rem] py-[0.0625rem] text-[0.6875rem] font-semibold">
+        <span className="font-semibold text-sm text-text tracking-tight">{title}</span>
+        <span
+          className="rounded-full px-[0.4375rem] py-[0.0625rem] text-[0.6875rem] font-bold tabular-nums"
+          style={{ background: `${color}18`, color: `${color}cc` }}
+        >
           {cards.length}
         </span>
       </div>

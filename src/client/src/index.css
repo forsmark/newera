@@ -24,7 +24,7 @@
   --color-red: #ef4444;
   --color-red-bg: #1a0606;
 
-  --font-family-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-family-sans: 'Manrope', ui-sans-serif, system-ui, sans-serif;
 
   --radius: 8px;
   --radius-sm: 5px;
@@ -69,9 +69,22 @@
 ::-webkit-scrollbar-thumb { background: var(--color-border-2); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--color-text-3); }
 
+/* Grain noise overlay */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9998;
+  opacity: 0.028;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 160px 160px;
+}
+
 /* Transition defaults */
 @layer base {
-  button, a[href] { transition: color 0.12s, background 0.12s, border-color 0.12s, opacity 0.12s; }
+  button, a[href] { transition: color 0.12s, background 0.12s, border-color 0.12s, opacity 0.12s, transform 0.1s; }
+  button:active:not(:disabled), a[href]:active { transform: scale(0.97); }
 }
 
 /* Custom checkbox */

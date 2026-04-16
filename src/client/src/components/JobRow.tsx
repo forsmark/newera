@@ -150,17 +150,20 @@ export default function JobRow({ job, onStatusChange, onSeenChange, compact, sel
     setExpanded(v => !v);
   }
 
-  const scoreBadgeClass = job.match_score === null
-    ? "bg-surface-raised text-text-3"
+  const scoreBadgeStyle: React.CSSProperties = job.match_score === null
+    ? { background: 'var(--color-surface-raised)', color: 'var(--color-text-3)', borderColor: 'var(--color-border)' }
     : job.match_score >= 80
-      ? "bg-green-bg text-green"
+      ? { background: 'var(--color-green-bg)', color: 'var(--color-green)', borderColor: 'var(--color-green-border)', boxShadow: '0 0 8px rgba(34,197,94,0.12)' }
       : job.match_score >= 50
-        ? "bg-amber-bg text-amber"
-        : "bg-surface text-text-3";
+        ? { background: 'var(--color-amber-bg)', color: 'var(--color-amber)', borderColor: '#3a2200', boxShadow: '0 0 8px rgba(245,158,11,0.10)' }
+        : { background: 'var(--color-surface)', color: 'var(--color-text-3)', borderColor: 'var(--color-border)' };
 
   const scoreBadge = (
     <div className="relative shrink-0">
-      <div className={`${scoreBadgeClass} min-w-[2.75rem] text-center px-2 py-1.5 rounded-sm font-bold text-[0.875rem] tabular-nums`}>
+      <div
+        className="min-w-[2.75rem] text-center px-2 py-1.5 rounded-sm font-bold text-[0.875rem] tabular-nums border"
+        style={scoreBadgeStyle}
+      >
         {job.match_score === null
           ? <span style={{ animation: "pulse 1.5s ease-in-out infinite", display: "inline-block" }}>···</span>
           : job.match_score}
@@ -320,9 +323,9 @@ export default function JobRow({ job, onStatusChange, onSeenChange, compact, sel
       ref={scope}
       className={`rounded mb-4 overflow-hidden ${selected ? 'bg-selected' : 'bg-surface'}`}
       style={{
-        borderLeft: `3px solid ${selected ? '#3b82f6' : accent}`,
+        borderLeft: selected ? '3px solid #3b82f6' : job.seen_at === null ? `3px solid #f59e0b` : `3px solid ${accent}`,
         borderTop: `1px solid ${selected ? '#243653' : '#1a2840'}`,
-        borderRight: job.seen_at === null && !selected ? '10px solid #f59e0b' : `1px solid ${selected ? '#243653' : '#1a2840'}`,
+        borderRight: `1px solid ${selected ? '#243653' : '#1a2840'}`,
         borderBottom: `1px solid ${selected ? '#243653' : '#1a2840'}`,
         opacity: isLowScore ? 0.6 : 1,
       }}
