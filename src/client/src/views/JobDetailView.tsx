@@ -176,7 +176,7 @@ export default function JobDetailView() {
                 disabled={statusLoading}
                 className="px-3 py-1.5 text-[0.8125rem] rounded-sm border border-border-red text-red font-medium bg-transparent cursor-pointer"
               >
-                Reject
+                Discard
               </button>
             )}
 

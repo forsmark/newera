@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { Application, ApplicationEvent, Artifact } from "../types";
 
 interface Props {
@@ -186,7 +187,13 @@ export default function KanbanCard({ application, onUpdate, columnColor = "#2436
           {job.match_score === null ? "…" : job.match_score}
         </div>
         <div className="min-w-0">
-          <div className="font-semibold text-text text-sm leading-[1.35] break-words">{job.title}</div>
+          <Link
+            to={`/jobs/${application.job_id}`}
+            onClick={e => e.stopPropagation()}
+            className="font-semibold text-text text-sm leading-[1.35] break-words no-underline hover:underline"
+          >
+            {job.title}
+          </Link>
           <div className="text-text-2 text-[0.8125rem] mt-[0.0625rem]">{job.company}</div>
         </div>
       </div>

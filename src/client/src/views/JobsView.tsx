@@ -13,7 +13,7 @@ interface Props {
   status?: AppStatus | null;
 }
 
-type FilterStatus = "all" | "unread" | "unsaved" | "saved" | "applied" | "rejected";
+type FilterStatus = "all" | "unread" | "unsaved" | "saved" | "rejected";
 type PostedWithin = 'any' | '7d' | '30d';
 type SortBy = 'score' | 'posted' | 'fetched';
 
@@ -411,7 +411,6 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
         if (filterStatus === "unread" && j.seen_at !== null) return false;
         if (filterStatus === "unsaved" && j.status !== "new") return false;
         if (filterStatus === "saved" && j.status !== "saved") return false;
-        if (filterStatus === "applied" && j.status !== "applied") return false;
         if (filterStatus === "rejected" && j.status !== "rejected") return false;
       }
       if (selectedSources.size > 0 && !selectedSources.has(j.source)) return false;
@@ -419,7 +418,11 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
       if (activeTags.length > 0 && !activeTags.every(tag => j.tags?.includes(tag))) return false;
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
-        if (!(j.title.toLowerCase().includes(q) || j.company.toLowerCase().includes(q))) return false;
+        const matchesTitle = j.title.toLowerCase().includes(q);
+        const matchesCompany = j.company.toLowerCase().includes(q);
+        const matchesWorkType = j.work_type?.toLowerCase().includes(q) ?? false;
+        const matchesTags = j.tags?.some(t => t.toLowerCase().includes(q)) ?? false;
+        if (!(matchesTitle || matchesCompany || matchesWorkType || matchesTags)) return false;
       }
       if (postedWithin !== 'any' && j.posted_at) {
         const days = postedWithin === '7d' ? 7 : 30;
@@ -480,7 +483,6 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
   const unreadCount = jobs.filter(j => j.seen_at === null && j.status !== 'rejected').length;
   const unsavedCount = jobs.filter(j => j.status === 'new').length;
   const savedCount = jobs.filter(j => j.status === 'saved').length;
-  const appliedCount = jobs.filter(j => j.status === 'applied').length;
   const rejectedCount = jobs.filter(j => j.status === 'rejected').length;
 
   // Determine whether to animate the list (filter changed)
@@ -589,8 +591,8 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
         <div className="flex gap-2 sm:gap-3 items-center flex-wrap">
           {/* Status tabs */}
           <div className="flex gap-0 border-b border-border overflow-x-auto sm:overflow-x-visible shrink-0 w-full sm:w-auto">
-            {(["all", "unread", "unsaved", "saved", "applied", "rejected"] as FilterStatus[]).map(s => {
-              const count = s === "unread" ? unreadCount : s === "unsaved" ? unsavedCount : s === "saved" ? savedCount : s === "applied" ? appliedCount : s === "rejected" ? rejectedCount : null;
+            {(["all", "unread", "unsaved", "saved", "rejected"] as FilterStatus[]).map(s => {
+              const count = s === "unread" ? unreadCount : s === "unsaved" ? unsavedCount : s === "saved" ? savedCount : s === "rejected" ? rejectedCount : null;
               const isActive = filterStatus === s;
               return (
                 <button
@@ -813,59 +815,75 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
       <AnimatePresence>
         {selectedIds.size > 0 && (
           <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 12 }}
-            transition={{ duration: 0.15 }}
-            className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-surface border border-border rounded px-3 py-2 flex flex-wrap items-center gap-x-2 gap-y-2 shadow-[0_8px_32px_rgba(0,0,0,0.5)] z-[100] max-w-[calc(100vw-2rem)]"
+            initial={{ y: 80, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 80, opacity: 0 }}
+            transition={{ duration: 0.18, ease: "easeOut" }}
+            className="fixed bottom-0 left-0 right-0 z-[100] sm:bottom-6 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:w-auto"
           >
-            <span className="text-text-2 text-sm font-medium mr-1">{selectedIds.size} selected</span>
-            <button
-              onClick={bulkMarkRead}
-              disabled={bulkLoading}
-              className="px-2.5 py-1.5 rounded-sm border border-border bg-transparent text-text-2 cursor-pointer text-[0.8125rem] font-medium disabled:opacity-40"
-            >
-              <span className="sm:hidden">Read</span>
-              <span className="hidden sm:inline">Mark read</span>
-            </button>
-            <button
-              onClick={bulkMarkUnread}
-              disabled={bulkLoading}
-              className="px-2.5 py-1.5 rounded-sm border border-border bg-transparent text-text-2 cursor-pointer text-[0.8125rem] font-medium disabled:opacity-40"
-            >
-              <span className="sm:hidden">Unread</span>
-              <span className="hidden sm:inline">Mark unread</span>
-            </button>
-            <button
-              onClick={() => bulkSetStatus('saved')}
-              disabled={bulkLoading}
-              className="px-2.5 py-1.5 rounded-sm border border-border-accent bg-transparent text-accent cursor-pointer text-[0.8125rem] font-medium disabled:opacity-40"
-            >
-              <span className="sm:hidden">Save</span>
-              <span className="hidden sm:inline">Save all</span>
-            </button>
-            <button
-              onClick={() => bulkSetStatus('rejected')}
-              disabled={bulkLoading}
-              className="px-2.5 py-1.5 rounded-sm border border-border-red bg-transparent text-red cursor-pointer text-[0.8125rem] font-medium disabled:opacity-40"
-            >
-              <span className="sm:hidden">Discard</span>
-              <span className="hidden sm:inline">Discard all</span>
-            </button>
-            <button
-              onClick={() => bulkSetStatus('new')}
-              disabled={bulkLoading}
-              className="px-2.5 py-1.5 rounded-sm border border-border bg-transparent text-text-3 cursor-pointer text-[0.8125rem] font-medium disabled:opacity-40"
-            >
-              <span className="sm:hidden">Restore</span>
-              <span className="hidden sm:inline">Restore all</span>
-            </button>
-            <button
-              onClick={() => setSelectedIds(new Set())}
-              className="px-2 py-1.5 rounded-sm border-none bg-transparent text-text-3 cursor-pointer text-sm ml-1"
-            >
-              ✕
-            </button>
+            {/* Mobile: full-width bottom sheet */}
+            <div className="sm:hidden bg-surface border-t border-border shadow-[0_-4px_24px_rgba(0,0,0,0.45)] px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+              <div className="flex items-center justify-between mb-2.5">
+                <span className="text-text-2 text-sm font-semibold">{selectedIds.size} selected</span>
+                <button
+                  onClick={() => setSelectedIds(new Set())}
+                  className="w-7 h-7 flex items-center justify-center rounded-sm border-none bg-transparent text-text-3 cursor-pointer text-base leading-none"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="grid grid-cols-3 gap-1.5">
+                <button onClick={bulkMarkRead} disabled={bulkLoading}
+                  className="py-2 rounded-sm border border-border bg-transparent text-text-2 cursor-pointer text-[0.8125rem] font-medium disabled:opacity-40">
+                  Mark read
+                </button>
+                <button onClick={bulkMarkUnread} disabled={bulkLoading}
+                  className="py-2 rounded-sm border border-border bg-transparent text-text-2 cursor-pointer text-[0.8125rem] font-medium disabled:opacity-40">
+                  Mark unread
+                </button>
+                <button onClick={() => bulkSetStatus('new')} disabled={bulkLoading}
+                  className="py-2 rounded-sm border border-border bg-transparent text-text-3 cursor-pointer text-[0.8125rem] font-medium disabled:opacity-40">
+                  Restore
+                </button>
+                <button onClick={() => bulkSetStatus('saved')} disabled={bulkLoading}
+                  className="py-2 rounded-sm border border-border-accent bg-transparent text-accent cursor-pointer text-[0.8125rem] font-medium disabled:opacity-40 col-span-2">
+                  Save all
+                </button>
+                <button onClick={() => bulkSetStatus('rejected')} disabled={bulkLoading}
+                  className="py-2 rounded-sm border border-border-red bg-transparent text-red cursor-pointer text-[0.8125rem] font-medium disabled:opacity-40">
+                  Discard all
+                </button>
+              </div>
+            </div>
+
+            {/* Desktop: floating pill */}
+            <div className="hidden sm:flex items-center gap-x-2 bg-surface border border-border rounded px-3 py-2 shadow-[0_8px_32px_rgba(0,0,0,0.5)]">
+              <span className="text-text-2 text-sm font-medium mr-1">{selectedIds.size} selected</span>
+              <button onClick={bulkMarkRead} disabled={bulkLoading}
+                className="px-2.5 py-1.5 rounded-sm border border-border bg-transparent text-text-2 cursor-pointer text-[0.8125rem] font-medium disabled:opacity-40">
+                Mark read
+              </button>
+              <button onClick={bulkMarkUnread} disabled={bulkLoading}
+                className="px-2.5 py-1.5 rounded-sm border border-border bg-transparent text-text-2 cursor-pointer text-[0.8125rem] font-medium disabled:opacity-40">
+                Mark unread
+              </button>
+              <button onClick={() => bulkSetStatus('saved')} disabled={bulkLoading}
+                className="px-2.5 py-1.5 rounded-sm border border-border-accent bg-transparent text-accent cursor-pointer text-[0.8125rem] font-medium disabled:opacity-40">
+                Save all
+              </button>
+              <button onClick={() => bulkSetStatus('rejected')} disabled={bulkLoading}
+                className="px-2.5 py-1.5 rounded-sm border border-border-red bg-transparent text-red cursor-pointer text-[0.8125rem] font-medium disabled:opacity-40">
+                Discard all
+              </button>
+              <button onClick={() => bulkSetStatus('new')} disabled={bulkLoading}
+                className="px-2.5 py-1.5 rounded-sm border border-border bg-transparent text-text-3 cursor-pointer text-[0.8125rem] font-medium disabled:opacity-40">
+                Restore all
+              </button>
+              <button onClick={() => setSelectedIds(new Set())}
+                className="px-2 py-1.5 rounded-sm border-none bg-transparent text-text-3 cursor-pointer text-sm ml-1">
+                ✕
+              </button>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
