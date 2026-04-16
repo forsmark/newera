@@ -228,7 +228,8 @@ export default function JobRow({ job, onStatusChange, onSeenChange, compact, sel
       )}
       {scoreBadge}
       <div className="flex-1 min-w-0 flex items-center gap-[0.375rem] overflow-hidden">
-        <span className="font-semibold text-text text-sm whitespace-nowrap overflow-hidden text-ellipsis">{job.title}</span>
+        {job.seen_at === null && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#f59e0b', flexShrink: 0, display: 'inline-block' }} />}
+        <span className="whitespace-nowrap overflow-hidden text-ellipsis text-text text-sm" style={{ fontWeight: job.seen_at === null ? 700 : 600 }}>{job.title}</span>
         <span className="text-border shrink-0">·</span>
         <span className="text-text-2 text-[0.8125rem] whitespace-nowrap overflow-hidden text-ellipsis">{job.company}</span>
         {job.location && (
@@ -258,7 +259,8 @@ export default function JobRow({ job, onStatusChange, onSeenChange, compact, sel
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
           <div className="min-w-0">
             <div className="flex items-baseline gap-2 flex-wrap">
-              <span className="font-semibold text-text text-[0.9375rem]">{job.title}</span>
+              {job.seen_at === null && <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#f59e0b', flexShrink: 0, display: 'inline-block', marginBottom: 1 }} />}
+              <span className="text-text text-[0.9375rem]" style={{ fontWeight: job.seen_at === null ? 700 : 600 }}>{job.title}</span>
               <span className="text-text-2 text-sm">{job.company}</span>
               {job.location && <span className="text-text-3 text-[0.8125rem]">{job.location}</span>}
             </div>
@@ -323,7 +325,7 @@ export default function JobRow({ job, onStatusChange, onSeenChange, compact, sel
       ref={scope}
       className={`rounded mb-4 overflow-hidden ${selected ? 'bg-selected' : 'bg-surface'}`}
       style={{
-        borderLeft: selected ? '3px solid #3b82f6' : job.seen_at === null ? `3px solid #f59e0b` : `3px solid ${accent}`,
+        borderLeft: `3px solid ${selected ? '#3b82f6' : accent}`,
         borderTop: `1px solid ${selected ? '#243653' : '#1a2840'}`,
         borderRight: `1px solid ${selected ? '#243653' : '#1a2840'}`,
         borderBottom: `1px solid ${selected ? '#243653' : '#1a2840'}`,
