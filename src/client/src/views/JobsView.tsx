@@ -787,7 +787,7 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
               exit={{ opacity: 0, scale: 0.96 }}
               transition={{ duration: 0.15 }}
               onClick={e => e.stopPropagation()}
-              className="bg-surface border border-border rounded p-6 min-w-[280px] text-text shadow-[0_24px_48px_rgba(0,0,0,0.6)]"
+              className="bg-surface border border-border rounded p-6 min-w-[280px] text-text shadow-[0_24px_64px_rgba(3,11,23,0.9)]"
             >
               <h3 className="m-0 mb-4 text-[0.9375rem] font-semibold">Keyboard Shortcuts</h3>
               {[
@@ -822,7 +822,7 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
             className="fixed bottom-0 left-0 right-0 z-[100] sm:bottom-6 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:w-auto"
           >
             {/* Mobile: full-width bottom sheet */}
-            <div className="sm:hidden bg-surface border-t border-border shadow-[0_-4px_24px_rgba(0,0,0,0.45)] px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+            <div className="sm:hidden bg-surface border-t border-border shadow-[0_-4px_32px_rgba(3,11,23,0.8)] px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
               <div className="flex items-center justify-between mb-2.5">
                 <span className="text-text-2 text-sm font-semibold">{selectedIds.size} selected</span>
                 <button
@@ -857,7 +857,7 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
             </div>
 
             {/* Desktop: floating pill */}
-            <div className="hidden sm:flex items-center gap-x-2 bg-surface border border-border rounded px-3 py-2 shadow-[0_8px_32px_rgba(0,0,0,0.5)]">
+            <div className="hidden sm:flex items-center gap-x-2 bg-surface border border-border rounded px-3 py-2 shadow-[0_8px_40px_rgba(3,11,23,0.85)]">
               <span className="text-text-2 text-sm font-medium mr-1">{selectedIds.size} selected</span>
               <button onClick={bulkMarkRead} disabled={bulkLoading}
                 className="px-2.5 py-1.5 rounded-sm border border-border bg-transparent text-text-2 cursor-pointer text-[0.8125rem] font-medium disabled:opacity-40">

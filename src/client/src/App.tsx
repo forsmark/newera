@@ -37,9 +37,9 @@ const navLinkStyle = ({ isActive }: { isActive: boolean }): React.CSSProperties 
   borderRadius: "var(--radius-sm)",
   textDecoration: "none",
   fontSize: "0.875rem",
-  fontWeight: 500,
+  fontWeight: isActive ? 600 : 500,
   color: isActive ? "var(--color-text)" : "var(--color-text-3)",
-  background: isActive ? "var(--color-border)" : "transparent",
+  background: isActive ? "rgba(59,130,246,0.12)" : "transparent",
   whiteSpace: "nowrap",
   display: "inline-flex",
   alignItems: "center",
@@ -95,7 +95,7 @@ function Nav({ status, onFetchNow, fetching, onLogout, authEnabled }: NavProps) 
   const isBusy = fetching || (status?.is_fetching ?? false);
 
   return (
-    <nav className="flex items-center gap-1 px-4 h-14 border-b border-border bg-nav sticky top-0 z-50 overflow-hidden">
+    <nav className="flex items-center gap-1 px-4 h-14 border-b border-border sticky top-0 z-50 overflow-hidden backdrop-blur-md" style={{ background: 'rgba(6,15,30,0.88)' }}>
       <div className="mr-2 shrink-0">
         <Logo size="sm" />
       </div>
@@ -325,7 +325,7 @@ export default function App() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -6 }}
             transition={{ duration: 0.18 }}
-            className="fixed top-[3.25rem] left-1/2 -translate-x-1/2 bg-surface border border-border rounded px-5 py-2 text-text text-sm font-medium z-[200] shadow-[0_4px_20px_rgba(0,0,0,0.5)] whitespace-nowrap"
+            className="fixed top-[3.25rem] left-1/2 -translate-x-1/2 bg-surface border border-border rounded px-5 py-2 text-text text-sm font-medium z-[200] shadow-[0_4px_24px_rgba(3,11,23,0.8)] whitespace-nowrap"
           >
             {fetchNotification}
           </motion.div>
