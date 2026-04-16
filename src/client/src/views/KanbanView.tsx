@@ -4,6 +4,7 @@ import KanbanColumn from "../components/KanbanColumn";
 import { toast } from "../components/Toast";
 
 type KanbanCol = Application["kanban_column"];
+type KanbanSort = 'score' | 'time' | 'name';
 
 const COLUMNS: { key: KanbanCol; title: string; color: string }[] = [
   { key: "saved",     title: "Saved",     color: "#f59e0b" },
@@ -19,6 +20,9 @@ export default function KanbanView({ refreshKey }: Props) {
   const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState<KanbanSort>(() =>
+    (localStorage.getItem('kanban-sort-by') as KanbanSort | null) ?? 'time'
+  );
 
   useEffect(() => {
     async function load() {
@@ -52,12 +56,25 @@ export default function KanbanView({ refreshKey }: Props) {
     setApplications(prev => prev.map(a => a.job_id === updated.job_id ? updated : a));
   }
 
-  const filtered = searchQuery
+  const filtered = (searchQuery
     ? applications.filter(a => {
         const q = searchQuery.toLowerCase();
         return a.job.title.toLowerCase().includes(q) || a.job.company.toLowerCase().includes(q);
       })
-    : applications;
+    : applications
+  ).slice().sort((a, b) => {
+    if (sortBy === 'score') {
+      if (a.job.match_score === null && b.job.match_score === null) return 0;
+      if (a.job.match_score === null) return 1;
+      if (b.job.match_score === null) return -1;
+      return b.job.match_score - a.job.match_score;
+    }
+    if (sortBy === 'name') {
+      return a.job.title.localeCompare(b.job.title);
+    }
+    // time: most recently applied first
+    return new Date(b.applied_at).getTime() - new Date(a.applied_at).getTime();
+  });
 
   if (loading) {
     return <div className="text-text-3 text-center py-16 text-sm">Loading…</div>;
@@ -76,8 +93,8 @@ export default function KanbanView({ refreshKey }: Props) {
 
   return (
     <div className="px-3 sm:px-4 py-4 sm:py-6">
-      <div className="max-w-full sm:max-w-[320px] mb-4">
-        <div className="relative w-full">
+      <div className="flex gap-2 items-center mb-4 flex-wrap">
+        <div className="relative flex-1 min-w-[160px] max-w-[320px]">
           <input
             type="text"
             placeholder="Search applications…"
@@ -96,6 +113,15 @@ export default function KanbanView({ refreshKey }: Props) {
             </button>
           )}
         </div>
+        <select
+          value={sortBy}
+          onChange={e => { const v = e.target.value as KanbanSort; localStorage.setItem('kanban-sort-by', v); setSortBy(v); }}
+          className="px-2.5 py-[0.375rem] rounded-sm border border-border bg-surface text-text-2 text-[0.8125rem] cursor-pointer outline-none"
+        >
+          <option value="time">↓ Time</option>
+          <option value="score">↓ Score</option>
+          <option value="name">↓ Name</option>
+        </select>
       </div>
       <div className="flex gap-4 overflow-x-auto items-stretch min-h-[calc(100vh_-_130px)]">
         {COLUMNS.map(col => (
