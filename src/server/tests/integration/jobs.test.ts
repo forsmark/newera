@@ -328,6 +328,69 @@ describe('deduplication at ingest', () => {
     ).get('li-999');
     expect(row?.duplicate_of).toBeNull();
   });
+
+  it('rejects jobs with example.com URLs', () => {
+    const result = ingestJob({
+      source: 'jobindex',
+      external_id: 'test-dummy-1',
+      title: 'Frontend Developer',
+      company: 'Acme Corp',
+      url: 'https://example.com/jobs/1',
+      fetched_at: new Date().toISOString(),
+    });
+    expect(result.isNew).toBe(false);
+
+    const row = db.query('SELECT id FROM jobs WHERE external_id = ?').get('test-dummy-1');
+    expect(row).toBeNull();
+  });
+
+  it('marks fuzzy cross-source duplicate when titles overlap', () => {
+    const existing = seedJob({
+      source: 'jobindex',
+      external_id: 'ji-dsv-1',
+      title: 'Application Specialist',
+      company: 'DSV A/S',
+      content_fingerprint: contentFingerprint('Application Specialist', 'DSV A/S'),
+    });
+
+    ingestJob({
+      source: 'linkedin',
+      external_id: 'li-dsv-1',
+      title: 'IT Application Specialist',
+      company: 'DSV',
+      url: 'https://linkedin.com/jobs/li-dsv-1',
+      fetched_at: new Date().toISOString(),
+    });
+
+    const dupeRow = db.query<{ duplicate_of: string | null }, [string]>(
+      'SELECT duplicate_of FROM jobs WHERE external_id = ?'
+    ).get('li-dsv-1');
+    expect(dupeRow?.duplicate_of).toBe(existing.id);
+  });
+
+  it('does not fuzzy-match when titles have low overlap', () => {
+    seedJob({
+      source: 'jobindex',
+      external_id: 'ji-dsv-2',
+      title: 'Application Specialist',
+      company: 'DSV A/S',
+      content_fingerprint: contentFingerprint('Application Specialist', 'DSV A/S'),
+    });
+
+    ingestJob({
+      source: 'linkedin',
+      external_id: 'li-dsv-2',
+      title: 'Warehouse Manager',
+      company: 'DSV',
+      url: 'https://linkedin.com/jobs/li-dsv-2',
+      fetched_at: new Date().toISOString(),
+    });
+
+    const row = db.query<{ duplicate_of: string | null }, [string]>(
+      'SELECT duplicate_of FROM jobs WHERE external_id = ?'
+    ).get('li-dsv-2');
+    expect(row?.duplicate_of).toBeNull();
+  });
 });
 
 // ─── GET /api/jobs/:id ───────────────────────────────────────────────────────

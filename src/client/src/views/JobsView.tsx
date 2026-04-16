@@ -588,7 +588,7 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
         {/* Row 2: status tabs + source/tag pills */}
         <div className="flex gap-2 sm:gap-3 items-center flex-wrap">
           {/* Status tabs */}
-          <div className="flex gap-0 border-b border-border overflow-x-auto shrink-0 w-full sm:w-auto">
+          <div className="flex gap-0 border-b border-border overflow-x-auto sm:overflow-x-visible shrink-0 w-full sm:w-auto">
             {(["all", "unread", "unsaved", "saved", "applied", "rejected"] as FilterStatus[]).map(s => {
               const count = s === "unread" ? unreadCount : s === "unsaved" ? unsavedCount : s === "saved" ? savedCount : s === "applied" ? appliedCount : s === "rejected" ? rejectedCount : null;
               const isActive = filterStatus === s;

@@ -9,7 +9,7 @@ import db from './db';
 import { randomUUID } from 'crypto';
 import type { Job } from './types';
 import { getPreferences, getResume } from './settings';
-import { contentFingerprint } from './utils/normalize';
+import { contentFingerprint, isFuzzyDuplicate, normalizeCompany } from './utils/normalize';
 import { classifyLiveness } from './utils/liveness';
 import { sendFetchSummary, type ScoredJob } from './telegram';
 
@@ -37,6 +37,14 @@ type JobPartial = {
 };
 
 export function ingestJob(job: JobPartial): { isNew: boolean } {
+  // Reject test/placeholder URLs that should never enter production
+  try {
+    const host = new URL(job.url).hostname;
+    if (host === 'example.com' || host === 'localhost') {
+      return { isNew: false };
+    }
+  } catch { /* malformed URL — let it through, dedup will handle it */ }
+
   const fp = contentFingerprint(job.title, job.company);
 
   const result = db.transaction(() => {
@@ -72,6 +80,25 @@ export function ingestJob(job: JobPartial): { isNew: boolean } {
       db.run('UPDATE jobs SET duplicate_of = ? WHERE source = ? AND external_id = ?',
         [duplicate.id, job.source, job.external_id]);
       return { isNew: false };
+    }
+
+    // Fuzzy fallback: same company + similar title across sources
+    if (!existingRow) {
+      const nc = normalizeCompany(job.company);
+      const candidates = db.query<{ id: string; title: string; company: string }, [string, string, string]>(
+        `SELECT id, title, company FROM jobs
+         WHERE source != ?
+         AND NOT (source = ? AND external_id = ?)
+         AND duplicate_of IS NULL`
+      ).all(job.source, job.source, job.external_id);
+
+      for (const c of candidates) {
+        if (normalizeCompany(c.company) === nc && isFuzzyDuplicate(job.title, job.company, c.title, c.company)) {
+          db.run('UPDATE jobs SET duplicate_of = ? WHERE source = ? AND external_id = ?',
+            [c.id, job.source, job.external_id]);
+          return { isNew: false };
+        }
+      }
     }
 
     return { isNew: existingRow === null };
