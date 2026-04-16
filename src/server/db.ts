@@ -105,4 +105,7 @@ db.run('CREATE INDEX IF NOT EXISTS idx_artifacts_job_id ON application_artifacts
 // Rename legacy 'jsearch' source to 'linkedin'
 db.run(`UPDATE jobs SET source = 'linkedin' WHERE source = 'jsearch'`);
 
+// Remove test/placeholder jobs that leaked into production
+db.run(`DELETE FROM jobs WHERE url LIKE '%example.com%'`);
+
 export default db;
