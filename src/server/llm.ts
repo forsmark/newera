@@ -159,11 +159,20 @@ export function extractJson(raw: string): AnalysisResult {
   return { match_score, match_reasoning, match_summary, tags, work_type, prefs_hash: '' };
 }
 
-async function llamaComplete(prompt: string, nPredict: number, signal: AbortSignal): Promise<string> {
+const JSON_GRAMMAR = `\
+root   ::= object
+value  ::= object | array | string | number | ("true" | "false" | "null") ws
+object ::= "{" ws ( string ":" ws value ("," ws string ":" ws value)* )? "}" ws
+array  ::= "[" ws ( value ("," ws value)* )? "]" ws
+string ::= "\\"" ( [^\\\\"\x7F\x00-\x1F] | "\\\\" (["\\\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F]) )* "\\"" ws
+number ::= ("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? ws
+ws     ::= ([ \\t\\n] ws)?`;
+
+async function llamaComplete(prompt: string, nPredict: number, signal: AbortSignal, extraParams?: Record<string, unknown>): Promise<string> {
   const response = await fetch(LLAMA_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt, n_predict: nPredict, temperature: 0.1, cache_prompt: true }),
+    body: JSON.stringify({ prompt, n_predict: nPredict, temperature: 0.1, cache_prompt: true, ...extraParams }),
     signal,
   });
   if (!response.ok) {
@@ -333,7 +342,7 @@ export async function analyzeJob(job: Job): Promise<AnalysisResult | null> {
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
     try {
-      const raw = await llamaComplete(prompt, 2048, controller.signal);
+      const raw = await llamaComplete(prompt, 2048, controller.signal, { grammar: JSON_GRAMMAR });
       clearTimeout(timer);
 
       if (!raw) throw new Error('llama.cpp response missing content');
