@@ -97,7 +97,8 @@ ${preferences.knownLanguages ? `- Language: if the job clearly requires communic
 ${preferences.companyBlacklist && preferences.companyBlacklist.includes(job.company) ? '- This company is on your blacklist — score must be 0.' : ''}
 
 ## Task
-Return ONLY a JSON object with this exact format (no markdown, no explanation):
+Respond with ONLY a single JSON object. No prose, no markdown, no code fences, no explanation before or after. Start your response with { and end with }.
+
 {"match_score": <0-100>, "match_reasoning": "<1-2 sentences addressed directly to you explaining why you are or aren't a fit>", "summary": "<2-3 sentence factual overview of what the role involves and who it's for>", "tags": ["<tech1>", "<tech2>"], "work_type": "<remote|hybrid|onsite|null>"}
 
 summary: factual description of the role — what the job is about, not an opinion.
@@ -316,38 +317,49 @@ export async function analyzeJob(job: Job): Promise<AnalysisResult | null> {
   const prefs_hash = computePrefsHash(resume, prefsJson);
   const prompt = buildPrompt(resume, preferences, job);
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const MAX_ATTEMPTS = 3;
 
-  try {
-    const raw = await llamaComplete(prompt, 1024, controller.signal);
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
-    if (!raw) throw new Error('llama.cpp response missing content');
+    try {
+      const raw = await llamaComplete(prompt, 1024, controller.signal);
+      clearTimeout(timer);
 
-    const result = extractJson(raw);
-    result.prefs_hash = prefs_hash;
+      if (!raw) throw new Error('llama.cpp response missing content');
 
-    if (result.tags.length === 0 && job.description && job.description.length > 50) {
-      console.log(`[llm] No tags from main pass for job ${job.id}, running tag extraction pass`);
-      result.tags = await extractTagsFromDescription(job.description);
-      if (result.tags.length > 0) {
-        console.log(`[llm] Tag pass found: ${result.tags.join(', ')}`);
+      const result = extractJson(raw);
+      result.prefs_hash = prefs_hash;
+
+      if (result.tags.length === 0 && job.description && job.description.length > 50) {
+        console.log(`[llm] No tags from main pass for job ${job.id}, running tag extraction pass`);
+        result.tags = await extractTagsFromDescription(job.description);
+        if (result.tags.length > 0) {
+          console.log(`[llm] Tag pass found: ${result.tags.join(', ')}`);
+        }
       }
-    }
 
-    return result;
-  } catch (err) {
-    if (err instanceof Error && err.name === 'AbortError') {
-      console.error(`[llm] analyzeJob timed out after ${TIMEOUT_MS}ms for job ${job.id}`);
-      llmAvailable = false;
-    } else if (err instanceof Error && (err.message.includes('ECONNREFUSED') || err.message.includes('fetch failed'))) {
-      llmAvailable = false;
-      console.error('[llm] llama.cpp unreachable for job', job.id, ':', err.message);
-    } else {
+      return result;
+    } catch (err) {
+      clearTimeout(timer);
+      if (err instanceof Error && err.name === 'AbortError') {
+        console.error(`[llm] analyzeJob timed out after ${TIMEOUT_MS}ms for job ${job.id}`);
+        llmAvailable = false;
+        return null;
+      }
+      if (err instanceof Error && (err.message.includes('ECONNREFUSED') || err.message.includes('fetch failed') || err.message.includes('Unable to connect'))) {
+        llmAvailable = false;
+        console.error('[llm] llama.cpp unreachable for job', job.id, ':', err.message);
+        return null;
+      }
+      if (attempt < MAX_ATTEMPTS) {
+        console.warn(`[llm] analyzeJob attempt ${attempt} failed for job ${job.id}, retrying:`, (err as Error).message);
+        continue;
+      }
       console.error('[llm] analyzeJob failed for job', job.id, ':', err);
+      return null;
     }
-    return null;
-  } finally {
-    clearTimeout(timer);
   }
+  return null;
 }
