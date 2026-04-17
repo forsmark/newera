@@ -164,91 +164,91 @@ export async function fetchJobs(): Promise<number> {
   isFetching = true;
   try {
     console.log('[scheduler] Fetching jobs...');
+    const { disabledSources } = getPreferences();
 
     let totalNew = 0;
 
     // 1. Fetch jobindex first
-    try {
-      const jobindexJobs = await fetchJobindex();
-      console.log(`[scheduler] Jobindex: ${jobindexJobs.length} jobs`);
-      const batch1Ids = ingestBatch(jobindexJobs);
-      totalNew += batch1Ids.length;
-      if (batch1Ids.length > 0) {
-        scoreBatchInBackground(batch1Ids);
+    if (!disabledSources.includes('jobindex')) {
+      try {
+        const jobindexJobs = await fetchJobindex();
+        console.log(`[scheduler] Jobindex: ${jobindexJobs.length} jobs`);
+        const batch1Ids = ingestBatch(jobindexJobs);
+        totalNew += batch1Ids.length;
+        if (batch1Ids.length > 0) scoreBatchInBackground(batch1Ids);
+      } catch (err) {
+        console.error('[scheduler] Jobindex failed:', err);
       }
-    } catch (err) {
-      console.error('[scheduler] Jobindex failed:', err);
     }
 
     // 2. Wait 30 seconds to spread Ollama load
     await new Promise(r => setTimeout(r, 30_000));
 
     // 3. Fetch LinkedIn
-    try {
-      const linkedinJobs = await fetchLinkedIn();
-      console.log(`[scheduler] LinkedIn: ${linkedinJobs.length} jobs`);
-      const batch2Ids = ingestBatch(linkedinJobs);
-      totalNew += batch2Ids.length;
-      if (batch2Ids.length > 0) {
-        scoreBatchInBackground(batch2Ids);
+    if (!disabledSources.includes('linkedin')) {
+      try {
+        const linkedinJobs = await fetchLinkedIn();
+        console.log(`[scheduler] LinkedIn: ${linkedinJobs.length} jobs`);
+        const batch2Ids = ingestBatch(linkedinJobs);
+        totalNew += batch2Ids.length;
+        if (batch2Ids.length > 0) scoreBatchInBackground(batch2Ids);
+      } catch (err) {
+        console.error('[scheduler] LinkedIn failed:', err);
       }
-    } catch (err) {
-      console.error('[scheduler] LinkedIn failed:', err);
     }
 
     // 4. Wait 30 seconds to spread Ollama load
     await new Promise(r => setTimeout(r, 30_000));
 
     // 5. Fetch Remotive
-    try {
-      const remotiveJobs = await fetchRemotive();
-      console.log(`[scheduler] Remotive: ${remotiveJobs.length} jobs`);
-      const batch3Ids = ingestBatch(remotiveJobs);
-      totalNew += batch3Ids.length;
-      if (batch3Ids.length > 0) {
-        scoreBatchInBackground(batch3Ids);
+    if (!disabledSources.includes('remotive')) {
+      try {
+        const remotiveJobs = await fetchRemotive();
+        console.log(`[scheduler] Remotive: ${remotiveJobs.length} jobs`);
+        const batch3Ids = ingestBatch(remotiveJobs);
+        totalNew += batch3Ids.length;
+        if (batch3Ids.length > 0) scoreBatchInBackground(batch3Ids);
+      } catch (err) {
+        console.error('[scheduler] Remotive failed:', err);
       }
-    } catch (err) {
-      console.error('[scheduler] Remotive failed:', err);
     }
 
     // 6. Wait 30 seconds to spread Ollama load
     await new Promise(r => setTimeout(r, 30_000));
 
     // 7. Fetch Arbeitnow
-    try {
-      const arbeitnowJobs = await fetchArbeitnow();
-      console.log(`[scheduler] Arbeitnow: ${arbeitnowJobs.length} jobs`);
-      const batch4Ids = ingestBatch(arbeitnowJobs);
-      totalNew += batch4Ids.length;
-      if (batch4Ids.length > 0) {
-        scoreBatchInBackground(batch4Ids);
+    if (!disabledSources.includes('arbeitnow')) {
+      try {
+        const arbeitnowJobs = await fetchArbeitnow();
+        console.log(`[scheduler] Arbeitnow: ${arbeitnowJobs.length} jobs`);
+        const batch4Ids = ingestBatch(arbeitnowJobs);
+        totalNew += batch4Ids.length;
+        if (batch4Ids.length > 0) scoreBatchInBackground(batch4Ids);
+      } catch (err) {
+        console.error('[scheduler] Arbeitnow failed:', err);
       }
-    } catch (err) {
-      console.error('[scheduler] Arbeitnow failed:', err);
     }
 
     // 8. Wait 30 seconds to spread Ollama load
     await new Promise(r => setTimeout(r, 30_000));
 
     // 9. Fetch RemoteOK
-    try {
-      const remoteokJobs = await fetchRemoteOK();
-      console.log(`[scheduler] RemoteOK: ${remoteokJobs.length} jobs`);
-      const batch5Ids = ingestBatch(remoteokJobs);
-      totalNew += batch5Ids.length;
-      if (batch5Ids.length > 0) {
-        scoreBatchInBackground(batch5Ids);
+    if (!disabledSources.includes('remoteok')) {
+      try {
+        const remoteokJobs = await fetchRemoteOK();
+        console.log(`[scheduler] RemoteOK: ${remoteokJobs.length} jobs`);
+        const batch5Ids = ingestBatch(remoteokJobs);
+        totalNew += batch5Ids.length;
+        if (batch5Ids.length > 0) scoreBatchInBackground(batch5Ids);
+      } catch (err) {
+        console.error('[scheduler] RemoteOK failed:', err);
       }
-    } catch (err) {
-      console.error('[scheduler] RemoteOK failed:', err);
     }
 
     console.log(`[scheduler] ${totalNew} new jobs total`);
     lastFetchAt = new Date().toISOString();
     lastFetchNewJobs = totalNew;
 
-    // Check link liveness for a batch of older jobs (fire-and-forget)
     checkStaleLinksBatch().catch(console.error);
 
     return totalNew;
