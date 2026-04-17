@@ -1,41 +1,47 @@
 import type { Job, Preferences } from './types';
-import { OLLAMA_BASE_URL } from './config';
+import { LLAMACPP_BASE_URL } from './config';
 import { getPreferences, getSetting } from './settings';
 import { computePrefsHash } from './utils/hash';
 
-const OLLAMA_URL = `${OLLAMA_BASE_URL}/api/generate`;
-const OLLAMA_HEALTH_URL = `${OLLAMA_BASE_URL}/api/tags`;
-const TIMEOUT_MS = 60_000;
-const COVER_LETTER_TIMEOUT_MS = 4 * 60_000; // 4 minutes — cover letters take longer on large models
+const LLAMA_URL = `${LLAMACPP_BASE_URL}/completion`;
+const LLAMA_HEALTH_URL = `${LLAMACPP_BASE_URL}/health`;
+const TIMEOUT_MS = 3 * 60_000;
+const COVER_LETTER_TIMEOUT_MS = 8 * 60_000;
 
-let ollamaAvailable: boolean | null = null; // null = not yet checked
+let llmAvailable: boolean | null = null;
 
 export function getOllamaAvailable(): boolean | null {
-  return ollamaAvailable;
+  return llmAvailable;
 }
 
 export async function checkOllamaHealth(): Promise<boolean> {
   try {
-    const res = await fetch(OLLAMA_HEALTH_URL, {
+    const res = await fetch(LLAMA_HEALTH_URL, {
       signal: AbortSignal.timeout(5000),
     });
-    ollamaAvailable = res.ok;
-    if (!res.ok) console.warn('[llm] Ollama health check failed — HTTP', res.status);
-    else console.log('[llm] Ollama is reachable');
+    if (!res.ok) {
+      llmAvailable = false;
+      console.warn('[llm] llama.cpp health check failed — HTTP', res.status);
+      return false;
+    }
+    const json = (await res.json()) as { status?: string };
+    llmAvailable = json.status === 'ok';
+    if (!llmAvailable) console.warn('[llm] llama.cpp not ready — status:', json.status);
+    else console.log('[llm] llama.cpp is reachable');
   } catch (err) {
-    ollamaAvailable = false;
-    console.warn('[llm] Ollama is not reachable:', (err as Error).message);
+    llmAvailable = false;
+    console.warn('[llm] llama.cpp not reachable:', (err as Error).message);
   }
-  return ollamaAvailable;
+  return llmAvailable ?? false;
 }
 
 export interface AnalysisResult {
-  match_score: number;      // 0–100
-  match_reasoning: string;  // 1-2 sentence explanation of fit
-  match_summary: string;    // 2-3 sentence factual overview of the role
-  tags: string[];           // tech stack tags extracted from the job posting
+  match_score: number;
+  match_reasoning: string;
+  match_summary: string;
+  tags: string[];
   work_type: 'remote' | 'hybrid' | 'onsite' | null;
-  prefs_hash: string;       // hash of resume+prefs at time of scoring
+  prefs_hash: string;
 }
 
 function formatPreferences(p: Preferences): string {
@@ -65,12 +71,12 @@ function buildLocationRules(p: Preferences): string {
 }
 
 function buildPrompt(resume: string, preferences: Preferences, job: Job): string {
-  return `You are evaluating a job posting for a job seeker. Score how well this job matches the candidate's profile.
+  return `You are a job matching assistant. Score how well the job posting below fits the person's resume and preferences, then write your assessment directly to them.
 
-## Candidate Resume
+## Your Resume
 ${resume || 'Not provided'}
 
-## Candidate Preferences
+## Your Preferences
 ${formatPreferences(preferences)}
 
 ## Job Posting
@@ -84,29 +90,36 @@ Description: ${job.description ?? 'Not provided'}
 ${buildLocationRules(preferences)}
 - Apply the location penalty first, then score skills and experience fit on the remainder.
 ${preferences.knownLanguages ? `- Language: if the job clearly requires communication in a spoken language not in [${preferences.knownLanguages}], subtract 30–40 points.` : ''}
-${preferences.companyBlacklist && preferences.companyBlacklist.includes(job.company) ? '- This company is on the candidate\'s blacklist — score must be 0.' : ''}
+${preferences.companyBlacklist && preferences.companyBlacklist.includes(job.company) ? '- This company is on your blacklist — score must be 0.' : ''}
 
 ## Task
 Return ONLY a JSON object with this exact format (no markdown, no explanation):
-{"match_score": <0-100>, "match_reasoning": "<1-2 sentences on why this candidate is or isn't a fit>", "summary": "<2-3 sentence factual overview of what the role involves and who it's for>", "tags": ["<tech1>", "<tech2>"], "work_type": "<remote|hybrid|onsite|null>"}
+{"match_score": <0-100>, "match_reasoning": "<1-2 sentences addressed directly to you explaining why you are or aren't a fit>", "summary": "<2-3 sentence factual overview of what the role involves and who it's for>", "tags": ["<tech1>", "<tech2>"], "work_type": "<remote|hybrid|onsite|null>"}
 
-summary: factual description of the role — what the job is about, not an opinion on the candidate.
-match_reasoning: personalised assessment of fit for this specific candidate. If location is outside the preferred area, say so explicitly.
+summary: factual description of the role — what the job is about, not an opinion.
+match_reasoning: direct second-person assessment (use "you"/"your", not "the candidate"). If location is outside your preferred area, say so explicitly.
 tags: up to 8 specific technologies, languages, frameworks, or tools mentioned in the job (e.g. "React", "TypeScript", "Node.js", "AWS"). Empty array if none identifiable.
 work_type: one of "remote", "hybrid", "onsite", or null if the posting does not clearly indicate the work arrangement.`;
 }
 
 export function extractJson(raw: string): AnalysisResult {
-  // Strip markdown code fences if the model wrapped its response
   const stripped = raw.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim();
 
-  // Find the first {...} block
   const match = stripped.match(/\{[\s\S]*\}/);
   if (!match) {
     throw new Error(`No JSON object found in model response: ${raw.slice(0, 200)}`);
   }
 
-  const parsed = JSON.parse(match[0]) as Record<string, unknown>;
+  // Sanitize common model JSON quirks before parsing
+  const sanitized = match[0]
+    .replace(/:\s*NaN\b/g, ': null')
+    .replace(/:\s*Infinity\b/g, ': null')
+    .replace(/:\s*-Infinity\b/g, ': null')
+    .replace(/:\s*\+(\d)/g, ': $1')      // leading +  e.g. +75 → 75
+    .replace(/(\d)\.\s*([,}\]])/g, '$1$2') // trailing decimal e.g. 75. → 75
+    .replace(/,\s*([}\]])/g, '$1');        // trailing commas
+
+  const parsed = JSON.parse(sanitized) as Record<string, unknown>;
 
   const match_score = Number(parsed['match_score']);
   const match_reasoning = String(parsed['match_reasoning'] ?? '');
@@ -132,7 +145,18 @@ export function extractJson(raw: string): AnalysisResult {
   return { match_score, match_reasoning, match_summary, tags, work_type, prefs_hash: '' };
 }
 
-/** Focused second-pass tag extraction when the main analysis returned no tags. */
+async function llamaComplete(prompt: string, nPredict: number, signal: AbortSignal): Promise<string> {
+  const response = await fetch(LLAMA_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt, n_predict: nPredict, temperature: 0.1, cache_prompt: true }),
+    signal,
+  });
+  if (!response.ok) throw new Error(`llama.cpp returned HTTP ${response.status}`);
+  const json = (await response.json()) as { content?: string };
+  return json.content?.trim() ?? '';
+}
+
 async function extractTagsFromDescription(description: string): Promise<string[]> {
   const truncated = description.length > 6_000 ? description.slice(0, 6_000) + '\n[truncated]' : description;
 
@@ -147,23 +171,10 @@ ${truncated}`;
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
   try {
-    const response = await fetch(OLLAMA_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: getPreferences().ollamaModel, prompt, stream: false, think: false }),
-      signal: controller.signal,
-    });
-
-    if (!response.ok) throw new Error(`Ollama returned HTTP ${response.status}`);
-
-    const json = (await response.json()) as { response?: string };
-    const raw = json.response?.trim() ?? '';
-
-    // Strip markdown fences and find the array
+    const raw = await llamaComplete(prompt, 256, controller.signal);
     const stripped = raw.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim();
     const match = stripped.match(/\[[\s\S]*\]/);
     if (!match) return [];
-
     const parsed = JSON.parse(match[0]);
     if (!Array.isArray(parsed)) return [];
     return parsed.map((t: unknown) => String(t).trim()).filter(t => t.length > 0).slice(0, 8);
@@ -174,9 +185,7 @@ ${truncated}`;
   }
 }
 
-/** Ask the LLM to pull out the job description text from a raw webpage dump. */
 export async function extractJobDescription(pageText: string): Promise<string | null> {
-  // Truncate to avoid overloading context — 12 000 chars is plenty for most postings
   const truncated = pageText.length > 12_000 ? pageText.slice(0, 12_000) + '\n[truncated]' : pageText;
 
   const prompt = `Below is the raw text content scraped from a job posting webpage.
@@ -192,18 +201,8 @@ ${truncated}
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
   try {
-    const response = await fetch(OLLAMA_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: getPreferences().ollamaModel, prompt, stream: false, think: false }),
-      signal: controller.signal,
-    });
-
-    if (!response.ok) throw new Error(`Ollama returned HTTP ${response.status}`);
-
-    const json = (await response.json()) as { response?: string };
-    const text = json.response?.trim();
-    return text && text.length > 0 ? text : null;
+    const text = await llamaComplete(prompt, 2048, controller.signal);
+    return text.length > 0 ? text : null;
   } catch (err) {
     if (err instanceof Error && err.name !== 'AbortError') {
       console.warn('[llm] extractJobDescription failed:', (err as Error).message);
@@ -214,7 +213,6 @@ ${truncated}
   }
 }
 
-/** Parse raw CV text into structured markdown. Returns null if LLM unavailable. */
 export async function parseResume(rawText: string): Promise<string | null> {
   const truncated = rawText.length > 15_000 ? rawText.slice(0, 15_000) + '\n[truncated]' : rawText;
   const prompt = `You are processing a CV/resume for a job matching system.
@@ -228,16 +226,8 @@ ${truncated}`;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
-    const response = await fetch(OLLAMA_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: getPreferences().ollamaModel, prompt, stream: false, think: false }),
-      signal: controller.signal,
-    });
-    if (!response.ok) throw new Error(`Ollama returned HTTP ${response.status}`);
-    const json = (await response.json()) as { response?: string };
-    const text = json.response?.trim();
-    return text && text.length > 50 ? text : null;
+    const text = await llamaComplete(prompt, 2048, controller.signal);
+    return text.length > 50 ? text : null;
   } catch (err) {
     console.warn('[llm] parseResume failed:', (err as Error).message);
     return null;
@@ -291,18 +281,8 @@ Return only the cover letter text, no commentary or metadata.`;
   const timer = setTimeout(() => controller.abort(), COVER_LETTER_TIMEOUT_MS);
 
   try {
-    const response = await fetch(OLLAMA_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: getPreferences().ollamaModel, prompt, stream: false, think: false }),
-      signal: controller.signal,
-    });
-
-    if (!response.ok) throw new Error(`Ollama returned HTTP ${response.status}`);
-
-    const json = (await response.json()) as { response?: string };
-    const text = json.response?.trim();
-    return text && text.length > 50 ? text : null;
+    const text = await llamaComplete(prompt, 1024, controller.signal);
+    return text.length > 50 ? text : null;
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') {
       console.error(`[llm] generateCoverLetter timed out for job ${job.id}`);
@@ -316,7 +296,6 @@ Return only the cover letter text, no commentary or metadata.`;
 }
 
 export async function analyzeJob(job: Job): Promise<AnalysisResult | null> {
-  // Import here to avoid circular dependency (settings route → llm → settings route)
   const { getResume, getPreferences } = await import('./routes/settings');
   const resume = getResume();
   const preferences = getPreferences();
@@ -328,40 +307,19 @@ export async function analyzeJob(job: Job): Promise<AnalysisResult | null> {
 
   const prefsJson = getSetting('preferences') ?? '{}';
   const prefs_hash = computePrefsHash(resume, prefsJson);
-
   const prompt = buildPrompt(resume, preferences, job);
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
   try {
-    const response = await fetch(OLLAMA_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: getPreferences().ollamaModel,
-        prompt,
-        stream: false,
-        think: false,   // disable extended thinking — reduces latency from 60s+ to <5s
-      }),
-      signal: controller.signal,
-    });
+    const raw = await llamaComplete(prompt, 1024, controller.signal);
 
-    if (!response.ok) {
-      throw new Error(`Ollama returned HTTP ${response.status}`);
-    }
-
-    const json = (await response.json()) as { response?: string };
-    const raw = json.response;
-
-    if (!raw) {
-      throw new Error('Ollama response missing "response" field');
-    }
+    if (!raw) throw new Error('llama.cpp response missing content');
 
     const result = extractJson(raw);
     result.prefs_hash = prefs_hash;
 
-    // Second pass: if no tags were extracted but description exists, try a focused extraction
     if (result.tags.length === 0 && job.description && job.description.length > 50) {
       console.log(`[llm] No tags from main pass for job ${job.id}, running tag extraction pass`);
       result.tags = await extractTagsFromDescription(job.description);
@@ -374,10 +332,10 @@ export async function analyzeJob(job: Job): Promise<AnalysisResult | null> {
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') {
       console.error(`[llm] analyzeJob timed out after ${TIMEOUT_MS}ms for job ${job.id}`);
-      ollamaAvailable = false;
+      llmAvailable = false;
     } else if (err instanceof Error && (err.message.includes('ECONNREFUSED') || err.message.includes('fetch failed'))) {
-      ollamaAvailable = false;
-      console.error('[llm] Ollama unreachable for job', job.id, ':', err.message);
+      llmAvailable = false;
+      console.error('[llm] llama.cpp unreachable for job', job.id, ':', err.message);
     } else {
       console.error('[llm] analyzeJob failed for job', job.id, ':', err);
     }
