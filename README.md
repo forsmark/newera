@@ -5,7 +5,7 @@ Personal job aggregation and tracking app. Fetches jobs from LinkedIn and Jobind
 ## Prerequisites
 
 - [Docker](https://docs.docker.com/get-docker/) + Docker Compose v2
-- [Ollama](https://ollama.com) running on the host with `gemma4:26b` pulled
+- [llama.cpp](https://github.com/ggml-org/llama.cpp) server running on the host, port `8080`
 
 For local development only:
 - [Bun](https://bun.sh) ≥ 1.1
@@ -46,21 +46,32 @@ Create a `.env` file in the project root (see `.env.example`):
 # If not set, the app is accessible without a password (fine for local-only use)
 AUTH_SECRET=choose_a_strong_password
 
+# llama.cpp server URL (default: http://localhost:8080)
+# Docker Compose sets this to http://host.docker.internal:8080 automatically
+LLAMACPP_BASE_URL=http://localhost:8080
 ```
 
-`OLLAMA_BASE_URL` is set automatically by Docker Compose to reach Ollama on the host via `host.docker.internal`. You only need to override it if Ollama is running somewhere else.
+`LLAMACPP_BASE_URL` is set automatically by Docker Compose to reach llama.cpp on the host via `host.docker.internal:8080`. Override it if the server runs elsewhere.
 
-## Ollama Setup
+## llama.cpp Setup
+
+Download and build llama.cpp, then start the server with a compatible model (Gemma 4 27B recommended):
 
 ```bash
-# Install Ollama — see https://ollama.com/download
-ollama pull gemma4:26b
+# Start the server — adjust -ngl (GPU layers) and --ctx-size to fit your VRAM
+llama-server \
+  --model /path/to/gemma-4-27b-q4.gguf \
+  --port 8080 \
+  --ctx-size 8192 \
+  -ngl 99
 
 # Verify it's running
-curl http://localhost:11434/api/tags
+curl http://localhost:8080/health
 ```
 
-The navbar shows an `ollama ✗` badge if Ollama is unreachable. Job scoring is skipped until it's available.
+The server exposes an OpenAI-compatible API at `/completion`. The app uses `LLAMACPP_BASE_URL` (default: `http://localhost:8080`) to reach it.
+
+The navbar shows an `llm ✗` badge if the server is unreachable. Job scoring is skipped until it's available.
 
 ## Authentication
 
@@ -133,7 +144,7 @@ bun run dev
 ## Project Structure
 
 ```
-src/server/       Hono API, scheduler, scrapers, Ollama client
+src/server/       Hono API, scheduler, scrapers, llama.cpp client
 src/client/       React frontend (Vite)
 db/               SQLite database (gitignored)
 backups/          Automatic database backups (gitignored)

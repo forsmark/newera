@@ -6,7 +6,7 @@ import {
 } from "../components/SettingsShared";
 
 interface SystemInfo {
-  ollama_available: boolean | null;
+  llm_available: boolean | null;
   unscored_jobs: number;
 }
 
@@ -57,15 +57,20 @@ export default function SettingsView({ staleCount = 0 }: { staleCount?: number }
       })
       .catch(() => toast("Failed to load settings"));
 
-    fetch("/api/status")
-      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
-      .then(d => setSystem({ ollama_available: d.ollama_available ?? null, unscored_jobs: d.unscored_jobs ?? 0 }))
-      .catch(() => {});
+    const fetchStatus = () =>
+      fetch("/api/status")
+        .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+        .then(d => setSystem({ llm_available: d.llm_available ?? null, unscored_jobs: d.unscored_jobs ?? 0 }))
+        .catch(() => {});
+    fetchStatus();
+    const statusInterval = setInterval(fetchStatus, 15_000);
 
     fetch("/api/backups")
       .then(r => r.json())
       .then((d: { backups: BackupInfo[] }) => setBackups(d.backups ?? []))
       .catch(() => {});
+
+    return () => clearInterval(statusInterval);
   }, []);
 
   function updatePref<K extends keyof Preferences>(key: K, value: Preferences[K]) {
@@ -204,11 +209,11 @@ export default function SettingsView({ staleCount = 0 }: { staleCount?: number }
               min={1} max={24} step={1} placeholder="2"
             />
           </Field>
-          <Field label="Ollama model">
+          <Field label="llama.cpp model">
             <input className={inputClass}
-              value={prefs.ollamaModel}
-              onChange={e => updatePref('ollamaModel', e.target.value)}
-              placeholder="gemma4:26b" />
+              value={prefs.model}
+              onChange={e => updatePref('model', e.target.value)}
+              placeholder="unsloth/gemma-4-26B-A4B-it-GGUF" />
           </Field>
         </div>
 
@@ -430,8 +435,8 @@ export default function SettingsView({ staleCount = 0 }: { staleCount?: number }
         {system && (
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-2 text-xs">
-              <span className={`w-2 h-2 rounded-full shrink-0 ${system.ollama_available ? "bg-green" : "bg-red"}`} />
-              <span className="text-text-2">Ollama {system.ollama_available ? "Connected" : "Unavailable"}</span>
+              <span className={`w-2 h-2 rounded-full shrink-0 ${system.llm_available ? "bg-green" : "bg-red"}`} />
+              <span className="text-text-2">llama.cpp {system.llm_available ? "Connected" : "Unavailable"}</span>
             </div>
             <p className="text-xs text-text-3 m-0">
               {system.unscored_jobs > 0

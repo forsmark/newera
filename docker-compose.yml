@@ -9,7 +9,7 @@ services:
       - ./backups:/app/backups
     env_file: .env
     environment:
-      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      - LLAMACPP_BASE_URL=http://host.docker.internal:8080
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped

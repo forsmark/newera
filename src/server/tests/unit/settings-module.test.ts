@@ -47,7 +47,7 @@ describe('getPreferences', () => {
     expect(p.seniority).toBe('any');
     expect(p.lowScoreThreshold).toBe(20);
     expect(p.autoRejectLowScore).toBe(false);
-    expect(p.ollamaModel).toBe('gemma4:26b');
+    expect(p.model).toBe('unsloth/gemma-4-26B-A4B-it-GGUF');
     expect(p.fetchIntervalHours).toBe(2);
     expect(p.minSalaryDkk).toBeNull();
     expect(p.location).toBe('');
@@ -58,7 +58,7 @@ describe('getPreferences', () => {
     const p = getPreferences();
     expect(p.location).toBe('Copenhagen');
     expect(p.lowScoreThreshold).toBe(35);
-    expect(p.ollamaModel).toBe('gemma4:26b'); // default preserved
+    expect(p.model).toBe('unsloth/gemma-4-26B-A4B-it-GGUF'); // default preserved
   });
 
   it('migrates old remote "any" string to empty array', () => {

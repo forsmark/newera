@@ -31,7 +31,7 @@ export interface AppStatus {
     grey: number;
     pending: number;
   };
-  ollama_available?: boolean | null;
+  llm_available?: boolean | null;
   last_fetch_new_jobs?: number;
   stale_count?: number;
   data_files?: { resume: boolean; preferences: boolean };

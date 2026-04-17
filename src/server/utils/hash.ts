@@ -15,7 +15,7 @@ const SCORING_KEYS = [
   'techAvoid',
   'companyBlacklist',
   'notes',
-  'ollamaModel',
+  'model',
 ] as const;
 
 /** SHA-256 of resume + scoring-relevant prefs, truncated to 16 hex chars. */
