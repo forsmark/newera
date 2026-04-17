@@ -110,7 +110,7 @@ function ollamaResponse(score: number) {
     work_type: null,
   });
   return Promise.resolve(
-    new Response(JSON.stringify({ response: llmJson, done: true }), {
+    new Response(JSON.stringify({ content: llmJson }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     }),

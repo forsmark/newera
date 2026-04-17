@@ -1,7 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useInfiniteQuery, useQueryClient, InfiniteData } from "@tanstack/react-query";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { Job, AppStatus } from "../types";
+
+type JobsPage = { jobs: Job[]; total: number; limit: number; offset: number };
 import JobRow from "../components/JobRow";
 import { toast } from "../components/Toast";
 import SourceFilter from "../components/SourceFilter";
@@ -92,12 +95,6 @@ function FirstTimeSetup({ status }: { status: AppStatus | null }) {
 }
 
 export default function JobsView({ refreshKey, isFetching, status }: Props) {
-  const [jobs, setJobs] = useState<Job[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [totalJobs, setTotalJobs] = useState(0);
-  const offsetRef = useRef(0);
-  const loadingMoreRef = useRef(false);
   const [sentinelVisible, setSentinelVisible] = useState(false);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const [hideWeakMatches, setHideWeakMatches] = useState(true);
@@ -151,41 +148,49 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
   const filterKey = `${filterStatus}|${[...selectedSources].sort().join(',')}|${[...selectedWorkTypes].sort().join(',')}|${activeTags.join(',')}|${searchQuery}|${postedWithin}|${sortBy}|${hideJobsFromDisabledSources}|${[...disabledSources].sort().join(',')}`;
   const prevFilterKey = useRef(filterKey);
 
-  const fetchJobs = useCallback(async (reset?: boolean) => {
-    const isReset = reset === true;
-    if (!isReset && loadingMoreRef.current) return;
-    if (!isReset) {
-      loadingMoreRef.current = true;
-      setLoadingMore(true);
-    } else {
-      offsetRef.current = 0;
-      setLoading(true);
-    }
-    try {
-      const res = await fetch(`/api/jobs?limit=100&offset=${offsetRef.current}`);
-      if (!res.ok) {
-        toast('Failed to load jobs');
-      } else {
-        const data = await res.json();
-        if (isReset) {
-          setJobs(data.jobs);
-          offsetRef.current = data.jobs.length;
-        } else {
-          setJobs(prev => [...prev, ...data.jobs]);
-          offsetRef.current += data.jobs.length;
-        }
-        setTotalJobs(data.total);
-      }
-    } finally {
-      if (isReset) setLoading(false);
-      else { loadingMoreRef.current = false; setLoadingMore(false); }
-    }
-  }, []);
+  const hasPendingScores = (status?.score_distribution?.pending ?? 0) > 0;
+
+  const queryClient = useQueryClient();
+
+  const {
+    data: jobsData,
+    fetchNextPage,
+    hasNextPage,
+    isFetching: isQueryFetching,
+    isFetchingNextPage,
+    isError: isJobsError,
+    refetch: refetchJobs,
+  } = useInfiniteQuery<JobsPage>({
+    queryKey: ['jobs', refreshKey],
+    queryFn: async ({ pageParam }) => {
+      const res = await fetch(`/api/jobs?limit=100&offset=${pageParam as number}`);
+      if (!res.ok) throw new Error('Failed to load jobs');
+      return res.json() as Promise<JobsPage>;
+    },
+    initialPageParam: 0,
+    getNextPageParam: (_lastPage, allPages) => {
+      const loaded = allPages.reduce((sum, p) => sum + p.jobs.length, 0);
+      const total = allPages[0]?.total ?? 0;
+      return loaded < total ? loaded : undefined;
+    },
+    refetchInterval: hasPendingScores ? 5_000 : false,
+    staleTime: 30_000,
+  });
+
+  const jobs = jobsData?.pages.flatMap(p => p.jobs) ?? [];
+  const totalJobs = jobsData?.pages[0]?.total ?? 0;
+  const loading = isQueryFetching && !isFetchingNextPage && !jobsData;
+  const loadingMore = isFetchingNextPage;
 
   useEffect(() => {
+    if (isJobsError) toast('Failed to load jobs');
+  }, [isJobsError]);
+
+  const prevRefreshKey = useRef(refreshKey);
+  useEffect(() => {
+    if (refreshKey === prevRefreshKey.current) return;
+    prevRefreshKey.current = refreshKey;
     setPinnedIds(null);
-    fetchJobs(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshKey]);
 
   useEffect(() => {
@@ -230,9 +235,10 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
     if (!sentinelVisible) return;
     if (pinnedIds) return;
     if (filterStatus === 'rejected') return;
-    if (jobs.length >= totalJobs) return;
-    fetchJobs(false);
-  }, [sentinelVisible, jobs.length, totalJobs, pinnedIds, filterStatus, fetchJobs]);
+    if (!hasNextPage) return;
+    if (isFetchingNextPage) return;
+    fetchNextPage();
+  }, [sentinelVisible, hasNextPage, isFetchingNextPage, pinnedIds, filterStatus, fetchNextPage]);
 
   // Filters that persist in-view even as items change state (sticky snapshot)
   const STICKY_FILTERS: FilterStatus[] = ['unread', 'saved'];
@@ -249,39 +255,29 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
     setFilterStatus(s);
   }
 
-  const hasPendingScores = jobs.some(j => j.match_score === null);
+  function updateJobInCache(id: string, update: Partial<Job>) {
+    queryClient.setQueryData<InfiniteData<JobsPage>>(['jobs', refreshKey], (old) => {
+      if (!old) return old;
+      return {
+        ...old,
+        pages: old.pages.map(p => ({
+          ...p,
+          jobs: p.jobs.map(j => j.id === id ? { ...j, ...update } : j),
+        })),
+      };
+    });
+  }
 
-  useEffect(() => {
-    if (!hasPendingScores) return;
-    const MAX_POLL_MS = 10 * 60 * 1000;
-    const startedAt = Date.now();
-    const interval = setInterval(() => {
-      if (Date.now() - startedAt > MAX_POLL_MS) { clearInterval(interval); return; }
-      fetch('/api/jobs?limit=100&offset=0')
-        .then(r => r.json())
-        .then((data: { jobs: Job[]; total: number }) => {
-          setJobs(prev => {
-            const fresh = data.jobs;
-            const rest = prev.slice(fresh.length);
-            return [...fresh, ...rest];
-          });
-          setTotalJobs(data.total);
-        })
-        .catch(() => {});
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [hasPendingScores]);
-
-  function handleStatusChange(id: string, status: string) {
-    setJobs(prev => prev.map(j => j.id === id ? { ...j, status: status as Job["status"] } : j));
+  function handleStatusChange(id: string, newStatus: string) {
+    updateJobInCache(id, { status: newStatus as Job['status'] });
   }
 
   function handleSeenChange(id: string, seen_at: string | null) {
-    setJobs(prev => prev.map(j => j.id === id ? { ...j, seen_at } : j));
+    updateJobInCache(id, { seen_at });
   }
 
   function handleRescore(id: string) {
-    setJobs(prev => prev.map(j => j.id === id ? { ...j, match_score: null, match_reasoning: null, match_summary: null } : j));
+    updateJobInCache(id, { match_score: null, match_reasoning: null, match_summary: null });
   }
 
   function toggleSelect(id: string) {
@@ -393,7 +389,7 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
       const res = await fetch('/api/jobs/rescore-stale', { method: 'POST' });
       if (res.ok) {
         setStaleBannerDismissed(true);
-        fetchJobs(true);
+        refetchJobs();
       } else {
         toast('Re-score failed — please try again');
       }
@@ -427,8 +423,8 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
       }
       if (selectedSources.size > 0 && !selectedSources.has(j.source)) return false;
       if (hideJobsFromDisabledSources && disabledSources.includes(j.source)) return false;
-      if (selectedWorkTypes.size > 0 && (j.work_type === null || !selectedWorkTypes.has(j.work_type))) return false;
-      if (activeTags.length > 0 && !activeTags.every(tag => j.tags?.includes(tag))) return false;
+      if (selectedWorkTypes.size > 0 && j.work_type !== null && !selectedWorkTypes.has(j.work_type)) return false;
+      if (activeTags.length > 0 && j.tags !== null && !activeTags.every(tag => j.tags!.includes(tag))) return false;
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
         const matchesTitle = j.title.toLowerCase().includes(q);
@@ -705,7 +701,7 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
       {hasPendingScores && (
         <div className="text-[0.75rem] text-text-3 mb-3 flex items-center gap-[0.375rem]">
           <span className="inline-block w-[5px] h-[5px] rounded-full bg-amber" style={{ animation: "pulse 1.5s ease-in-out infinite" }} />
-          Scoring {jobs.filter(j => j.match_score === null).length} jobs…
+          Scoring {status?.score_distribution?.pending ?? 0} jobs…
         </div>
       )}
 
@@ -776,11 +772,12 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
             </AnimatePresence>
           </motion.div>
 
-          <div ref={sentinelRef} style={{ height: 1 }} />
-          {loadingMore && (
-            <div className="text-center py-5 text-text-3 text-sm">Loading…</div>
-          )}
         </>
+      )}
+
+      <div ref={sentinelRef} style={{ height: 1 }} />
+      {loadingMore && (
+        <div className="text-center py-5 text-text-3 text-sm">Loading…</div>
       )}
 
       {/* Keyboard shortcuts modal */}

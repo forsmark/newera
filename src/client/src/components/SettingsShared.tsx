@@ -16,7 +16,7 @@ export interface Preferences {
   defaultHideLowScore: boolean;
   defaultHideUnscored: boolean;
   autoRejectLowScore: boolean;
-  ollamaModel: string;
+  model: string;
   fetchIntervalHours: number;
   telegramBotToken: string;
   telegramChatId: string;
@@ -43,7 +43,7 @@ export const EMPTY_PREFS: Preferences = {
   defaultHideLowScore: true,
   defaultHideUnscored: false,
   autoRejectLowScore: false,
-  ollamaModel: 'gemma4:26b',
+  model: 'unsloth/gemma-4-26B-A4B-it-GGUF',
   fetchIntervalHours: 2,
   telegramBotToken: '',
   telegramChatId: '',

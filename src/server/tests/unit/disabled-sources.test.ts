@@ -27,10 +27,6 @@ mock.module('../../sources/remoteok', () => ({
 mock.module('../../telegram', () => ({
   sendFetchSummary: mock(() => Promise.resolve()),
 }));
-mock.module('../../llm', () => ({
-  analyzeJob: mock(() => Promise.resolve(null)),
-}));
-
 import { setSetting } from '../../settings';
 import { fetchJobs } from '../../scheduler';
 

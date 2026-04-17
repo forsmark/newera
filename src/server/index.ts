@@ -73,7 +73,7 @@ app.get('/api/status', (c) => {
     is_fetching: getIsFetching(),
     unscored_jobs: unscoredRow.count,
     score_distribution: scoreDist,
-    ollama_available: getOllamaAvailable(),
+    llm_available: getOllamaAvailable(),
     last_fetch_new_jobs: getLastFetchNewJobs(),
     stale_count,
     data_files: {
@@ -97,8 +97,13 @@ app.get('/*', (c) => new Response(Bun.file(resolve(DIST, 'index.html'))));
 
 // Start Ollama health check, job scheduler, and backup scheduler
 checkOllamaHealth().catch(console.error);
-startScheduler();
-startBackupScheduler();
+setInterval(() => checkOllamaHealth().catch(console.error), 30_000);
+if (process.env.DISABLE_SCHEDULER !== '1') {
+  startScheduler();
+  startBackupScheduler();
+} else {
+  console.log('[server] Scheduler disabled via DISABLE_SCHEDULER=1');
+}
 
 function shutdown() {
   console.log('[server] Shutting down — checkpointing WAL…');

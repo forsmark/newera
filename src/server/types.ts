@@ -40,7 +40,7 @@ export interface Preferences {
   defaultHideLowScore: boolean;    // initial state of the "Hide <N" checkbox
   defaultHideUnscored: boolean;    // initial state of the "Hide unscored" checkbox
   autoRejectLowScore: boolean;     // automatically reject new jobs that score below the threshold
-  ollamaModel: string;         // Ollama model used for scoring/analysis
+  model: string;               // llama.cpp model used for scoring/analysis
   fetchIntervalHours: number;  // how often to auto-fetch jobs (hours)
   telegramBotToken: string;
   telegramChatId: string;
@@ -68,7 +68,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   defaultHideLowScore: true,
   defaultHideUnscored: false,
   autoRejectLowScore: false,
-  ollamaModel: 'gemma4:26b',
+  model: 'unsloth/gemma-4-26B-A4B-it-GGUF',
   fetchIntervalHours: 2,
   telegramBotToken: '',
   telegramChatId: '',
