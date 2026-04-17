@@ -148,7 +148,7 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
   const prefersReducedMotion = useReducedMotion();
 
   // Track filter identity to re-trigger list animation
-  const filterKey = `${filterStatus}|${[...selectedSources].sort().join(',')}|${[...selectedWorkTypes].sort().join(',')}|${activeTags.join(',')}|${searchQuery}|${postedWithin}|${sortBy}`;
+  const filterKey = `${filterStatus}|${[...selectedSources].sort().join(',')}|${[...selectedWorkTypes].sort().join(',')}|${activeTags.join(',')}|${searchQuery}|${postedWithin}|${sortBy}|${hideJobsFromDisabledSources}|${[...disabledSources].sort().join(',')}`;
   const prevFilterKey = useRef(filterKey);
 
   const fetchJobs = useCallback(async (reset?: boolean) => {
