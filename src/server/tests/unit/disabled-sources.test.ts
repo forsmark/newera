@@ -1,4 +1,4 @@
-import { describe, it, expect, mock, beforeEach } from 'bun:test';
+import { describe, it, expect, mock, beforeEach, afterAll } from 'bun:test';
 
 // Module mocks must be declared before any imports that resolve the mocked modules
 const mockFetchLinkedIn = mock(() => Promise.resolve([]));
@@ -39,6 +39,7 @@ const _orig = globalThis.setTimeout;
 // @ts-ignore
 globalThis.setTimeout = (fn: TimerHandler, _delay?: number, ...args: unknown[]) =>
   _orig(fn, 0, ...args);
+afterAll(() => { globalThis.setTimeout = _orig; });
 
 describe('fetchJobs — disabledSources', () => {
   beforeEach(() => {
