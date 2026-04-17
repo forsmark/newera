@@ -47,6 +47,8 @@ export interface Preferences {
   telegramEnabled: boolean;
   telegramNotifyThreshold: number;  // minimum score to include in Telegram notification
   appBaseUrl: string;               // base URL for links in notifications (e.g. Tailscale IP)
+  disabledSources: string[];            // sources to skip during fetch, empty = all active
+  hideJobsFromDisabledSources: boolean; // hide jobs from disabled sources in job list
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
@@ -73,6 +75,8 @@ export const DEFAULT_PREFERENCES: Preferences = {
   telegramEnabled: false,
   telegramNotifyThreshold: 80,
   appBaseUrl: 'http://localhost:3000',
+  disabledSources: [],
+  hideJobsFromDisabledSources: false,
 };
 
 export interface Application {
