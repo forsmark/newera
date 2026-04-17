@@ -116,13 +116,22 @@ export function extractJson(raw: string): AnalysisResult {
   }
 
   // Sanitize common model JSON quirks before parsing
-  const sanitized = match[0]
+  let sanitized = match[0]
     .replace(/:\s*NaN\b/g, ': null')
     .replace(/:\s*Infinity\b/g, ': null')
     .replace(/:\s*-Infinity\b/g, ': null')
-    .replace(/:\s*\+(\d)/g, ': $1')      // leading +  e.g. +75 → 75
-    .replace(/(\d)\.\s*([,}\]])/g, '$1$2') // trailing decimal e.g. 75. → 75
-    .replace(/,\s*([}\]])/g, '$1');        // trailing commas
+    .replace(/:\s*\+(\d)/g, ': $1')               // leading + e.g. +75 → 75
+    .replace(/(\d)\.\s*([,}\]])/g, '$1$2')         // trailing decimal e.g. 75. → 75
+    .replace(/([{,]\s*)([a-zA-Z_]\w*)\s*:/g, '$1"$2":') // unquoted keys
+    .replace(/,\s*([}\]])/g, '$1');                // trailing commas
+
+  // If JSON is truncated (unterminated string/object), close it out
+  try {
+    JSON.parse(sanitized);
+  } catch {
+    // Strip back to last complete key-value pair then close the object
+    sanitized = sanitized.replace(/,?\s*"[^"]*"?\s*:\s*[^,}\]]*$/, '').replace(/,\s*$/, '') + '}';
+  }
 
   const parsed = JSON.parse(sanitized) as Record<string, unknown>;
 
@@ -324,7 +333,7 @@ export async function analyzeJob(job: Job): Promise<AnalysisResult | null> {
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
     try {
-      const raw = await llamaComplete(prompt, 1024, controller.signal);
+      const raw = await llamaComplete(prompt, 2048, controller.signal);
       clearTimeout(timer);
 
       if (!raw) throw new Error('llama.cpp response missing content');
