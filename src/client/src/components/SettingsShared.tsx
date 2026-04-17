@@ -23,6 +23,8 @@ export interface Preferences {
   telegramEnabled: boolean;
   telegramNotifyThreshold: number;
   appBaseUrl: string;
+  disabledSources: string[];
+  hideJobsFromDisabledSources: boolean;
 }
 
 export const EMPTY_PREFS: Preferences = {
@@ -48,6 +50,8 @@ export const EMPTY_PREFS: Preferences = {
   telegramEnabled: false,
   telegramNotifyThreshold: 80,
   appBaseUrl: 'http://localhost:3000',
+  disabledSources: [],
+  hideJobsFromDisabledSources: false,
 };
 
 export const inputClass = "w-full bg-surface-deep text-text text-sm border border-border rounded-sm px-3 py-2 outline-none focus:border-accent";
