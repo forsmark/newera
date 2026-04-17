@@ -16,6 +16,14 @@ interface BackupInfo {
   created_at: string;
 }
 
+const ALL_SOURCES = [
+  { key: 'linkedin', label: 'LinkedIn' },
+  { key: 'jobindex', label: 'Jobindex' },
+  { key: 'remotive', label: 'Remotive' },
+  { key: 'arbeitnow', label: 'Arbeitnow' },
+  { key: 'remoteok', label: 'RemoteOK' },
+] as const;
+
 export default function SettingsView({ staleCount = 0 }: { staleCount?: number }) {
   const [prefs, setPrefs] = useState<Preferences>(EMPTY_PREFS);
   const [savedPrefs, setSavedPrefs] = useState<Preferences>(EMPTY_PREFS);
@@ -251,6 +259,45 @@ export default function SettingsView({ staleCount = 0 }: { staleCount?: number }
             </button>
           </div>
         </div>
+      </Accordion>
+
+      {/* Sources */}
+      <Accordion title="Sources" defaultOpen={false} action={saveBtn(prefsDirty, savingPrefs, savePrefs)}>
+        <p className="text-[0.75rem] text-text-3 m-0">
+          Disabled sources are skipped during fetch. Existing jobs from disabled sources are not removed.
+        </p>
+        <div className="flex flex-wrap gap-x-6 gap-y-2">
+          {ALL_SOURCES.map(({ key, label }) => {
+            const enabled = !prefs.disabledSources.includes(key);
+            return (
+              <label key={key} className="flex items-center gap-2 cursor-pointer select-none text-sm text-text-2">
+                <input
+                  type="checkbox"
+                  checked={enabled}
+                  aria-label={label}
+                  onChange={e => {
+                    const next = e.target.checked
+                      ? prefs.disabledSources.filter(s => s !== key)
+                      : [...prefs.disabledSources, key];
+                    updatePref('disabledSources', next);
+                  }}
+                  className="checkbox-styled"
+                />
+                {label}
+              </label>
+            );
+          })}
+        </div>
+        <label className="flex items-center gap-2 cursor-pointer select-none text-sm text-text-2">
+          <input
+            type="checkbox"
+            checked={prefs.hideJobsFromDisabledSources}
+            onChange={e => updatePref('hideJobsFromDisabledSources', e.target.checked)}
+            disabled={prefs.disabledSources.length === 0}
+            className="checkbox-styled"
+          />
+          Hide jobs from disabled sources in job list
+        </label>
       </Accordion>
 
       {/* Notifications */}

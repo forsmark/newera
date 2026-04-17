@@ -31,8 +31,29 @@ describe('SettingsView', () => {
     render(<SettingsView />);
     await waitFor(() => {
       expect(screen.getByText('App config')).toBeInTheDocument();
+      expect(screen.getByText('Sources')).toBeInTheDocument();
       expect(screen.getByText('Notifications')).toBeInTheDocument();
       expect(screen.getByText('System')).toBeInTheDocument();
+    });
+  });
+
+  it('renders Sources accordion', async () => {
+    render(<SettingsView />);
+    await waitFor(() => {
+      expect(screen.getByText('Sources')).toBeInTheDocument();
+    });
+  });
+
+  it('all source checkboxes are checked by default when disabledSources is empty', async () => {
+    render(<SettingsView />);
+    await waitFor(() => screen.getByText('Sources'));
+    fireEvent.click(screen.getByText('Sources'));
+    await waitFor(() => {
+      expect(screen.getByLabelText('LinkedIn')).toBeChecked();
+      expect(screen.getByLabelText('Jobindex')).toBeChecked();
+      expect(screen.getByLabelText('Remotive')).toBeChecked();
+      expect(screen.getByLabelText('Arbeitnow')).toBeChecked();
+      expect(screen.getByLabelText('RemoteOK')).toBeChecked();
     });
   });
 
