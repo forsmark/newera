@@ -180,6 +180,18 @@ app.patch('/:id', async (c) => {
   return c.json({ ...raw, tags: raw.tags ? JSON.parse(raw.tags) as string[] : null });
 });
 
+// DELETE /api/jobs/:id
+app.delete('/:id', (c) => {
+  const id = c.req.param('id');
+  const job = db.query('SELECT id FROM jobs WHERE id = ?').get(id);
+  if (!job) return c.json({ error: 'Job not found' }, 404);
+  db.transaction(() => {
+    db.run('DELETE FROM applications WHERE job_id = ?', [id]);
+    db.run('DELETE FROM jobs WHERE id = ?', [id]);
+  })();
+  return c.json({ deleted: id });
+});
+
 // POST /api/jobs/bulk-status
 // Body: { ids: string[], status: 'saved' | 'rejected' }
 // Updates status for all provided job IDs in a single transaction

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { Job } from "../types";
 import JobDetail from "../components/JobDetail";
 
@@ -37,6 +37,7 @@ function scoreAccentColor(score: number | null): string {
 
 export default function JobDetailView() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [job, setJob] = useState<Job | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -81,7 +82,7 @@ export default function JobDetailView() {
     return (
       <div className="max-w-[740px] mx-auto px-4 py-12 text-center">
         <div className="text-text-3 text-lg mb-4">Job not found</div>
-        <Link to="/jobs" className="text-accent no-underline hover:underline">← Back to jobs</Link>
+        <button onClick={() => navigate(-1)} className="text-accent bg-transparent border-none cursor-pointer p-0 hover:underline">← Back</button>
       </div>
     );
   }
@@ -100,9 +101,9 @@ export default function JobDetailView() {
   return (
     <div className="max-w-[740px] mx-auto px-3 sm:px-4 py-4 sm:py-6">
       {/* Back link */}
-      <Link to="/jobs" className="text-text-3 text-[0.8125rem] no-underline hover:text-text-2 mb-4 inline-block">
-        ← Back to jobs
-      </Link>
+      <button onClick={() => navigate(-1)} className="text-text-3 text-[0.8125rem] bg-transparent border-none cursor-pointer p-0 hover:text-text-2 mb-4 inline-block">
+        ← Back
+      </button>
 
       {/* Header card */}
       <div
@@ -157,16 +158,6 @@ export default function JobDetailView() {
                 }
               >
                 {job.status === "saved" ? "Saved" : "Save"}
-              </button>
-            )}
-
-            {job.status === "saved" && (
-              <button
-                onClick={() => patchStatus("applied")}
-                disabled={statusLoading}
-                className="px-3 py-1.5 text-[0.8125rem] rounded-sm border border-border text-text-3 font-medium bg-transparent cursor-pointer"
-              >
-                Applied →
               </button>
             )}
 

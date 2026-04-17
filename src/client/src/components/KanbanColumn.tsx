@@ -9,9 +9,10 @@ interface Props {
   cards: Application[];
   onDrop: (jobId: string, column: Application['kanban_column']) => void;
   onCardUpdate: (updated: Application) => void;
+  onCardDelete: (jobId: string) => void;
 }
 
-export default function KanbanColumn({ title, column, color, cards, onDrop, onCardUpdate }: Props) {
+export default function KanbanColumn({ title, column, color, cards, onDrop, onCardUpdate, onCardDelete }: Props) {
   const [dragOver, setDragOver] = useState(false);
 
   function handleDragOver(e: React.DragEvent) { e.preventDefault(); setDragOver(true); }
@@ -54,7 +55,7 @@ export default function KanbanColumn({ title, column, color, cards, onDrop, onCa
         }}
       >
         {cards.map(app => (
-          <KanbanCard key={app.job_id} application={app} onUpdate={onCardUpdate} columnColor={color} />
+          <KanbanCard key={app.job_id} application={app} onUpdate={onCardUpdate} onDelete={onCardDelete} columnColor={color} />
         ))}
         {cards.length === 0 && !dragOver && (
           <div className="text-center text-border text-[0.8125rem] py-10 select-none">
