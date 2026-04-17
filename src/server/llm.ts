@@ -71,10 +71,14 @@ function buildLocationRules(p: Preferences): string {
 }
 
 function buildPrompt(resume: string, preferences: Preferences, job: Job): string {
+  const truncResume = resume.length > 4_000 ? resume.slice(0, 4_000) + '\n[truncated]' : resume;
+  const desc = job.description ?? 'Not provided';
+  const truncDesc = desc.length > 6_000 ? desc.slice(0, 6_000) + '\n[truncated]' : desc;
+
   return `You are a job matching assistant. Score how well the job posting below fits the person's resume and preferences, then write your assessment directly to them.
 
 ## Your Resume
-${resume || 'Not provided'}
+${truncResume || 'Not provided'}
 
 ## Your Preferences
 ${formatPreferences(preferences)}
@@ -83,7 +87,7 @@ ${formatPreferences(preferences)}
 Title: ${job.title}
 Company: ${job.company}
 Location: ${job.location ?? 'Not specified'}
-Description: ${job.description ?? 'Not provided'}
+Description: ${truncDesc}
 
 ## Scoring rules
 - Location is a hard constraint:
@@ -152,7 +156,10 @@ async function llamaComplete(prompt: string, nPredict: number, signal: AbortSign
     body: JSON.stringify({ prompt, n_predict: nPredict, temperature: 0.1, cache_prompt: true }),
     signal,
   });
-  if (!response.ok) throw new Error(`llama.cpp returned HTTP ${response.status}`);
+  if (!response.ok) {
+    const body = await response.text().catch(() => '');
+    throw new Error(`llama.cpp returned HTTP ${response.status}: ${body.slice(0, 200)}`);
+  }
   const json = (await response.json()) as { content?: string };
   return json.content?.trim() ?? '';
 }
