@@ -5,6 +5,7 @@ import { Application, ApplicationEvent, Artifact } from "../types";
 interface Props {
   application: Application;
   onUpdate: (updated: Application) => void;
+  onDelete?: (jobId: string) => void;
   columnColor?: string;
 }
 
@@ -26,13 +27,14 @@ function formatInterviewDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 
-export default function KanbanCard({ application, onUpdate, columnColor = "#243653" }: Props) {
+export default function KanbanCard({ application, onUpdate, onDelete, columnColor = "#243653" }: Props) {
   const [editing, setEditing] = useState(false);
   const [notes, setNotes] = useState(application.notes ?? "");
   const [interviewAt, setInterviewAt] = useState(
     application.interview_at ? application.interview_at.slice(0, 10) : ""
   );
   const [saving, setSaving] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [archiveExpanded, setArchiveExpanded] = useState(false);
   const [coverLetterExpanded, setCoverLetterExpanded] = useState(false);
   const [generatingCoverLetter, setGeneratingCoverLetter] = useState(false);
@@ -447,12 +449,37 @@ export default function KanbanCard({ application, onUpdate, columnColor = "#2436
           </div>
         </div>
       ) : (
-        <button
-          onClick={e => { e.stopPropagation(); setEditing(true); }}
-          className="mt-1.5 px-3 py-1.5 text-[0.75rem] rounded-sm border border-border bg-transparent text-text-3 font-medium cursor-pointer btn-ghost"
-        >
-          Edit
-        </button>
+        <div className="flex gap-1.5 mt-1.5">
+          <button
+            onClick={e => { e.stopPropagation(); setEditing(true); }}
+            className="px-3 py-1.5 text-[0.75rem] rounded-sm border border-border bg-transparent text-text-3 font-medium cursor-pointer btn-ghost"
+          >
+            Edit
+          </button>
+          {deleteConfirm ? (
+            <>
+              <button
+                onClick={async e => { e.stopPropagation(); await fetch(`/api/jobs/${application.job_id}`, { method: 'DELETE' }); onDelete?.(application.job_id); }}
+                className="px-3 py-1.5 text-[0.75rem] rounded-sm border border-border-red bg-transparent text-red font-medium cursor-pointer"
+              >
+                Confirm delete
+              </button>
+              <button
+                onClick={e => { e.stopPropagation(); setDeleteConfirm(false); }}
+                className="px-3 py-1.5 text-[0.75rem] rounded-sm border border-border bg-transparent text-text-3 font-medium cursor-pointer"
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={e => { e.stopPropagation(); setDeleteConfirm(true); }}
+              className="px-3 py-1.5 text-[0.75rem] rounded-sm border border-border bg-transparent text-text-3 font-medium cursor-pointer btn-ghost"
+            >
+              Delete
+            </button>
+          )}
+        </div>
       )}
     </div>
   );

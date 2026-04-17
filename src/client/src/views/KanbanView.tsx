@@ -56,6 +56,10 @@ export default function KanbanView({ refreshKey }: Props) {
     setApplications(prev => prev.map(a => a.job_id === updated.job_id ? updated : a));
   }
 
+  function handleCardDelete(jobId: string) {
+    setApplications(prev => prev.filter(a => a.job_id !== jobId));
+  }
+
   const filtered = (searchQuery
     ? applications.filter(a => {
         const q = searchQuery.toLowerCase();
@@ -133,6 +137,7 @@ export default function KanbanView({ refreshKey }: Props) {
             cards={filtered.filter(a => a.kanban_column === col.key)}
             onDrop={handleDrop}
             onCardUpdate={handleCardUpdate}
+            onCardDelete={handleCardDelete}
           />
         ))}
       </div>
