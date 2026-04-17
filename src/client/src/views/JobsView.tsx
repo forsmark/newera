@@ -103,6 +103,8 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
   const [hideWeakMatches, setHideWeakMatches] = useState(true);
   const [hideUnscored, setHideUnscored] = useState(false);
   const [lowScoreThreshold, setLowScoreThreshold] = useState(20);
+  const [disabledSources, setDisabledSources] = useState<string[]>([]);
+  const [hideJobsFromDisabledSources, setHideJobsFromDisabledSources] = useState(false);
   const filterDefaultsApplied = useRef(false);
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -189,9 +191,19 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
   useEffect(() => {
     fetch('/api/settings')
       .then(r => r.json())
-      .then((d: { preferences?: { lowScoreThreshold?: number; defaultHideLowScore?: boolean; defaultHideUnscored?: boolean } }) => {
+      .then((d: {
+        preferences?: {
+          lowScoreThreshold?: number;
+          defaultHideLowScore?: boolean;
+          defaultHideUnscored?: boolean;
+          disabledSources?: string[];
+          hideJobsFromDisabledSources?: boolean;
+        }
+      }) => {
         const p = d.preferences ?? {};
         if (typeof p.lowScoreThreshold === 'number') setLowScoreThreshold(p.lowScoreThreshold);
+        if (Array.isArray(p.disabledSources)) setDisabledSources(p.disabledSources);
+        if (typeof p.hideJobsFromDisabledSources === 'boolean') setHideJobsFromDisabledSources(p.hideJobsFromDisabledSources);
         if (!filterDefaultsApplied.current) {
           if (typeof p.defaultHideLowScore === 'boolean') setHideWeakMatches(p.defaultHideLowScore);
           if (typeof p.defaultHideUnscored === 'boolean') setHideUnscored(p.defaultHideUnscored);
@@ -414,6 +426,7 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
         if (filterStatus === "rejected" && j.status !== "rejected") return false;
       }
       if (selectedSources.size > 0 && !selectedSources.has(j.source)) return false;
+      if (hideJobsFromDisabledSources && disabledSources.includes(j.source)) return false;
       if (selectedWorkTypes.size > 0 && (j.work_type === null || !selectedWorkTypes.has(j.work_type))) return false;
       if (activeTags.length > 0 && !activeTags.every(tag => j.tags?.includes(tag))) return false;
       if (searchQuery) {
