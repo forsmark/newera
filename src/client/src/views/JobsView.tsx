@@ -268,6 +268,19 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
     });
   }
 
+  function updateJobsInCache(ids: Set<string>, updateFn: (j: Job) => Job) {
+    queryClient.setQueryData<InfiniteData<JobsPage>>(['jobs', refreshKey], (old) => {
+      if (!old) return old;
+      return {
+        ...old,
+        pages: old.pages.map(p => ({
+          ...p,
+          jobs: p.jobs.map(j => ids.has(j.id) ? updateFn(j) : j),
+        })),
+      };
+    });
+  }
+
   function handleStatusChange(id: string, newStatus: string) {
     updateJobInCache(id, { status: newStatus as Job['status'] });
   }
@@ -310,9 +323,7 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
       } else {
         const s = status as Job['status'];
         const now = new Date().toISOString();
-        setJobs(prev => prev.map(j =>
-          selectedIds.has(j.id) ? { ...j, status: s, seen_at: j.seen_at ?? now } : j
-        ));
+        updateJobsInCache(selectedIds, j => ({ ...j, status: s, seen_at: j.seen_at ?? now }));
         setSelectedIds(new Set());
       }
     } finally {
@@ -333,9 +344,7 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
         toast('Bulk update failed — please try again');
       } else {
         const data = await res.json() as { seen_at: string };
-        setJobs(prev => prev.map(j =>
-          selectedIds.has(j.id) ? { ...j, seen_at: j.seen_at ?? data.seen_at } : j
-        ));
+        updateJobsInCache(selectedIds, j => ({ ...j, seen_at: j.seen_at ?? data.seen_at }));
         setSelectedIds(new Set());
       }
     } finally {
@@ -355,9 +364,27 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
       if (!res.ok) {
         toast('Bulk update failed — please try again');
       } else {
-        setJobs(prev => prev.map(j =>
-          selectedIds.has(j.id) ? { ...j, seen_at: null } : j
-        ));
+        updateJobsInCache(selectedIds, j => ({ ...j, seen_at: null }));
+        setSelectedIds(new Set());
+      }
+    } finally {
+      setBulkLoading(false);
+    }
+  }
+
+  async function bulkRescore() {
+    if (selectedIds.size === 0) return;
+    setBulkLoading(true);
+    try {
+      const res = await fetch('/api/jobs/bulk-rescore', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [...selectedIds] }),
+      });
+      if (!res.ok) {
+        toast('Re-score failed — please try again');
+      } else {
+        updateJobsInCache(selectedIds, j => ({ ...j, match_score: null, match_reasoning: null, match_summary: null }));
         setSelectedIds(new Set());
       }
     } finally {
@@ -373,9 +400,18 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
       if (!res.ok) {
         toast('Re-score failed — please try again');
       } else {
-        setJobs(prev => prev.map(j =>
-          j.status !== 'rejected' ? { ...j, match_score: null, match_reasoning: null, match_summary: null } : j
-        ));
+        queryClient.setQueryData<InfiniteData<JobsPage>>(['jobs', refreshKey], (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            pages: old.pages.map(p => ({
+              ...p,
+              jobs: p.jobs.map(j =>
+                j.status !== 'rejected' ? { ...j, match_score: null, match_reasoning: null, match_summary: null } : j
+              ),
+            })),
+          };
+        });
       }
     } finally {
       setRescoring(false);
@@ -851,12 +887,16 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
                   className="py-2 rounded-sm border border-border bg-transparent text-text-2 cursor-pointer text-[0.8125rem] font-medium disabled:opacity-40">
                   Mark unread
                 </button>
+                <button onClick={bulkRescore} disabled={bulkLoading}
+                  className="py-2 rounded-sm border border-border bg-transparent text-text-3 cursor-pointer text-[0.8125rem] font-medium disabled:opacity-40">
+                  Re-score
+                </button>
                 <button onClick={() => bulkSetStatus('new')} disabled={bulkLoading}
                   className="py-2 rounded-sm border border-border bg-transparent text-text-3 cursor-pointer text-[0.8125rem] font-medium disabled:opacity-40">
                   Restore
                 </button>
                 <button onClick={() => bulkSetStatus('saved')} disabled={bulkLoading}
-                  className="py-2 rounded-sm border border-border-accent bg-transparent text-accent cursor-pointer text-[0.8125rem] font-medium disabled:opacity-40 col-span-2">
+                  className="py-2 rounded-sm border border-border-accent bg-transparent text-accent cursor-pointer text-[0.8125rem] font-medium disabled:opacity-40">
                   Save all
                 </button>
                 <button onClick={() => bulkSetStatus('rejected')} disabled={bulkLoading}
@@ -876,6 +916,10 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
               <button onClick={bulkMarkUnread} disabled={bulkLoading}
                 className="px-2.5 py-1.5 rounded-sm border border-border bg-transparent text-text-2 cursor-pointer text-[0.8125rem] font-medium disabled:opacity-40">
                 Mark unread
+              </button>
+              <button onClick={bulkRescore} disabled={bulkLoading}
+                className="px-2.5 py-1.5 rounded-sm border border-border bg-transparent text-text-3 cursor-pointer text-[0.8125rem] font-medium disabled:opacity-40">
+                Re-score
               </button>
               <button onClick={() => bulkSetStatus('saved')} disabled={bulkLoading}
                 className="px-2.5 py-1.5 rounded-sm border border-border-accent bg-transparent text-accent cursor-pointer text-[0.8125rem] font-medium disabled:opacity-40">

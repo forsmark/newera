@@ -291,6 +291,45 @@ app.post('/bulk-unseen', async (c) => {
   return c.json({ updated });
 });
 
+// POST /api/jobs/bulk-rescore
+// Body: { ids: string[] }
+// Resets scores for specific jobs and re-queues them for analysis
+app.post('/bulk-rescore', async (c) => {
+  let body: { ids?: unknown };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400);
+  }
+
+  const { ids } = body;
+  if (!Array.isArray(ids) || ids.length === 0 || !ids.every(id => typeof id === 'string')) {
+    return c.json({ error: 'ids must be a non-empty string array' }, 400);
+  }
+
+  const placeholders = (ids as string[]).map(() => '?').join(',');
+  db.run(
+    `UPDATE jobs SET match_score = NULL, match_reasoning = NULL, match_summary = NULL WHERE id IN (${placeholders})`,
+    ids as string[]
+  );
+
+  (async () => {
+    for (const id of ids as string[]) {
+      const job = db.query('SELECT * FROM jobs WHERE id = ?').get(id) as Job | null;
+      if (!job) continue;
+      const result = await analyzeJob(job);
+      if (!result) continue;
+      db.run(
+        `UPDATE jobs SET match_score=?, match_reasoning=?, match_summary=?, tags=?, work_type=?, prefs_hash=? WHERE id=?`,
+        [result.match_score, result.match_reasoning, result.match_summary,
+         JSON.stringify(result.tags), result.work_type, result.prefs_hash, id]
+      );
+    }
+  })().catch(console.error);
+
+  return c.json({ queued: (ids as string[]).length }, 202);
+});
+
 // POST /api/jobs/rescore-all
 // Resets match scores for all non-rejected jobs and re-queues analysis via the scheduler
 app.post('/rescore-all', (c) => {
