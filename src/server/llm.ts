@@ -8,6 +8,15 @@ const LLAMA_HEALTH_URL = `${LLAMACPP_BASE_URL}/health`;
 const TIMEOUT_MS = 3 * 60_000;
 const COVER_LETTER_TIMEOUT_MS = 8 * 60_000;
 
+export function resolveBaseUrl(provider: string, storedUrl: string): string {
+  if (storedUrl) return storedUrl;
+  switch (provider) {
+    case 'ollama': return 'http://localhost:11434';
+    case 'lmstudio': return 'http://localhost:1234';
+    default: return LLAMACPP_BASE_URL;
+  }
+}
+
 let llmAvailable: boolean | null = null;
 
 export function getOllamaAvailable(): boolean | null {

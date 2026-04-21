@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test';
-import { extractJson } from '../../llm';
+import { extractJson, resolveBaseUrl } from '../../llm';
 
 describe('extractJson', () => {
   it('parses a valid response', () => {
@@ -63,5 +63,25 @@ describe('extractJson', () => {
     const result = extractJson(raw);
     expect(result.match_score).toBe(55);
     expect(result.tags).toEqual(['Python']);
+  });
+});
+
+describe('resolveBaseUrl', () => {
+  it('returns stored URL when non-empty, regardless of provider', () => {
+    expect(resolveBaseUrl('ollama', 'http://custom:11434')).toBe('http://custom:11434');
+    expect(resolveBaseUrl('lmstudio', 'http://other:1234')).toBe('http://other:1234');
+    expect(resolveBaseUrl('llamacpp', 'http://myserver:8080')).toBe('http://myserver:8080');
+  });
+
+  it('returns ollama default when stored URL is empty', () => {
+    expect(resolveBaseUrl('ollama', '')).toBe('http://localhost:11434');
+  });
+
+  it('returns lmstudio default when stored URL is empty', () => {
+    expect(resolveBaseUrl('lmstudio', '')).toBe('http://localhost:1234');
+  });
+
+  it('returns http://localhost:8080 when llamacpp and stored URL is empty', () => {
+    expect(resolveBaseUrl('llamacpp', '')).toBe('http://localhost:8080');
   });
 });
