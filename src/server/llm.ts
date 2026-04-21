@@ -17,27 +17,41 @@ export function resolveBaseUrl(provider: string, storedUrl: string): string {
 
 let llmAvailable: boolean | null = null;
 
-export function getOllamaAvailable(): boolean | null {
+export function getLLMAvailable(): boolean | null {
   return llmAvailable;
 }
 
-export async function checkOllamaHealth(): Promise<boolean> {
+export async function checkLLMHealth(): Promise<boolean> {
+  const prefs = getPreferences();
+  const provider = prefs.llmProvider ?? 'ollama';
+  const baseUrl = resolveBaseUrl(provider, prefs.llmBaseUrl ?? '');
+
+  let healthUrl: string;
+  switch (provider) {
+    case 'ollama': healthUrl = `${baseUrl}/`; break;
+    case 'lmstudio': healthUrl = `${baseUrl}/v1/models`; break;
+    default: healthUrl = `${baseUrl}/health`; break;
+  }
+
   try {
-    const res = await fetch(`${LLAMACPP_BASE_URL}/health`, {
-      signal: AbortSignal.timeout(5000),
-    });
+    const res = await fetch(healthUrl, { signal: AbortSignal.timeout(5000) });
     if (!res.ok) {
       llmAvailable = false;
-      console.warn('[llm] llama.cpp health check failed — HTTP', res.status);
+      console.warn(`[llm] ${provider} health check failed — HTTP`, res.status);
       return false;
     }
-    const json = (await res.json()) as { status?: string };
-    llmAvailable = json.status === 'ok';
-    if (!llmAvailable) console.warn('[llm] llama.cpp not ready — status:', json.status);
-    else console.log('[llm] llama.cpp is reachable');
+    if (provider === 'llamacpp') {
+      const json = (await res.json()) as { status?: string };
+      llmAvailable = json.status === 'ok';
+      if (!llmAvailable) console.warn('[llm] llama.cpp not ready — status:', json.status);
+      else console.log('[llm] llama.cpp is reachable');
+    } else {
+      llmAvailable = true;
+      console.log(`[llm] ${provider} is reachable`);
+    }
   } catch (err) {
     llmAvailable = false;
-    console.warn('[llm] llama.cpp not reachable:', (err as Error).message);
+    console.warn(`[llm] ${provider} not reachable:`, (err as Error).message);
   }
   return llmAvailable ?? false;
 }
