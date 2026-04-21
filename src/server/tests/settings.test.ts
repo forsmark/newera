@@ -150,6 +150,44 @@ describe('POST /rescore', () => {
   });
 });
 
+describe('GET / — LLM provider defaults', () => {
+  beforeEach(clearSettings);
+
+  it('defaults llmProvider to ollama', async () => {
+    const res = await app.request('/');
+    const data = await res.json() as { preferences: Record<string, unknown> };
+    expect(data.preferences.llmProvider).toBe('ollama');
+  });
+
+  it('defaults llmBaseUrl to empty string', async () => {
+    const res = await app.request('/');
+    const data = await res.json() as { preferences: Record<string, unknown> };
+    expect(data.preferences.llmBaseUrl).toBe('');
+  });
+
+  it('defaults model to gemma4:26b', async () => {
+    const res = await app.request('/');
+    const data = await res.json() as { preferences: Record<string, unknown> };
+    expect(data.preferences.model).toBe('gemma4:26b');
+  });
+});
+
+describe('PUT /preferences — LLM provider fields', () => {
+  beforeEach(clearSettings);
+
+  it('persists llmProvider and llmBaseUrl', async () => {
+    await app.request('/preferences', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ llmProvider: 'lmstudio', llmBaseUrl: 'http://localhost:1234' }),
+    });
+    const get = await app.request('/');
+    const data = await get.json() as { preferences: Record<string, unknown> };
+    expect(data.preferences.llmProvider).toBe('lmstudio');
+    expect(data.preferences.llmBaseUrl).toBe('http://localhost:1234');
+  });
+});
+
 describe('POST /telegram-test', () => {
   beforeEach(clearSettings);
   afterEach(() => { globalThis.fetch = originalFetch; });
