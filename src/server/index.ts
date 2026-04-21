@@ -12,7 +12,7 @@ import backupsRoute from './routes/backups';
 import { isAuthEnabled, validateSession } from './auth';
 import { startBackupScheduler } from './backup';
 import { startScheduler, getLastFetchAt, getIsFetching, getLastFetchNewJobs } from './scheduler';
-import { checkOllamaHealth, getOllamaAvailable } from './llm';
+import { checkLLMHealth, getLLMAvailable } from './llm';
 import { computePrefsHash } from './utils/hash';
 import { getSetting } from './settings';
 import { getCookie } from 'hono/cookie';
@@ -73,7 +73,7 @@ app.get('/api/status', (c) => {
     is_fetching: getIsFetching(),
     unscored_jobs: unscoredRow.count,
     score_distribution: scoreDist,
-    llm_available: getOllamaAvailable(),
+    llm_available: getLLMAvailable(),
     last_fetch_new_jobs: getLastFetchNewJobs(),
     stale_count,
     data_files: {
@@ -95,9 +95,9 @@ app.use('/robots.txt', serveStatic({ root: DIST }));
 // SPA fallback: all other routes serve index.html for client-side routing
 app.get('/*', (c) => new Response(Bun.file(resolve(DIST, 'index.html'))));
 
-// Start Ollama health check, job scheduler, and backup scheduler
-checkOllamaHealth().catch(console.error);
-setInterval(() => checkOllamaHealth().catch(console.error), 30_000);
+// Start LLM health check, job scheduler, and backup scheduler
+checkLLMHealth().catch(console.error);
+setInterval(() => checkLLMHealth().catch(console.error), 30_000);
 if (process.env.DISABLE_SCHEDULER !== '1') {
   startScheduler();
   startBackupScheduler();

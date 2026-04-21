@@ -5,7 +5,7 @@ Personal job aggregation and tracking app. Fetches jobs from LinkedIn and Jobind
 ## Prerequisites
 
 - [Docker](https://docs.docker.com/get-docker/) + Docker Compose v2
-- [llama.cpp](https://github.com/ggml-org/llama.cpp) server running on the host, port `8080`
+- A local LLM server — see [LLM Providers](#llm-providers) below
 
 For local development only:
 - [Bun](https://bun.sh) ≥ 1.1
@@ -46,32 +46,56 @@ Create a `.env` file in the project root (see `.env.example`):
 # If not set, the app is accessible without a password (fine for local-only use)
 AUTH_SECRET=choose_a_strong_password
 
-# llama.cpp server URL (default: http://localhost:8080)
+# llama.cpp fallback URL — used when provider is llamacpp and no URL is saved in Settings
 # Docker Compose sets this to http://host.docker.internal:8080 automatically
 LLAMACPP_BASE_URL=http://localhost:8080
 ```
 
 `LLAMACPP_BASE_URL` is set automatically by Docker Compose to reach llama.cpp on the host via `host.docker.internal:8080`. Override it if the server runs elsewhere.
 
-## llama.cpp Setup
+## LLM Providers
 
-Download and build llama.cpp, then start the server with a compatible model (Gemma 4 27B recommended):
+The app supports three local LLM providers. Configure the provider, base URL, and model from **Settings → LLM Provider** — no server restart needed after saving.
+
+| Provider | Default URL | Recommended model |
+|---|---|---|
+| **Ollama** (default) | `http://localhost:11434` | `gemma4:26b` |
+| **LM Studio** | `http://localhost:1234` | `google/gemma-3-27b-it` |
+| **llama.cpp** | `http://localhost:8080` | `unsloth/gemma-4-26B-A4B-it-GGUF` |
+
+### Ollama (recommended)
 
 ```bash
-# Start the server — adjust -ngl (GPU layers) and --ctx-size to fit your VRAM
+# Install (Linux/macOS)
+curl -fsSL https://ollama.com/install.sh | sh
+
+# Pull the model and start serving
+ollama pull gemma4:26b
+ollama serve
+```
+
+### LM Studio
+
+1. Download from [lmstudio.ai](https://lmstudio.ai) and install
+2. In the Discover tab, search for `google/gemma-3-27b-it` and download it
+3. Load the model, open the **Local Server** tab, and click **Start Server** (default port 1234)
+
+### llama.cpp
+
+```bash
+# Adjust -ngl (GPU layers) and --ctx-size to fit your VRAM
 llama-server \
-  --model /path/to/gemma-4-27b-q4.gguf \
+  --model /path/to/gemma-4-26B-A4B-it.gguf \
   --port 8080 \
   --ctx-size 8192 \
   -ngl 99
-
-# Verify it's running
-curl http://localhost:8080/health
 ```
 
-The server exposes an OpenAI-compatible API at `/completion`. The app uses `LLAMACPP_BASE_URL` (default: `http://localhost:8080`) to reach it.
+llama.cpp uses a Gemma chat template and grammar-based JSON sampling automatically.
 
-The navbar shows an `llm ✗` badge if the server is unreachable. Job scoring is skipped until it's available.
+### LLAMACPP_BASE_URL (legacy env var)
+
+`LLAMACPP_BASE_URL` is still honoured as the fallback base URL when using the llama.cpp provider and no URL is saved in Settings. Docker Compose sets it to `http://host.docker.internal:8080` automatically.
 
 ## Authentication
 
