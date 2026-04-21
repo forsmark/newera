@@ -43,6 +43,26 @@ export default function SettingsView({ staleCount = 0 }: { staleCount?: number }
 
   const prefsDirty = JSON.stringify(prefs) !== JSON.stringify(savedPrefs);
 
+  const [showLLMHelp, setShowLLMHelp] = useState(false);
+
+  const LLM_PROVIDER_LABELS: Record<string, string> = {
+    ollama: 'Ollama',
+    lmstudio: 'LM Studio',
+    llamacpp: 'llama.cpp',
+  };
+
+  const LLM_DEFAULT_URLS: Record<string, string> = {
+    ollama: 'http://localhost:11434',
+    lmstudio: 'http://localhost:1234',
+    llamacpp: 'http://localhost:8080',
+  };
+
+  const LLM_DEFAULT_MODELS: Record<string, string> = {
+    ollama: 'gemma4:26b',
+    lmstudio: 'google/gemma-3-27b-it',
+    llamacpp: 'unsloth/gemma-4-26B-A4B-it-GGUF',
+  };
+
   useEffect(() => {
     fetch("/api/settings")
       .then(r => r.json())
@@ -194,7 +214,7 @@ export default function SettingsView({ staleCount = 0 }: { staleCount?: number }
 
       {/* App config */}
       <Accordion title="App config" defaultOpen={true} action={saveBtn(prefsDirty, savingPrefs, savePrefs)}>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="Low score threshold" hint="(0–100)">
             <NumberInput
               value={prefs.lowScoreThreshold}
@@ -208,12 +228,6 @@ export default function SettingsView({ staleCount = 0 }: { staleCount?: number }
               onChange={v => updatePref('fetchIntervalHours', v ?? 2)}
               min={1} max={24} step={1} placeholder="2"
             />
-          </Field>
-          <Field label="llama.cpp model">
-            <input className={inputClass}
-              value={prefs.model}
-              onChange={e => updatePref('model', e.target.value)}
-              placeholder="unsloth/gemma-4-26B-A4B-it-GGUF" />
           </Field>
         </div>
 
@@ -264,6 +278,63 @@ export default function SettingsView({ staleCount = 0 }: { staleCount?: number }
             </button>
           </div>
         </div>
+      </Accordion>
+
+      {/* LLM Provider */}
+      <Accordion
+        title="LLM Provider"
+        defaultOpen={false}
+        action={
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowLLMHelp(true)}
+              title="Setup guide"
+              className="w-5 h-5 rounded-full border border-border text-text-3 text-[0.625rem] font-bold flex items-center justify-center cursor-pointer hover:text-text-2 hover:border-text-3 shrink-0"
+            >
+              ?
+            </button>
+            {saveBtn(prefsDirty, savingPrefs, savePrefs)}
+          </div>
+        }
+      >
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <Field label="Provider">
+            <select
+              className={inputClass}
+              value={prefs.llmProvider}
+              onChange={e => updatePref('llmProvider', e.target.value as 'ollama' | 'lmstudio' | 'llamacpp')}
+            >
+              <option value="ollama">Ollama</option>
+              <option value="lmstudio">LM Studio</option>
+              <option value="llamacpp">llama.cpp</option>
+            </select>
+          </Field>
+          <Field label="Base URL" hint="(leave empty for default)">
+            <input
+              className={inputClass}
+              value={prefs.llmBaseUrl}
+              onChange={e => updatePref('llmBaseUrl', e.target.value)}
+              placeholder={LLM_DEFAULT_URLS[prefs.llmProvider] ?? 'http://localhost:11434'}
+            />
+          </Field>
+          <Field
+            label="Model"
+            hint={prefs.llmProvider === 'llamacpp' ? '(informational only)' : undefined}
+          >
+            <input
+              className={inputClass}
+              value={prefs.model}
+              onChange={e => updatePref('model', e.target.value)}
+              placeholder={LLM_DEFAULT_MODELS[prefs.llmProvider] ?? 'gemma4:26b'}
+            />
+          </Field>
+        </div>
+        {prefs.llmProvider === 'llamacpp' && (
+          <p className="text-[0.75rem] text-text-3 m-0">
+            Model loads at server start — this name is for reference only.
+          </p>
+        )}
       </Accordion>
 
       {/* Sources */}
