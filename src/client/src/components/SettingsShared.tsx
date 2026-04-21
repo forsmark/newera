@@ -17,6 +17,8 @@ export interface Preferences {
   defaultHideUnscored: boolean;
   autoRejectLowScore: boolean;
   model: string;
+  llmProvider: 'ollama' | 'lmstudio' | 'llamacpp';
+  llmBaseUrl: string;
   fetchIntervalHours: number;
   telegramBotToken: string;
   telegramChatId: string;
@@ -43,7 +45,9 @@ export const EMPTY_PREFS: Preferences = {
   defaultHideLowScore: true,
   defaultHideUnscored: false,
   autoRejectLowScore: false,
-  model: 'unsloth/gemma-4-26B-A4B-it-GGUF',
+  model: 'gemma4:26b',
+  llmProvider: 'ollama',
+  llmBaseUrl: '',
   fetchIntervalHours: 2,
   telegramBotToken: '',
   telegramChatId: '',
