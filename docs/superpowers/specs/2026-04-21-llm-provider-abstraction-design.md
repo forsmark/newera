@@ -21,7 +21,7 @@ llmBaseUrl: string;  // empty string = use provider default URL
 **Defaults:**
 - `llmProvider: 'ollama'`
 - `llmBaseUrl: ''`
-- `model` default changes from `'unsloth/gemma-4-26B-A4B-it-GGUF'` → `'gemma3:27b'`
+- `model` default changes from `'unsloth/gemma-4-26B-A4B-it-GGUF'` → `'gemma4:26b'`
 
 **Provider default URLs** (used when `llmBaseUrl` is empty):
 - `ollama` → `http://localhost:11434`
@@ -86,7 +86,7 @@ Placed between "App config" and "Sources" in `SettingsView.tsx`. Saved with the 
 Controls:
 1. **Provider select** — `<select>` with options: Ollama, LM Studio, llama.cpp
 2. **Base URL** — text input; placeholder shows the provider's default URL; cleared when provider changes if it matches the old provider's default
-3. **Model** — text input; for `llamacpp` shows muted hint "loaded at server start, informational only"; placeholder updates per provider (gemma3:27b / google/gemma-3-27b-it / unsloth/gemma-4-26B-A4B-it-GGUF)
+3. **Model** — text input; for `llamacpp` shows muted hint "loaded at server start, informational only"; placeholder updates per provider (gemma4:26b / google/gemma-3-27b-it / unsloth/gemma-4-26B-A4B-it-GGUF)
 4. **`?` help button** — small icon button in the accordion header beside the title; opens the help modal
 
 ### Help modal
@@ -94,8 +94,8 @@ Controls:
 Single modal component. Shows content for the currently selected provider (no tabs — just the relevant provider).
 
 **Ollama content:**
-- Recommended model: `gemma3:27b`
-- Setup: install Ollama, run `ollama serve`, pull model with `ollama pull gemma3:27b`
+- Recommended model: `gemma4:26b`
+- Setup: install Ollama, run `ollama serve`, pull model with `ollama pull gemma4:26b`
 - Default URL: `http://localhost:11434`
 
 **LM Studio content:**
@@ -142,7 +142,7 @@ New **"LLM Providers"** section added to `README.md`.
 
 | Provider | Default URL | Recommended model |
 |---|---|---|
-| Ollama (default) | `http://localhost:11434` | `gemma3:27b` |
+| Ollama (default) | `http://localhost:11434` | `gemma4:26b` |
 | LM Studio | `http://localhost:1234` | `google/gemma-3-27b-it` |
 | llama.cpp | `http://localhost:8080` | `unsloth/gemma-4-26B-A4B-it-GGUF` |
 
