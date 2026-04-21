@@ -563,6 +563,98 @@ export default function SettingsView({ staleCount = 0 }: { staleCount?: number }
           </div>
         </div>
       </Accordion>
+
+      {/* LLM Provider help modal */}
+      {showLLMHelp && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+          onClick={() => setShowLLMHelp(false)}
+        >
+          <div
+            className="bg-surface max-w-lg w-full mx-4 rounded border border-border p-5 flex flex-col gap-4 max-h-[90vh] overflow-y-auto"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h2 className="text-text font-semibold text-sm m-0">
+                {LLM_PROVIDER_LABELS[prefs.llmProvider] ?? 'LLM'} Setup Guide
+              </h2>
+              <button
+                type="button"
+                onClick={() => setShowLLMHelp(false)}
+                className="text-text-3 text-xl leading-none cursor-pointer bg-transparent border-none"
+              >
+                ×
+              </button>
+            </div>
+
+            {prefs.llmProvider === 'ollama' && (
+              <div className="flex flex-col gap-3 text-sm text-text-2">
+                <p className="m-0">Ollama runs models locally via a simple REST API.</p>
+                <div>
+                  <p className="text-[0.75rem] text-text-3 font-medium mb-1">1. Install Ollama</p>
+                  <p className="m-0">Download from ollama.com or run:</p>
+                  <pre className="bg-surface-deep text-text-2 text-xs rounded p-2 mt-1 overflow-x-auto">curl -fsSL https://ollama.com/install.sh | sh</pre>
+                </div>
+                <div>
+                  <p className="text-[0.75rem] text-text-3 font-medium mb-1">2. Start the server and pull the model</p>
+                  <pre className="bg-surface-deep text-text-2 text-xs rounded p-2 overflow-x-auto">{"ollama serve\nollama pull gemma4:26b"}</pre>
+                </div>
+                <div>
+                  <p className="text-[0.75rem] text-text-3 font-medium mb-1">3. Configure</p>
+                  <p className="m-0">Set <strong>Model</strong> to <code className="text-accent bg-surface-deep px-1 rounded text-xs">gemma4:26b</code>. Leave URL empty to use the default (<code className="text-xs">http://localhost:11434</code>).</p>
+                </div>
+                <p className="m-0 text-text-3 text-xs">Recommended: gemma4:26b — 26B params, good balance of speed and quality.</p>
+              </div>
+            )}
+
+            {prefs.llmProvider === 'lmstudio' && (
+              <div className="flex flex-col gap-3 text-sm text-text-2">
+                <p className="m-0">LM Studio provides an OpenAI-compatible local API with a graphical model manager.</p>
+                <div>
+                  <p className="text-[0.75rem] text-text-3 font-medium mb-1">1. Install LM Studio</p>
+                  <p className="m-0">Download from lmstudio.ai and install it.</p>
+                </div>
+                <div>
+                  <p className="text-[0.75rem] text-text-3 font-medium mb-1">2. Download a model</p>
+                  <p className="m-0">In the Discover tab, search for <code className="text-accent bg-surface-deep px-1 rounded text-xs">google/gemma-3-27b-it</code> and download it.</p>
+                </div>
+                <div>
+                  <p className="text-[0.75rem] text-text-3 font-medium mb-1">3. Start the local server</p>
+                  <p className="m-0">Load your model, then open the <strong>Local Server</strong> tab and click <strong>Start Server</strong>. Default port is 1234.</p>
+                </div>
+                <div>
+                  <p className="text-[0.75rem] text-text-3 font-medium mb-1">4. Configure</p>
+                  <p className="m-0">Set <strong>Model</strong> to <code className="text-accent bg-surface-deep px-1 rounded text-xs">google/gemma-3-27b-it</code>. Leave URL empty to use the default (<code className="text-xs">http://localhost:1234</code>).</p>
+                </div>
+                <p className="m-0 text-text-3 text-xs">Recommended: google/gemma-3-27b-it</p>
+              </div>
+            )}
+
+            {prefs.llmProvider === 'llamacpp' && (
+              <div className="flex flex-col gap-3 text-sm text-text-2">
+                <p className="m-0">llama.cpp runs GGUF models with optional GPU acceleration and grammar-based JSON sampling.</p>
+                <div>
+                  <p className="text-[0.75rem] text-text-3 font-medium mb-1">1. Build or download llama-server</p>
+                  <p className="m-0">See github.com/ggml-org/llama.cpp for build instructions, or download a prebuilt release.</p>
+                </div>
+                <div>
+                  <p className="text-[0.75rem] text-text-3 font-medium mb-1">2. Download a GGUF model</p>
+                  <p className="m-0">Recommended: <code className="text-accent bg-surface-deep px-1 rounded text-xs">unsloth/gemma-4-26B-A4B-it-GGUF</code> from HuggingFace.</p>
+                </div>
+                <div>
+                  <p className="text-[0.75rem] text-text-3 font-medium mb-1">3. Start the server</p>
+                  <pre className="bg-surface-deep text-text-2 text-xs rounded p-2 overflow-x-auto">{"llama-server \\\n  --model /path/to/model.gguf \\\n  --port 8080 \\\n  --ctx-size 8192 \\\n  -ngl 99"}</pre>
+                </div>
+                <div>
+                  <p className="text-[0.75rem] text-text-3 font-medium mb-1">4. Configure</p>
+                  <p className="m-0">Leave URL empty to use the default (<code className="text-xs">http://localhost:8080</code>). The model name in settings is informational — it loads at server start.</p>
+                </div>
+                <p className="m-0 text-text-3 text-xs">Note: JSON grammar sampling is applied automatically for structured output.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
