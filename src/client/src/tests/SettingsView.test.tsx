@@ -13,7 +13,7 @@ beforeEach(() => {
     if (url === '/api/status') {
       return Promise.resolve({
         ok: true,
-        json: async () => ({ ollama_available: true, unscored_jobs: 3 }),
+        json: async () => ({ llm_available: true, unscored_jobs: 3 }),
       });
     }
     if (url === '/api/backups') {
@@ -72,6 +72,52 @@ describe('SettingsView', () => {
     fireEvent.click(screen.getByText('System'));
     await waitFor(() => {
       expect(screen.getByText('3 jobs pending LLM analysis')).toBeInTheDocument();
+    });
+  });
+
+  it('renders LLM Provider accordion', async () => {
+    render(<SettingsView />);
+    await waitFor(() => {
+      expect(screen.getByText('LLM Provider')).toBeInTheDocument();
+    });
+  });
+
+  it('shows LM Studio Connected when llmProvider is lmstudio', async () => {
+    vi.stubGlobal('fetch', vi.fn((url: string) => {
+      if (url === '/api/settings') {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ resume: '', preferences: { llmProvider: 'lmstudio' } }),
+        });
+      }
+      if (url === '/api/status') {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ llm_available: true, unscored_jobs: 0 }),
+        });
+      }
+      if (url === '/api/backups') {
+        return Promise.resolve({ ok: true, json: async () => ({ backups: [] }) });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) });
+    }));
+
+    render(<SettingsView />);
+    await waitFor(() => screen.getByText('System'));
+    fireEvent.click(screen.getByText('System'));
+    await waitFor(() => {
+      expect(screen.getByText('LM Studio Connected')).toBeInTheDocument();
+    });
+  });
+
+  it('opens help modal when ? button is clicked', async () => {
+    render(<SettingsView />);
+    await waitFor(() => screen.getByText('LLM Provider'));
+    fireEvent.click(screen.getByText('LLM Provider'));
+    await waitFor(() => screen.getByTitle('Setup guide'));
+    fireEvent.click(screen.getByTitle('Setup guide'));
+    await waitFor(() => {
+      expect(screen.getByText('Ollama Setup Guide')).toBeInTheDocument();
     });
   });
 

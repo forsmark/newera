@@ -507,7 +507,9 @@ export default function SettingsView({ staleCount = 0 }: { staleCount?: number }
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-2 text-xs">
               <span className={`w-2 h-2 rounded-full shrink-0 ${system.llm_available ? "bg-green" : "bg-red"}`} />
-              <span className="text-text-2">llama.cpp {system.llm_available ? "Connected" : "Unavailable"}</span>
+              <span className="text-text-2">
+                {LLM_PROVIDER_LABELS[prefs.llmProvider] ?? 'LLM'} {system.llm_available ? "Connected" : "Unavailable"}
+              </span>
             </div>
             <p className="text-xs text-text-3 m-0">
               {system.unscored_jobs > 0
