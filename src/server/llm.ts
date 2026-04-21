@@ -3,8 +3,6 @@ import { LLAMACPP_BASE_URL } from './config';
 import { getPreferences, getSetting } from './settings';
 import { computePrefsHash } from './utils/hash';
 
-const LLAMA_URL = `${LLAMACPP_BASE_URL}/completion`;
-const LLAMA_HEALTH_URL = `${LLAMACPP_BASE_URL}/health`;
 const TIMEOUT_MS = 3 * 60_000;
 const COVER_LETTER_TIMEOUT_MS = 8 * 60_000;
 
@@ -25,7 +23,7 @@ export function getOllamaAvailable(): boolean | null {
 
 export async function checkOllamaHealth(): Promise<boolean> {
   try {
-    const res = await fetch(LLAMA_HEALTH_URL, {
+    const res = await fetch(`${LLAMACPP_BASE_URL}/health`, {
       signal: AbortSignal.timeout(5000),
     });
     if (!res.ok) {
@@ -174,8 +172,8 @@ function applyGemmaTemplate(userMessage: string): string {
   return `<start_of_turn>user\n${userMessage}<end_of_turn>\n<start_of_turn>model\n<think>\n</think>\n`;
 }
 
-async function llamaComplete(prompt: string, nPredict: number, signal: AbortSignal): Promise<string> {
-  const response = await fetch(LLAMA_URL, {
+async function llamaComplete(baseUrl: string, prompt: string, nPredict: number, signal: AbortSignal): Promise<string> {
+  const response = await fetch(`${baseUrl}/completion`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -194,6 +192,59 @@ async function llamaComplete(prompt: string, nPredict: number, signal: AbortSign
   return json.content?.trim() ?? '';
 }
 
+async function ollamaComplete(baseUrl: string, model: string, prompt: string, nPredict: number, signal: AbortSignal): Promise<string> {
+  const response = await fetch(`${baseUrl}/api/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model,
+      messages: [{ role: 'user', content: prompt }],
+      stream: false,
+      options: { temperature: 0.1, num_predict: nPredict },
+    }),
+    signal,
+  });
+  if (!response.ok) {
+    const body = await response.text().catch(() => '');
+    throw new Error(`Ollama returned HTTP ${response.status}: ${body.slice(0, 200)}`);
+  }
+  const json = (await response.json()) as { message?: { content?: string } };
+  return json.message?.content?.trim() ?? '';
+}
+
+async function lmstudioComplete(baseUrl: string, model: string, prompt: string, nPredict: number, signal: AbortSignal): Promise<string> {
+  const response = await fetch(`${baseUrl}/v1/chat/completions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model,
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: nPredict,
+      temperature: 0.1,
+      stream: false,
+    }),
+    signal,
+  });
+  if (!response.ok) {
+    const body = await response.text().catch(() => '');
+    throw new Error(`LM Studio returned HTTP ${response.status}: ${body.slice(0, 200)}`);
+  }
+  const json = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
+  return json.choices?.[0]?.message?.content?.trim() ?? '';
+}
+
+async function llmComplete(prompt: string, nPredict: number, signal: AbortSignal): Promise<string> {
+  const prefs = getPreferences();
+  const provider = prefs.llmProvider ?? 'ollama';
+  const baseUrl = resolveBaseUrl(provider, prefs.llmBaseUrl ?? '');
+  const model = prefs.model;
+  switch (provider) {
+    case 'ollama': return ollamaComplete(baseUrl, model, prompt, nPredict, signal);
+    case 'lmstudio': return lmstudioComplete(baseUrl, model, prompt, nPredict, signal);
+    default: return llamaComplete(baseUrl, prompt, nPredict, signal);
+  }
+}
+
 async function extractTagsFromDescription(description: string): Promise<string[]> {
   const truncated = description.length > 6_000 ? description.slice(0, 6_000) + '\n[truncated]' : description;
 
@@ -208,7 +259,7 @@ ${truncated}`;
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
   try {
-    const raw = await llamaComplete(prompt, 256, controller.signal);
+    const raw = await llmComplete(prompt, 256, controller.signal);
     const stripped = raw.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim();
     const match = stripped.match(/\[[\s\S]*\]/);
     if (!match) return [];
@@ -238,7 +289,7 @@ ${truncated}
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
   try {
-    const text = await llamaComplete(prompt, 2048, controller.signal);
+    const text = await llmComplete(prompt, 2048, controller.signal);
     return text.length > 0 ? text : null;
   } catch (err) {
     if (err instanceof Error && err.name !== 'AbortError') {
@@ -263,7 +314,7 @@ ${truncated}`;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
-    const text = await llamaComplete(prompt, 2048, controller.signal);
+    const text = await llmComplete(prompt, 2048, controller.signal);
     return text.length > 50 ? text : null;
   } catch (err) {
     console.warn('[llm] parseResume failed:', (err as Error).message);
@@ -318,7 +369,7 @@ Return only the cover letter text, no commentary or metadata.`;
   const timer = setTimeout(() => controller.abort(), COVER_LETTER_TIMEOUT_MS);
 
   try {
-    const text = await llamaComplete(prompt, 1024, controller.signal);
+    const text = await llmComplete(prompt, 1024, controller.signal);
     return text.length > 50 ? text : null;
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') {
@@ -353,10 +404,10 @@ export async function analyzeJob(job: Job): Promise<AnalysisResult | null> {
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
     try {
-      const raw = await llamaComplete(prompt, 2048, controller.signal);
+      const raw = await llmComplete(prompt, 2048, controller.signal);
       clearTimeout(timer);
 
-      if (!raw) throw new Error('llama.cpp response missing content');
+      if (!raw) throw new Error('LLM response missing content');
 
       const result = extractJson(raw);
       result.prefs_hash = prefs_hash;
@@ -379,7 +430,7 @@ export async function analyzeJob(job: Job): Promise<AnalysisResult | null> {
       }
       if (err instanceof Error && (err.message.includes('ECONNREFUSED') || err.message.includes('fetch failed') || err.message.includes('Unable to connect'))) {
         llmAvailable = false;
-        console.error('[llm] llama.cpp unreachable for job', job.id, ':', err.message);
+        console.error('[llm] LLM unreachable for job', job.id, ':', err.message);
         return null;
       }
       if (attempt < MAX_ATTEMPTS) {
