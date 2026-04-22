@@ -129,7 +129,11 @@ work_type: one of "remote", "hybrid", "onsite", or null if the posting does not 
 }
 
 export function extractJson(raw: string): AnalysisResult {
-  const stripped = raw.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim();
+  // Strip thinking blocks and XML-like tags (e.g. <think>...</think>, <end_of_turn>)
+  const noThink = raw
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .replace(/<[^>]+>/g, '');
+  const stripped = noThink.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim();
 
   const match = stripped.match(/\{[\s\S]*\}/);
   if (!match) {
@@ -195,6 +199,17 @@ async function llamaComplete(baseUrl: string, prompt: string, nPredict: number, 
       n_predict: nPredict,
       temperature: 0.1,
       cache_prompt: true,
+      json_schema: {
+        type: 'object',
+        properties: {
+          match_score: { type: 'number' },
+          match_reasoning: { type: 'string' },
+          summary: { type: 'string' },
+          tags: { type: 'array', items: { type: 'string' } },
+          work_type: { type: ['string', 'null'] },
+        },
+        required: ['match_score', 'match_reasoning', 'summary', 'tags', 'work_type'],
+      },
     }),
     signal,
   });
