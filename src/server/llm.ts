@@ -120,10 +120,13 @@ ${preferences.companyBlacklist && preferences.companyBlacklist.includes(job.comp
 ## Task
 Respond with ONLY a single JSON object. No prose, no markdown, no code fences, no explanation before or after. Start your response with { and end with }.
 
-{"match_score": <0-100>, "match_reasoning": "<1-2 sentences addressed directly to you explaining why you are or aren't a fit>", "summary": "<2-3 sentence factual overview of what the role involves and who it's for>", "tags": ["<tech1>", "<tech2>"], "work_type": "<remote|hybrid|onsite|null>"}
+Write match_reasoning first — reason through the fit before committing to a score. The match_score must reflect the reasoning.
 
+{"match_reasoning": "<1-2 sentences addressed directly to you explaining why you are or aren't a fit>", "match_score": <0-100>, "summary": "<2-3 sentence factual overview of what the role involves and who it's for>", "tags": ["<tech1>", "<tech2>"], "work_type": "<remote|hybrid|onsite|null>"}
+
+match_reasoning: direct second-person assessment (use "you"/"your", not "the candidate"). If location is outside your preferred area, say so explicitly. Write this before deciding the score.
+match_score: integer 0–100. Must be consistent with the reasoning above.
 summary: factual description of the role — what the job is about, not an opinion.
-match_reasoning: direct second-person assessment (use "you"/"your", not "the candidate"). If location is outside your preferred area, say so explicitly.
 tags: up to 8 specific technologies, languages, frameworks, or tools mentioned in the job (e.g. "React", "TypeScript", "Node.js", "AWS"). Empty array if none identifiable.
 work_type: one of "remote", "hybrid", "onsite", or null if the posting does not clearly indicate the work arrangement.`;
 }
@@ -202,13 +205,13 @@ async function llamaComplete(baseUrl: string, prompt: string, nPredict: number, 
       json_schema: {
         type: 'object',
         properties: {
-          match_score: { type: 'number' },
           match_reasoning: { type: 'string' },
+          match_score: { type: 'number' },
           summary: { type: 'string' },
           tags: { type: 'array', items: { type: 'string' } },
           work_type: { type: ['string', 'null'] },
         },
-        required: ['match_score', 'match_reasoning', 'summary', 'tags', 'work_type'],
+        required: ['match_reasoning', 'match_score', 'summary', 'tags', 'work_type'],
       },
     }),
     signal,
