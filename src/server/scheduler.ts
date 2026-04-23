@@ -121,39 +121,78 @@ function ingestBatch(jobs: JobPartial[]): string[] {
   return newIds;
 }
 
-function scoreBatchInBackground(jobIds: string[]) {
-  (async () => {
-    const scoredResults: ScoredJob[] = [];
+// ── Scoring queue ──────────────────────────────────────────────────────────────
+// Single serialized worker prevents concurrent LLM calls across source batches.
+// Map deduplicates job IDs; autoReject=false always wins on collision.
 
-    for (const jobId of jobIds) {
+const scoreQueue = new Map<string, { autoReject: boolean }>();
+let workerRunning = false;
+const workerDoneCallbacks: Array<() => void> = [];
+
+async function runScoringWorker(): Promise<void> {
+  if (workerRunning) return;
+  workerRunning = true;
+  const scored: ScoredJob[] = [];
+
+  try {
+    while (scoreQueue.size > 0) {
+      const entry = scoreQueue.entries().next().value;
+      if (!entry) break;
+      const [jobId, { autoReject }] = entry;
+      scoreQueue.delete(jobId);
+
       const job = db.query('SELECT * FROM jobs WHERE id = ?').get(jobId) as Job | null;
       if (!job) continue;
 
+      if (job.source === 'linkedin' && !job.description) {
+        const linkedInId = job.external_id.replace(/^li_/, '');
+        console.log(`[scheduler] Re-fetching LinkedIn description for job ${job.id} (${linkedInId})`);
+        const desc = await fetchJobDescription(linkedInId);
+        if (desc) {
+          db.run('UPDATE jobs SET description = ? WHERE id = ?', [desc, job.id]);
+          job.description = desc;
+        }
+      }
+
       const result = await analyzeJob(job);
       if (result) {
-        db.run('UPDATE jobs SET match_score = ?, match_reasoning = ?, match_summary = ?, tags = ?, work_type = ?, prefs_hash = ? WHERE id = ?', [
-          result.match_score,
-          result.match_reasoning,
-          result.match_summary,
-          JSON.stringify(result.tags),
-          result.work_type,
-          result.prefs_hash,
-          jobId,
-        ]);
-        maybeAutoReject(jobId, result.match_score);
-        scoredResults.push({ job, score: result.match_score, matchSummary: result.match_summary });
+        db.run(
+          'UPDATE jobs SET match_score = ?, match_reasoning = ?, match_summary = ?, tags = ?, work_type = ?, prefs_hash = ? WHERE id = ?',
+          [result.match_score, result.match_reasoning, result.match_summary,
+           JSON.stringify(result.tags), result.work_type, result.prefs_hash, jobId]
+        );
+        if (autoReject) maybeAutoReject(jobId, result.match_score);
+        scored.push({ job, score: result.match_score, matchSummary: result.match_summary });
         console.log(`[scheduler] Analyzed job ${jobId}: score=${result.match_score} tags=${result.tags.join(',')}`);
       }
     }
 
-    // Send Telegram notification with batch summary
-    await sendFetchSummary(scoredResults);
-
-    // Retry any existing jobs that weren't scored yet
-    await analyzeUnscoredJobs();
-
+    if (scored.length > 0) await sendFetchSummary(scored);
     console.log('[scheduler] Done scoring batch');
-  })().catch((err) => console.error('[scheduler] Background analysis failed:', err));
+  } finally {
+    workerRunning = false;
+    const cbs = workerDoneCallbacks.splice(0);
+    for (const cb of cbs) cb();
+  }
+}
+
+export function enqueueForScoring(jobIds: string[], autoReject = true): void {
+  if (!getResume()) return;
+  for (const id of jobIds) {
+    const existing = scoreQueue.get(id);
+    if (existing) {
+      // autoReject=false wins: never escalate a safe override to auto-reject
+      if (!autoReject) existing.autoReject = false;
+    } else {
+      scoreQueue.set(id, { autoReject });
+    }
+  }
+  runScoringWorker().catch(console.error);
+}
+
+function waitForWorker(): Promise<void> {
+  if (!workerRunning && scoreQueue.size === 0) return Promise.resolve();
+  return new Promise(resolve => workerDoneCallbacks.push(resolve));
 }
 
 export async function fetchJobs(): Promise<number> {
@@ -175,13 +214,13 @@ export async function fetchJobs(): Promise<number> {
         console.log(`[scheduler] Jobindex: ${jobindexJobs.length} jobs`);
         const batch1Ids = ingestBatch(jobindexJobs);
         totalNew += batch1Ids.length;
-        if (batch1Ids.length > 0) scoreBatchInBackground(batch1Ids);
+        if (batch1Ids.length > 0) enqueueForScoring(batch1Ids);
       } catch (err) {
         console.error('[scheduler] Jobindex failed:', err);
       }
     }
 
-    // 2. Wait 30 seconds to spread Ollama load
+    // 2. Wait 30 seconds to avoid rate-limiting job boards
     await new Promise(r => setTimeout(r, 30_000));
 
     // 3. Fetch LinkedIn
@@ -191,13 +230,13 @@ export async function fetchJobs(): Promise<number> {
         console.log(`[scheduler] LinkedIn: ${linkedinJobs.length} jobs`);
         const batch2Ids = ingestBatch(linkedinJobs);
         totalNew += batch2Ids.length;
-        if (batch2Ids.length > 0) scoreBatchInBackground(batch2Ids);
+        if (batch2Ids.length > 0) enqueueForScoring(batch2Ids);
       } catch (err) {
         console.error('[scheduler] LinkedIn failed:', err);
       }
     }
 
-    // 4. Wait 30 seconds to spread Ollama load
+    // 4. Wait 30 seconds to avoid rate-limiting job boards
     await new Promise(r => setTimeout(r, 30_000));
 
     // 5. Fetch Remotive
@@ -207,13 +246,13 @@ export async function fetchJobs(): Promise<number> {
         console.log(`[scheduler] Remotive: ${remotiveJobs.length} jobs`);
         const batch3Ids = ingestBatch(remotiveJobs);
         totalNew += batch3Ids.length;
-        if (batch3Ids.length > 0) scoreBatchInBackground(batch3Ids);
+        if (batch3Ids.length > 0) enqueueForScoring(batch3Ids);
       } catch (err) {
         console.error('[scheduler] Remotive failed:', err);
       }
     }
 
-    // 6. Wait 30 seconds to spread Ollama load
+    // 6. Wait 30 seconds to avoid rate-limiting job boards
     await new Promise(r => setTimeout(r, 30_000));
 
     // 7. Fetch Arbeitnow
@@ -223,13 +262,13 @@ export async function fetchJobs(): Promise<number> {
         console.log(`[scheduler] Arbeitnow: ${arbeitnowJobs.length} jobs`);
         const batch4Ids = ingestBatch(arbeitnowJobs);
         totalNew += batch4Ids.length;
-        if (batch4Ids.length > 0) scoreBatchInBackground(batch4Ids);
+        if (batch4Ids.length > 0) enqueueForScoring(batch4Ids);
       } catch (err) {
         console.error('[scheduler] Arbeitnow failed:', err);
       }
     }
 
-    // 8. Wait 30 seconds to spread Ollama load
+    // 8. Wait 30 seconds to avoid rate-limiting job boards
     await new Promise(r => setTimeout(r, 30_000));
 
     // 9. Fetch RemoteOK
@@ -239,7 +278,7 @@ export async function fetchJobs(): Promise<number> {
         console.log(`[scheduler] RemoteOK: ${remoteokJobs.length} jobs`);
         const batch5Ids = ingestBatch(remoteokJobs);
         totalNew += batch5Ids.length;
-        if (batch5Ids.length > 0) scoreBatchInBackground(batch5Ids);
+        if (batch5Ids.length > 0) enqueueForScoring(batch5Ids);
       } catch (err) {
         console.error('[scheduler] RemoteOK failed:', err);
       }
@@ -260,45 +299,15 @@ export async function fetchJobs(): Promise<number> {
 export async function analyzeUnscoredJobs(autoReject = true): Promise<void> {
   if (!getResume()) return;
 
-  const unscoredJobs = db.query(`
-    SELECT * FROM jobs
-    WHERE match_score IS NULL
-    AND duplicate_of IS NULL
-    ORDER BY fetched_at DESC
-    LIMIT 20
-  `).all() as Job[];
+  const ids = db.query<{ id: string }, []>(
+    `SELECT id FROM jobs WHERE match_score IS NULL AND duplicate_of IS NULL ORDER BY fetched_at DESC`
+  ).all().map(r => r.id);
 
-  if (unscoredJobs.length === 0) return;
+  if (ids.length === 0) return;
 
-  console.log(`[scheduler] Retrying analysis for ${unscoredJobs.length} unscored jobs`);
-
-  for (const job of unscoredJobs) {
-    // Back-fill missing LinkedIn descriptions before scoring
-    if (job.source === 'linkedin' && !job.description) {
-      const linkedInId = job.external_id.replace(/^li_/, '');
-      console.log(`[scheduler] Re-fetching LinkedIn description for job ${job.id} (${linkedInId})`);
-      const desc = await fetchJobDescription(linkedInId);
-      if (desc) {
-        db.run('UPDATE jobs SET description = ? WHERE id = ?', [desc, job.id]);
-        job.description = desc;
-      }
-    }
-
-    const result = await analyzeJob(job);
-    if (result) {
-      db.run('UPDATE jobs SET match_score = ?, match_reasoning = ?, match_summary = ?, tags = ?, work_type = ?, prefs_hash = ? WHERE id = ?', [
-        result.match_score,
-        result.match_reasoning,
-        result.match_summary,
-        JSON.stringify(result.tags),
-        result.work_type,
-        result.prefs_hash,
-        job.id,
-      ]);
-      if (autoReject) maybeAutoReject(job.id, result.match_score);
-      console.log(`[scheduler] Scored job ${job.id}: ${result.match_score}`);
-    }
-  }
+  console.log(`[scheduler] Queuing ${ids.length} unscored jobs`);
+  enqueueForScoring(ids, autoReject);
+  await waitForWorker();
 }
 
 export function maybeAutoReject(jobId: string, score: number) {
@@ -350,14 +359,15 @@ function scheduleNextFetch() {
 }
 
 export function startScheduler(): void {
-  (async () => {
-    await fetchJobs();
-    // Drain any unscored jobs left from a previous run (e.g. after restart mid-rescore)
-    for (let i = 0; i < 100; i++) {
-      const row = db.query('SELECT COUNT(*) as c FROM jobs WHERE match_score IS NULL AND duplicate_of IS NULL').get() as { c: number };
-      if (row.c === 0) break;
-      await analyzeUnscoredJobs();
-    }
-  })().catch(console.error);
+  const unscoredIds = db.query<{ id: string }, []>(
+    'SELECT id FROM jobs WHERE match_score IS NULL AND duplicate_of IS NULL'
+  ).all().map(r => r.id);
+
+  if (unscoredIds.length > 0) {
+    console.log(`[scheduler] Draining ${unscoredIds.length} unscored jobs from previous run`);
+    enqueueForScoring(unscoredIds);
+  }
+
+  fetchJobs().catch(console.error);
   scheduleNextFetch();
 }
