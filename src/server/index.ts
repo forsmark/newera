@@ -44,7 +44,7 @@ app.route('/api/backups', backupsRoute);
 // GET /api/status
 app.get('/api/status', (c) => {
   const counts = db.query('SELECT status, COUNT(*) as count FROM jobs GROUP BY status').all();
-  const unscoredRow = db.query('SELECT COUNT(*) as count FROM jobs WHERE match_score IS NULL').get() as { count: number };
+  const unscoredRow = db.query('SELECT COUNT(*) as count FROM jobs WHERE match_score IS NULL AND duplicate_of IS NULL').get() as { count: number };
   const scoreDist = db.query(`
     SELECT
       COUNT(CASE WHEN match_score >= 80 THEN 1 END) as green,
@@ -53,6 +53,7 @@ app.get('/api/status', (c) => {
       COUNT(CASE WHEN match_score IS NULL THEN 1 END) as pending
     FROM jobs
     WHERE status != 'rejected'
+    AND duplicate_of IS NULL
   `).get() as { green: number; amber: number; grey: number; pending: number };
 
   const resume = getResume();
