@@ -82,15 +82,14 @@ export function ingestJob(job: JobPartial): { isNew: boolean } {
       return { isNew: false };
     }
 
-    // Fuzzy fallback: same company + similar title across sources
+    // Fuzzy fallback: same company + similar title (any source, including same source re-posts)
     if (!existingRow) {
       const nc = normalizeCompany(job.company);
-      const candidates = db.query<{ id: string; title: string; company: string }, [string, string, string]>(
+      const candidates = db.query<{ id: string; title: string; company: string }, [string, string]>(
         `SELECT id, title, company FROM jobs
-         WHERE source != ?
-         AND NOT (source = ? AND external_id = ?)
+         WHERE NOT (source = ? AND external_id = ?)
          AND duplicate_of IS NULL`
-      ).all(job.source, job.source, job.external_id);
+      ).all(job.source, job.external_id);
 
       for (const c of candidates) {
         if (normalizeCompany(c.company) === nc && isFuzzyDuplicate(job.title, job.company, c.title, c.company)) {
