@@ -263,6 +263,7 @@ export async function analyzeUnscoredJobs(autoReject = true): Promise<void> {
   const unscoredJobs = db.query(`
     SELECT * FROM jobs
     WHERE match_score IS NULL
+    AND duplicate_of IS NULL
     ORDER BY fetched_at DESC
     LIMIT 20
   `).all() as Job[];
@@ -349,6 +350,14 @@ function scheduleNextFetch() {
 }
 
 export function startScheduler(): void {
-  fetchJobs().catch(console.error);
+  (async () => {
+    await fetchJobs();
+    // Drain any unscored jobs left from a previous run (e.g. after restart mid-rescore)
+    for (let i = 0; i < 100; i++) {
+      const row = db.query('SELECT COUNT(*) as c FROM jobs WHERE match_score IS NULL AND duplicate_of IS NULL').get() as { c: number };
+      if (row.c === 0) break;
+      await analyzeUnscoredJobs();
+    }
+  })().catch(console.error);
   scheduleNextFetch();
 }
