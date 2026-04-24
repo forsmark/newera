@@ -4,6 +4,7 @@ import { fetchRemotive } from './sources/remotive';
 import { fetchArbeitnow } from './sources/arbeitnow';
 import { fetchRemoteOK } from './sources/remoteok';
 import { fetchInfojobs } from './sources/infojobs';
+import { fetchTecnoempleo } from './sources/tecnoempleo';
 import { fetchJobDescription } from './sources/linkedin';
 import { analyzeJob } from './llm';
 import db from './db';
@@ -297,6 +298,22 @@ export async function fetchJobs(): Promise<number> {
         if (batch6Ids.length > 0) enqueueForScoring(batch6Ids);
       } catch (err) {
         console.error('[scheduler] Infojobs failed:', err);
+      }
+    }
+
+    // 12. Wait 30 seconds to avoid rate-limiting job boards
+    await new Promise(r => setTimeout(r, 30_000));
+
+    // 13. Fetch Tecnoempleo
+    if (!disabledSources.includes('tecnoempleo')) {
+      try {
+        const tecnoempleoJobs = await fetchTecnoempleo();
+        console.log(`[scheduler] Tecnoempleo: ${tecnoempleoJobs.length} jobs`);
+        const batch7Ids = ingestBatch(tecnoempleoJobs);
+        totalNew += batch7Ids.length;
+        if (batch7Ids.length > 0) enqueueForScoring(batch7Ids);
+      } catch (err) {
+        console.error('[scheduler] Tecnoempleo failed:', err);
       }
     }
 
