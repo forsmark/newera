@@ -11,7 +11,11 @@ type JobPartial = Omit<Job, 'id' | 'match_score' | 'match_reasoning' | 'match_su
 // No work type filter (f_WT removed) — LLM scoring handles remote/hybrid preference
 const LINKEDIN_GUEST_API = 'https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search';
 const LINKEDIN_JOB_API = 'https://www.linkedin.com/jobs-guest/jobs/api/jobPosting';
-const GEO_ID = '102194656'; // Greater Copenhagen
+const COUNTRY_GEO_IDS: Record<string, string> = {
+  denmark: '102194656', // Greater Copenhagen
+  spain:   '105646813', // Spain
+  global:  '',          // no geo filter
+};
 
 const HEADERS = {
   'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
@@ -20,10 +24,10 @@ const HEADERS = {
   'Connection': 'close',
 };
 
-function buildSearchUrl(keywords: string, start = 0): string {
+function buildSearchUrl(keywords: string, geoId: string, start = 0): string {
   const url = new URL(LINKEDIN_GUEST_API);
   url.searchParams.set('keywords', keywords);
-  url.searchParams.set('geoId', GEO_ID);
+  if (geoId) url.searchParams.set('geoId', geoId);
   url.searchParams.set('f_TPR', 'r604800'); // last 7 days
   url.searchParams.set('sortBy', 'R');       // most recent
   url.searchParams.set('start', String(start));
@@ -148,24 +152,23 @@ async function pLimit<T>(tasks: (() => Promise<T>)[], limit: number): Promise<T[
   return results;
 }
 
-const DEFAULT_KEYWORDS = ['frontend developer', 'web developer'];
 const PAGE_SIZE = 25;
 const MAX_PAGES = 4; // up to 100 jobs per keyword
 
-function loadKeywords(): string[] {
+function loadConfig(): { keywords: string[]; geoId: string } {
   const prefs = getPreferences();
-  if (!prefs.linkedinSearchTerms) return DEFAULT_KEYWORDS;
-  const lines = prefs.linkedinSearchTerms
-    .split('\n')
-    .map(l => l.trim())
-    .filter(l => l.length > 0);
-  return lines.length > 0 ? lines : DEFAULT_KEYWORDS;
+  const raw = prefs.searchTerms.trim();
+  const keywords = raw
+    ? raw.split('\n').map(s => s.trim()).filter(Boolean)
+    : ['software engineer', 'developer'];
+  const geoId = COUNTRY_GEO_IDS[prefs.country] ?? '';
+  return { keywords, geoId };
 }
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-async function fetchOnePage(keywords: string, start: number): Promise<ParsedJob[]> {
-  const url = buildSearchUrl(keywords, start);
+async function fetchOnePage(keywords: string, geoId: string, start: number): Promise<ParsedJob[]> {
+  const url = buildSearchUrl(keywords, geoId, start);
 
   for (let attempt = 0; attempt < 3; attempt++) {
     if (attempt > 0) {
@@ -187,13 +190,13 @@ async function fetchOnePage(keywords: string, start: number): Promise<ParsedJob[
   throw new Error(`LinkedIn guest API returned 429 for "${keywords}" start=${start} (all retries exhausted)`);
 }
 
-async function fetchJobs(keywords: string): Promise<JobPartial[]> {
+async function fetchJobs(keywords: string, geoId: string): Promise<JobPartial[]> {
   const fetchedAt = new Date().toISOString();
   const parsed: ParsedJob[] = [];
 
   for (let page = 0; page < MAX_PAGES; page++) {
     const start = page * PAGE_SIZE;
-    const batch = await fetchOnePage(keywords, start);
+    const batch = await fetchOnePage(keywords, geoId, start);
     parsed.push(...batch);
     if (batch.length < PAGE_SIZE) break; // no more pages
   }
@@ -223,14 +226,14 @@ async function fetchJobs(keywords: string): Promise<JobPartial[]> {
 }
 
 export async function fetchLinkedIn(): Promise<JobPartial[]> {
-  const keywords = loadKeywords();
+  const { keywords, geoId } = loadConfig();
   let allJobs: JobPartial[] = [];
 
   for (let i = 0; i < keywords.length; i++) {
     if (i > 0) await sleep(3_000 + Math.random() * 2_000); // 3–5s between keyword batches
     const kw = keywords[i];
     try {
-      const jobs = await fetchJobs(kw);
+      const jobs = await fetchJobs(kw, geoId);
       console.log(`[linkedin] "${kw}" → ${jobs.length} results`);
       allJobs = allJobs.concat(jobs);
     } catch (err) {

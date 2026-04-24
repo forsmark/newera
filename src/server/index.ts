@@ -81,7 +81,7 @@ app.get('/api/status', (c) => {
       resume: getResume().length > 0,
       preferences: (() => {
         const p = getPreferences();
-        return p.linkedinSearchTerms.trim().length > 0 || p.jobindexSearchTerms.trim().length > 0;
+        return p.searchTerms.trim().length > 0;
       })(),
     },
   });

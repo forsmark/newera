@@ -139,20 +139,14 @@ if (!existsSync(prefsPath)) {
     }
   }
 
-  // LinkedIn search terms — strip trailing location suffixes
+  // Search terms (unified — strip trailing location suffixes)
   const liBlock = section(text, 'Search Terms');
   if (liBlock) {
     const terms = parseList(liBlock)
       .split('\n')
       .map(l => l.replace(/\s+(Copenhagen|København|Denmark|Danmark).*$/i, '').trim())
       .filter(Boolean);
-    prefs.linkedinSearchTerms = terms.join('\n');
-  }
-
-  // Jobindex search terms
-  const jiBlock = section(text, 'Jobindex Search Terms');
-  if (jiBlock) {
-    prefs.jobindexSearchTerms = parseList(jiBlock);
+    prefs.searchTerms = terms.join('\n');
   }
 
   setSetting('preferences', JSON.stringify(prefs));
@@ -163,8 +157,7 @@ if (!existsSync(prefsPath)) {
   console.log('  minSalaryDkk:', prefs.minSalaryDkk);
   console.log('  techInterests:', prefs.techInterests);
   console.log('  techAvoid:', prefs.techAvoid);
-  console.log('  linkedinSearchTerms:', prefs.linkedinSearchTerms.split('\n').join(', '));
-  console.log('  jobindexSearchTerms:', prefs.jobindexSearchTerms.split('\n').join(', '));
+  console.log('  searchTerms:', prefs.searchTerms.split('\n').join(', '));
 }
 
 console.log('\nDone. Open Settings in the app to review and adjust.');

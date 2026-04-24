@@ -37,13 +37,14 @@ function loadJobindexSearch(): { urls: string[]; area: string } {
   }
 
   const DEFAULT_URLS = [
-    `https://www.jobindex.dk/jobsoegning?q=${encodeURIComponent('frontend udvikler')}&superjob=1&area=${area}`,
-    `https://www.jobindex.dk/jobsoegning?q=${encodeURIComponent('webudvikler')}&superjob=1&area=${area}`,
+    `https://www.jobindex.dk/jobsoegning?q=${encodeURIComponent('software engineer')}&superjob=1&area=${area}`,
+    `https://www.jobindex.dk/jobsoegning?q=${encodeURIComponent('developer')}&superjob=1&area=${area}`,
   ];
 
-  if (!prefs.jobindexSearchTerms) return { urls: DEFAULT_URLS, area };
+  const raw = prefs.searchTerms.trim();
+  if (!raw) return { urls: DEFAULT_URLS, area };
 
-  const terms = prefs.jobindexSearchTerms
+  const terms = raw
     .split('\n')
     .map(l => l.trim())
     .filter(l => l.length > 0);

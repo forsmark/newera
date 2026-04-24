@@ -18,11 +18,18 @@ export function getPreferences(): Preferences {
   const raw = getSetting('preferences');
   if (!raw) return { ...DEFAULT_PREFERENCES };
   try {
-    const parsed = JSON.parse(raw) as Partial<Preferences> & { remote?: unknown };
+    // Cast type to include legacy fields for migration
+    const parsed = JSON.parse(raw) as Partial<Preferences> & { remote?: unknown; linkedinSearchTerms?: string; jobindexSearchTerms?: string };
     // Migrate old single-string remote format → array
     if (typeof parsed.remote === 'string') {
       parsed.remote = parsed.remote === 'any' ? [] : [parsed.remote];
     }
+    // Migrate old per-source search terms → unified searchTerms
+    if (!parsed.searchTerms && parsed.linkedinSearchTerms) {
+      parsed.searchTerms = parsed.linkedinSearchTerms;
+    }
+    delete parsed.linkedinSearchTerms;
+    delete parsed.jobindexSearchTerms;
     return { ...DEFAULT_PREFERENCES, ...parsed };
   } catch {
     return { ...DEFAULT_PREFERENCES };
