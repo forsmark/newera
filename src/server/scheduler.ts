@@ -3,6 +3,7 @@ import { fetchLinkedIn } from './sources/linkedin';
 import { fetchRemotive } from './sources/remotive';
 import { fetchArbeitnow } from './sources/arbeitnow';
 import { fetchRemoteOK } from './sources/remoteok';
+import { fetchInfojobs } from './sources/infojobs';
 import { fetchJobDescription } from './sources/linkedin';
 import { analyzeJob } from './llm';
 import db from './db';
@@ -280,6 +281,22 @@ export async function fetchJobs(): Promise<number> {
         if (batch5Ids.length > 0) enqueueForScoring(batch5Ids);
       } catch (err) {
         console.error('[scheduler] RemoteOK failed:', err);
+      }
+    }
+
+    // 10. Wait 30 seconds to avoid rate-limiting job boards
+    await new Promise(r => setTimeout(r, 30_000));
+
+    // 11. Fetch Infojobs
+    if (!disabledSources.includes('infojobs')) {
+      try {
+        const infojobsJobs = await fetchInfojobs();
+        console.log(`[scheduler] Infojobs: ${infojobsJobs.length} jobs`);
+        const batch6Ids = ingestBatch(infojobsJobs);
+        totalNew += batch6Ids.length;
+        if (batch6Ids.length > 0) enqueueForScoring(batch6Ids);
+      } catch (err) {
+        console.error('[scheduler] Infojobs failed:', err);
       }
     }
 
