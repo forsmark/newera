@@ -22,6 +22,8 @@ const ALL_SOURCES = [
   { key: 'remotive', label: 'Remotive' },
   { key: 'arbeitnow', label: 'Arbeitnow' },
   { key: 'remoteok', label: 'RemoteOK' },
+  { key: 'infojobs', label: 'Infojobs (Spain)' },
+  { key: 'tecnoempleo', label: 'Tecnoempleo (Spain, tech-focused)' },
 ] as const;
 
 export default function SettingsView({ staleCount = 0 }: { staleCount?: number }) {
