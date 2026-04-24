@@ -24,9 +24,13 @@ export function getPreferences(): Preferences {
     if (typeof parsed.remote === 'string') {
       parsed.remote = parsed.remote === 'any' ? [] : [parsed.remote];
     }
-    // Migrate old per-source search terms → unified searchTerms
-    if (!parsed.searchTerms && parsed.linkedinSearchTerms) {
-      parsed.searchTerms = parsed.linkedinSearchTerms;
+    // Migrate old per-source search terms → unified searchTerms (merge + deduplicate)
+    if (!parsed.searchTerms) {
+      const terms = [
+        ...(parsed.linkedinSearchTerms ?? '').split('\n'),
+        ...(parsed.jobindexSearchTerms ?? '').split('\n'),
+      ].map(s => s.trim()).filter(Boolean);
+      parsed.searchTerms = [...new Set(terms)].join('\n');
     }
     delete parsed.linkedinSearchTerms;
     delete parsed.jobindexSearchTerms;
