@@ -11,8 +11,8 @@ const MOCK_PREFS = {
   techInterests: 'React, TypeScript',
   techAvoid: '',
   companyBlacklist: '',
-  linkedinSearchTerms: 'frontend developer',
-  jobindexSearchTerms: 'frontend udvikler',
+  country: 'denmark',
+  searchTerms: 'frontend developer',
   notes: '',
 };
 

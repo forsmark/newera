@@ -9,8 +9,8 @@ export interface Preferences {
   techInterests: string;
   techAvoid: string;
   companyBlacklist: string;
-  linkedinSearchTerms: string;
-  jobindexSearchTerms: string;
+  country: 'denmark' | 'spain' | 'global';
+  searchTerms: string;
   notes: string;
   lowScoreThreshold: number;
   defaultHideLowScore: boolean;
@@ -38,8 +38,8 @@ export const EMPTY_PREFS: Preferences = {
   techInterests: '',
   techAvoid: '',
   companyBlacklist: '',
-  linkedinSearchTerms: '',
-  jobindexSearchTerms: '',
+  country: 'denmark',
+  searchTerms: '',
   notes: '',
   lowScoreThreshold: 20,
   defaultHideLowScore: true,

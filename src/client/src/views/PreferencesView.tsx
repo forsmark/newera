@@ -58,6 +58,20 @@ export default function PreferencesView() {
     });
   }
 
+  const COUNTRY_SOURCE_DEFAULTS: Record<string, { disable: string[]; enable: string[] }> = {
+    denmark: { disable: ['infojobs', 'tecnoempleo'], enable: ['jobindex'] },
+    spain:   { disable: ['jobindex'], enable: ['infojobs', 'tecnoempleo'] },
+    global:  { disable: ['jobindex', 'infojobs', 'tecnoempleo'], enable: [] },
+  };
+
+  function handleCountryChange(country: 'denmark' | 'spain' | 'global') {
+    const rules = COUNTRY_SOURCE_DEFAULTS[country];
+    const current = new Set(prefs.disabledSources);
+    rules.disable.forEach(s => current.add(s));
+    rules.enable.forEach(s => current.delete(s));
+    setPrefs(p => ({ ...p, country, disabledSources: [...current] }));
+  }
+
   async function savePrefs() {
     setSavingPrefs(true);
     try {
@@ -148,6 +162,26 @@ export default function PreferencesView() {
 
       {/* Job preferences */}
       <Accordion title="Job preferences" action={saveBtn(prefsDirty, savingPrefs, savePrefs)}>
+        {/* Country / Job Market */}
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Job market</label>
+          <div className="flex gap-4">
+            {(['denmark', 'spain', 'global'] as const).map(c => (
+              <label key={c} className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="country"
+                  value={c}
+                  checked={prefs.country === c}
+                  onChange={() => handleCountryChange(c)}
+                  className="accent-blue-600"
+                />
+                <span className="text-sm">{c === 'global' ? 'Global / Remote' : c.charAt(0).toUpperCase() + c.slice(1)}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="Preferred location">
             <input className={inputClass} value={prefs.location}
@@ -217,18 +251,12 @@ export default function PreferencesView() {
           </Field>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="LinkedIn search terms" hint="(one per line)">
+        <div>
+          <Field label="Search terms" hint="(one per line — LinkedIn, Jobindex, Spanish sources)">
             <textarea className={inputClass} style={{ height: '80px', resize: 'vertical' }}
-              value={prefs.linkedinSearchTerms}
-              onChange={e => updatePref('linkedinSearchTerms', e.target.value)}
-              placeholder={"frontend developer\nweb developer"} />
-          </Field>
-          <Field label="Jobindex search terms" hint="(one per line)">
-            <textarea className={inputClass} style={{ height: '80px', resize: 'vertical' }}
-              value={prefs.jobindexSearchTerms}
-              onChange={e => updatePref('jobindexSearchTerms', e.target.value)}
-              placeholder={"frontend udvikler\nwebudvikler"} />
+              value={prefs.searchTerms ?? ''}
+              onChange={e => updatePref('searchTerms', e.target.value)}
+              placeholder={"software engineer\nfrontend developer\nengineering manager"} />
           </Field>
         </div>
 
