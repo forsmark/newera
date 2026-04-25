@@ -498,10 +498,13 @@ const [staleBannerDismissed, setStaleBannerDismissed] = useState(false);
   const remotiveCount = jobs.filter(j => j.source === 'remotive').length;
   const arbeitnowCount = jobs.filter(j => j.source === 'arbeitnow').length;
   const remoteokCount = jobs.filter(j => j.source === 'remoteok').length;
-  const unreadCount = jobs.filter(j => j.seen_at === null && j.status !== 'rejected').length;
-  const unsavedCount = jobs.filter(j => j.status === 'new').length;
-  const savedCount = jobs.filter(j => j.status === 'saved').length;
-  const rejectedCount = jobs.filter(j => j.status === 'rejected').length;
+  const visibleJobs = hideJobsFromDisabledSources
+    ? jobs.filter(j => !disabledSources.includes(j.source))
+    : jobs;
+  const unreadCount = visibleJobs.filter(j => j.seen_at === null && j.status !== 'rejected').length;
+  const unsavedCount = visibleJobs.filter(j => j.status === 'new').length;
+  const savedCount = visibleJobs.filter(j => j.status === 'saved').length;
+  const rejectedCount = visibleJobs.filter(j => j.status === 'rejected').length;
 
   // Determine whether to animate the list (filter changed)
   const shouldAnimate = !prefersReducedMotion && filterKey !== prevFilterKey.current;

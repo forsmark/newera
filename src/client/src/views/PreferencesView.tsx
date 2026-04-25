@@ -224,8 +224,14 @@ export default function PreferencesView() {
           </Field>
           <Field label="Min salary / month">
             <div className="flex gap-2">
+              <NumberInput
+                value={prefs.minSalary}
+                onChange={v => updatePref('minSalary', v)}
+                min={0} step={1000} placeholder="e.g. 55000"
+                className={inputClass + " flex-1 min-w-0"}
+              />
               <select
-                className={inputClass + " w-28 shrink-0"}
+                className={inputClass + " flex-1 min-w-0"}
                 value={prefs.salaryCurrency}
                 onChange={e => updatePref('salaryCurrency', e.target.value as 'dkk' | 'eur' | 'usd')}
               >
@@ -233,11 +239,6 @@ export default function PreferencesView() {
                 <option value="eur">€ (EUR)</option>
                 <option value="usd">$ (USD)</option>
               </select>
-              <NumberInput
-                value={prefs.minSalary}
-                onChange={v => updatePref('minSalary', v)}
-                min={0} step={1000} placeholder="e.g. 55000"
-              />
             </div>
           </Field>
         </div>
