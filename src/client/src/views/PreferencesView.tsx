@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "../components/Toast";
 import {
-  type Preferences, EMPTY_PREFS, inputClass,
+  type Preferences, EMPTY_PREFS, inputClass, labelClass,
   Field, NumberInput, Accordion, saveBtn,
 } from "../components/SettingsShared";
 
@@ -61,10 +61,9 @@ export default function PreferencesView() {
   const COUNTRY_SOURCE_DEFAULTS: Record<string, { disable: string[]; enable: string[] }> = {
     denmark: { disable: ['infojobs', 'tecnoempleo'], enable: ['jobindex'] },
     spain:   { disable: ['jobindex'], enable: ['infojobs', 'tecnoempleo'] },
-    global:  { disable: ['jobindex', 'infojobs', 'tecnoempleo'], enable: [] },
   };
 
-  function handleCountryChange(country: 'denmark' | 'spain' | 'global') {
+  function handleCountryChange(country: 'denmark' | 'spain') {
     const rules = COUNTRY_SOURCE_DEFAULTS[country];
     const current = new Set(prefs.disabledSources);
     rules.disable.forEach(s => current.add(s));
@@ -164,22 +163,24 @@ export default function PreferencesView() {
       <Accordion title="Job preferences" action={saveBtn(prefsDirty, savingPrefs, savePrefs)}>
         {/* Country / Job Market */}
         <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Job market</label>
-          <div className="flex gap-4">
-            {(['denmark', 'spain', 'global'] as const).map(c => (
-              <label key={c} className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="country"
-                  value={c}
-                  checked={prefs.country === c}
-                  onChange={() => handleCountryChange(c)}
-                  className="accent-blue-600"
-                />
-                <span className="text-sm">{c === 'global' ? 'Global / Remote' : c.charAt(0).toUpperCase() + c.slice(1)}</span>
-              </label>
-            ))}
-          </div>
+          <label className={labelClass}>Job market</label>
+          <select
+            className={inputClass}
+            value={prefs.country}
+            onChange={e => handleCountryChange(e.target.value as 'denmark' | 'spain')}
+          >
+            <option value="denmark">🇩🇰 Denmark</option>
+            <option value="spain">🇪🇸 Spain</option>
+          </select>
+          <label className="flex items-center gap-2 cursor-pointer select-none text-sm text-text-2 mt-2">
+            <input
+              type="checkbox"
+              checked={prefs.includeRemote}
+              onChange={e => updatePref('includeRemote', e.target.checked)}
+              className="checkbox-styled"
+            />
+            Include remote / global jobs
+          </label>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -221,12 +222,23 @@ export default function PreferencesView() {
               <option value="lead">Lead / Principal</option>
             </select>
           </Field>
-          <Field label="Min salary (DKK/month)">
-            <NumberInput
-              value={prefs.minSalaryDkk}
-              onChange={v => updatePref('minSalaryDkk', v)}
-              min={0} step={1000} placeholder="e.g. 55000"
-            />
+          <Field label="Min salary / month">
+            <div className="flex gap-2">
+              <select
+                className={inputClass + " w-28 shrink-0"}
+                value={prefs.salaryCurrency}
+                onChange={e => updatePref('salaryCurrency', e.target.value as 'dkk' | 'eur' | 'usd')}
+              >
+                <option value="dkk">kr (DKK)</option>
+                <option value="eur">€ (EUR)</option>
+                <option value="usd">$ (USD)</option>
+              </select>
+              <NumberInput
+                value={prefs.minSalary}
+                onChange={v => updatePref('minSalary', v)}
+                min={0} step={1000} placeholder="e.g. 55000"
+              />
+            </div>
           </Field>
         </div>
 
@@ -252,7 +264,7 @@ export default function PreferencesView() {
         </div>
 
         <div>
-          <Field label="Search terms" hint="(one per line — LinkedIn, Jobindex, Spanish sources)">
+          <Field label="Search terms" hint="(one per line)">
             <textarea className={inputClass} style={{ height: '80px', resize: 'vertical' }}
               value={prefs.searchTerms ?? ''}
               onChange={e => updatePref('searchTerms', e.target.value)}
