@@ -73,7 +73,7 @@ function formatPreferences(p: Preferences): string {
   if (p.seniority && p.seniority !== 'any') lines.push(`Target seniority: ${p.seniority}`);
   if (p.minSalary) {
     const currencyLabel = p.salaryCurrency?.toUpperCase() ?? 'DKK';
-    lines.push(`Min salary: ${p.minSalary.toLocaleString()} ${currencyLabel}/month`);
+    lines.push(`Min salary: ${p.minSalary.toLocaleString('en-US')} ${currencyLabel}/month`);
   }
   if (p.techInterests) lines.push(`Tech interests: ${p.techInterests}`);
   if (p.techAvoid) lines.push(`Tech to avoid: ${p.techAvoid}`);
