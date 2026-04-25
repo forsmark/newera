@@ -49,11 +49,11 @@ describe('SettingsView', () => {
     await waitFor(() => screen.getByText('Sources'));
     fireEvent.click(screen.getByText('Sources'));
     await waitFor(() => {
-      expect(screen.getByLabelText('LinkedIn')).toBeChecked();
-      expect(screen.getByLabelText('Jobindex')).toBeChecked();
-      expect(screen.getByLabelText('Remotive')).toBeChecked();
-      expect(screen.getByLabelText('Arbeitnow')).toBeChecked();
-      expect(screen.getByLabelText('RemoteOK')).toBeChecked();
+      expect(screen.getByLabelText('🌐 LinkedIn')).toBeChecked();
+      expect(screen.getByLabelText('🇩🇰 Jobindex')).toBeChecked();
+      expect(screen.getByLabelText('🌐 Remotive')).toBeChecked();
+      expect(screen.getByLabelText('🌐 Arbeitnow')).toBeChecked();
+      expect(screen.getByLabelText('🌐 RemoteOK')).toBeChecked();
     });
   });
 

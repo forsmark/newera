@@ -17,13 +17,13 @@ interface BackupInfo {
 }
 
 const ALL_SOURCES = [
-  { key: 'linkedin', label: 'LinkedIn' },
-  { key: 'jobindex', label: 'Jobindex' },
-  { key: 'remotive', label: 'Remotive' },
-  { key: 'arbeitnow', label: 'Arbeitnow' },
-  { key: 'remoteok', label: 'RemoteOK' },
-  { key: 'infojobs', label: 'Infojobs (Spain)' },
-  { key: 'tecnoempleo', label: 'Tecnoempleo (Spain, tech-focused)' },
+  { key: 'linkedin',     label: '🌐 LinkedIn' },
+  { key: 'jobindex',     label: '🇩🇰 Jobindex' },
+  { key: 'remotive',     label: '🌐 Remotive' },
+  { key: 'arbeitnow',    label: '🌐 Arbeitnow' },
+  { key: 'remoteok',     label: '🌐 RemoteOK' },
+  { key: 'infojobs',     label: '🇪🇸 Infojobs' },
+  { key: 'tecnoempleo',  label: '🇪🇸 Tecnoempleo' },
 ] as const;
 
 export default function SettingsView({ staleCount = 0 }: { staleCount?: number }) {
@@ -33,6 +33,8 @@ export default function SettingsView({ staleCount = 0 }: { staleCount?: number }
 
   const [system, setSystem] = useState<SystemInfo | null>(null);
   const [rescoring, setRescoring] = useState(false);
+  const [isFetchPaused, setIsFetchPaused] = useState(false);
+  const [isScoringPaused, setIsScoringPaused] = useState(false);
 
   const [backups, setBackups] = useState<BackupInfo[]>([]);
   const [backingUp, setBackingUp] = useState(false);
@@ -82,7 +84,11 @@ export default function SettingsView({ staleCount = 0 }: { staleCount?: number }
     const fetchStatus = () =>
       fetch("/api/status")
         .then(r => { if (!r.ok) throw new Error(); return r.json(); })
-        .then(d => setSystem({ llm_available: d.llm_available ?? null, unscored_jobs: d.unscored_jobs ?? 0 }))
+        .then(d => {
+          setSystem({ llm_available: d.llm_available ?? null, unscored_jobs: d.unscored_jobs ?? 0 });
+          setIsFetchPaused(d.is_fetch_paused ?? false);
+          setIsScoringPaused(d.is_scoring_paused ?? false);
+        })
         .catch(() => {});
     fetchStatus();
     const statusInterval = setInterval(fetchStatus, 15_000);
@@ -193,6 +199,30 @@ export default function SettingsView({ staleCount = 0 }: { staleCount?: number }
       toast("Failed to clear jobs");
     } finally {
       setClearing(false);
+    }
+  }
+
+  async function toggleFetchPause() {
+    try {
+      const res = await fetch('/api/scheduler/pause-fetch', { method: 'POST' });
+      if (!res.ok) throw new Error();
+      const data = await res.json() as { paused: boolean };
+      setIsFetchPaused(data.paused);
+      toast(data.paused ? 'Fetching paused' : 'Fetching resumed', 'info');
+    } catch {
+      toast('Failed to toggle fetch pause');
+    }
+  }
+
+  async function toggleScoringPause() {
+    try {
+      const res = await fetch('/api/scheduler/pause-scoring', { method: 'POST' });
+      if (!res.ok) throw new Error();
+      const data = await res.json() as { paused: boolean };
+      setIsScoringPaused(data.paused);
+      toast(data.paused ? 'Scoring paused' : 'Scoring resumed', 'info');
+    } catch {
+      toast('Failed to toggle scoring pause');
     }
   }
 
@@ -521,6 +551,32 @@ export default function SettingsView({ staleCount = 0 }: { staleCount?: number }
           </div>
         )}
         <div className="flex flex-wrap gap-3 items-center">
+          <button
+            type="button"
+            onClick={toggleFetchPause}
+            className={[
+              "w-fit px-4 py-1.5 text-[0.8125rem] font-medium rounded-sm border",
+              isFetchPaused
+                ? "bg-surface-raised text-amber border-[#3a2200] cursor-pointer hover:bg-amber-bg"
+                : "bg-surface-raised text-text-2 border-border cursor-pointer btn-ghost",
+            ].join(" ")}
+          >
+            {isFetchPaused ? "Resume fetching" : "Pause fetching"}
+          </button>
+
+          <button
+            type="button"
+            onClick={toggleScoringPause}
+            className={[
+              "w-fit px-4 py-1.5 text-[0.8125rem] font-medium rounded-sm border",
+              isScoringPaused
+                ? "bg-surface-raised text-amber border-[#3a2200] cursor-pointer hover:bg-amber-bg"
+                : "bg-surface-raised text-text-2 border-border cursor-pointer btn-ghost",
+            ].join(" ")}
+          >
+            {isScoringPaused ? "Resume scoring" : "Pause scoring"}
+          </button>
+
           <button
             type="button"
             onClick={rescore}
