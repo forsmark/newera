@@ -18,6 +18,8 @@ import { sendFetchSummary, type ScoredJob } from './telegram';
 let lastFetchAt: string | null = null;
 let isFetching = false;
 let lastFetchNewJobs = 0;
+let isFetchPaused = false;
+let isScoringPaused = false;
 
 export function getLastFetchAt(): string | null {
   return lastFetchAt;
@@ -25,6 +27,10 @@ export function getLastFetchAt(): string | null {
 
 export function getIsFetching(): boolean { return isFetching; }
 export function getLastFetchNewJobs(): number { return lastFetchNewJobs; }
+export function getIsFetchPaused(): boolean { return isFetchPaused; }
+export function getIsScoringPaused(): boolean { return isScoringPaused; }
+export function toggleFetchPause(): boolean { isFetchPaused = !isFetchPaused; return isFetchPaused; }
+export function toggleScoringPause(): boolean { isScoringPaused = !isScoringPaused; return isScoringPaused; }
 
 type JobPartial = {
   source: string;
@@ -137,6 +143,10 @@ async function runScoringWorker(): Promise<void> {
 
   try {
     while (scoreQueue.size > 0) {
+      if (isScoringPaused) {
+        await new Promise(r => setTimeout(r, 5000));
+        continue;
+      }
       const entry = scoreQueue.entries().next().value;
       if (!entry) break;
       const [jobId, { autoReject }] = entry;
@@ -199,6 +209,10 @@ function waitForWorker(): Promise<void> {
 export async function fetchJobs(): Promise<number> {
   if (isFetching) {
     console.log('[scheduler] Fetch already in progress, skipping');
+    return 0;
+  }
+  if (isFetchPaused) {
+    console.log('[scheduler] Fetch paused, skipping');
     return 0;
   }
   isFetching = true;
