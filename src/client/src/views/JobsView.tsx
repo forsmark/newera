@@ -137,8 +137,7 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
   const [pinnedIds, setPinnedIds] = useState<Set<string> | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
-  const [rescoring, setRescoring] = useState(false);
-  const [staleBannerDismissed, setStaleBannerDismissed] = useState(false);
+const [staleBannerDismissed, setStaleBannerDismissed] = useState(false);
   const [rescoringStale, setRescoringStale] = useState(false);
   const [focusedIndex, setFocusedIndex] = useState<number>(-1);
   const [showShortcuts, setShowShortcuts] = useState(false);
@@ -392,32 +391,6 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
     }
   }
 
-  async function handleRescoreAll() {
-    if (rescoring) return;
-    setRescoring(true);
-    try {
-      const res = await fetch('/api/jobs/rescore-all', { method: 'POST' });
-      if (!res.ok) {
-        toast('Re-score failed — please try again');
-      } else {
-        queryClient.setQueryData<InfiniteData<JobsPage>>(['jobs', refreshKey], (old) => {
-          if (!old) return old;
-          return {
-            ...old,
-            pages: old.pages.map(p => ({
-              ...p,
-              jobs: p.jobs.map(j =>
-                j.status !== 'rejected' ? { ...j, match_score: null, match_reasoning: null, match_summary: null } : j
-              ),
-            })),
-          };
-        });
-      }
-    } finally {
-      setRescoring(false);
-    }
-  }
-
   async function rescoreStale() {
     if (rescoringStale) return;
     setRescoringStale(true);
@@ -613,14 +586,6 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
               className={`shrink-0 px-2.5 py-2 rounded-sm border border-border text-[0.8125rem] font-medium cursor-pointer ${compact ? 'bg-border text-text' : 'bg-transparent text-text-3'}`}
             >
               {compact ? "≡" : "⊞"}
-            </button>
-            <button
-              onClick={handleRescoreAll}
-              disabled={rescoring || hasPendingScores}
-              title="Re-score all jobs"
-              className="shrink-0 px-2.5 py-2 rounded-sm border border-border bg-transparent text-text-3 cursor-pointer text-[0.8125rem] disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {rescoring ? "…" : "↻"}
             </button>
             <button
               onClick={() => setShowShortcuts(true)}
