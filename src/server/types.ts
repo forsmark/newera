@@ -28,11 +28,13 @@ export interface Preferences {
   commutableLocations: string; // e.g. "Malmö, Sweden"
   remote: string[];  // subset of ['onsite','hybrid','remote'], empty = any
   seniority: 'any' | 'junior' | 'mid' | 'senior' | 'lead';
-  minSalaryDkk: number | null;
+  minSalary: number | null;
+  salaryCurrency: 'dkk' | 'eur' | 'usd';
   techInterests: string;       // comma-separated
   techAvoid: string;           // comma-separated
   companyBlacklist: string;    // newline-separated
-  country: 'denmark' | 'spain' | 'global';
+  country: 'denmark' | 'spain';
+  includeRemote: boolean;
   searchTerms: string; // newline-separated; used by all sources that support keyword search
   knownLanguages: string;       // comma-separated spoken languages (e.g. "English, Danish")
   notes: string;
@@ -58,11 +60,13 @@ export const DEFAULT_PREFERENCES: Preferences = {
   commutableLocations: '',
   remote: [],
   seniority: 'any',
-  minSalaryDkk: null,
+  minSalary: null,
+  salaryCurrency: 'dkk',
   techInterests: '',
   techAvoid: '',
   companyBlacklist: '',
   country: 'denmark',
+  includeRemote: true,
   searchTerms: '',
   knownLanguages: 'English',
   notes: '',

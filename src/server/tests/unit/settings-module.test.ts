@@ -49,7 +49,7 @@ describe('getPreferences', () => {
     expect(p.autoRejectLowScore).toBe(false);
     expect(p.model).toBe('gemma4:26b');
     expect(p.fetchIntervalHours).toBe(2);
-    expect(p.minSalaryDkk).toBeNull();
+    expect(p.minSalary).toBeNull();
     expect(p.location).toBe('');
   });
 

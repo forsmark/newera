@@ -71,7 +71,10 @@ function formatPreferences(p: Preferences): string {
   if (p.commutableLocations) lines.push(`Also commutable to: ${p.commutableLocations}`);
   if (Array.isArray(p.remote) && p.remote.length > 0) lines.push(`Work style preference: ${p.remote.join(' or ')}`);
   if (p.seniority && p.seniority !== 'any') lines.push(`Target seniority: ${p.seniority}`);
-  if (p.minSalaryDkk) lines.push(`Min salary: ${p.minSalaryDkk.toLocaleString('da-DK')} DKK/month`);
+  if (p.minSalary) {
+    const currencyLabel = p.salaryCurrency?.toUpperCase() ?? 'DKK';
+    lines.push(`Min salary: ${p.minSalary.toLocaleString()} ${currencyLabel}/month`);
+  }
   if (p.techInterests) lines.push(`Tech interests: ${p.techInterests}`);
   if (p.techAvoid) lines.push(`Tech to avoid: ${p.techAvoid}`);
   if (p.companyBlacklist) {
