@@ -11,7 +11,7 @@ import authRoute from './routes/auth';
 import backupsRoute from './routes/backups';
 import { isAuthEnabled, validateSession } from './auth';
 import { startBackupScheduler } from './backup';
-import { startScheduler, getLastFetchAt, getIsFetching, getLastFetchNewJobs, getIsFetchPaused, getIsScoringPaused, toggleFetchPause, toggleScoringPause } from './scheduler';
+import { startScheduler, getLastFetchAt, getIsFetching, getLastFetchNewJobs, getIsFetchPaused, getIsScoringPaused, toggleFetchPause, toggleScoringPause, triggerScoringBacklog } from './scheduler';
 import { checkLLMHealth, getLLMAvailable } from './llm';
 import { computePrefsHash } from './utils/hash';
 import { getSetting } from './settings';
@@ -111,8 +111,17 @@ app.use('/robots.txt', serveStatic({ root: DIST }));
 app.get('/*', (c) => new Response(Bun.file(resolve(DIST, 'index.html'))));
 
 // Start LLM health check, job scheduler, and backup scheduler
-checkLLMHealth().catch(console.error);
-setInterval(() => checkLLMHealth().catch(console.error), 30_000);
+async function runLLMHealthCheck() {
+  const wasAvailable = getLLMAvailable();
+  await checkLLMHealth().catch(console.error);
+  const nowAvailable = getLLMAvailable();
+  if (!wasAvailable && nowAvailable) {
+    console.log('[server] LLM reconnected — triggering scoring backlog');
+    triggerScoringBacklog();
+  }
+}
+runLLMHealthCheck();
+setInterval(runLLMHealthCheck, 30_000);
 if (process.env.DISABLE_SCHEDULER !== '1') {
   startScheduler();
   startBackupScheduler();

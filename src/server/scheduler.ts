@@ -37,13 +37,15 @@ export function toggleFetchPause(): boolean {
 export function toggleScoringPause(): boolean {
   isScoringPaused = !isScoringPaused;
   setSetting('scoring_paused', isScoringPaused ? '1' : '0');
-  if (!isScoringPaused) {
-    const unscored = db.query<{ id: string }, []>(
-      `SELECT id FROM jobs WHERE match_score IS NULL AND duplicate_of IS NULL AND status != 'rejected'`
-    ).all();
-    if (unscored.length > 0) enqueueForScoring(unscored.map(r => r.id), false);
-  }
+  if (!isScoringPaused) triggerScoringBacklog();
   return isScoringPaused;
+}
+
+export function triggerScoringBacklog(): void {
+  const unscored = db.query<{ id: string }, []>(
+    `SELECT id FROM jobs WHERE match_score IS NULL AND duplicate_of IS NULL AND status != 'rejected'`
+  ).all();
+  if (unscored.length > 0) enqueueForScoring(unscored.map(r => r.id), false);
 }
 
 type JobPartial = {
@@ -189,6 +191,11 @@ async function runScoringWorker(): Promise<void> {
         if (autoReject) maybeAutoReject(jobId, result.match_score);
         scored.push({ job, score: result.match_score, matchSummary: result.match_summary });
         console.log(`[scheduler] Analyzed job ${jobId}: score=${result.match_score} tags=${result.tags.join(',')}`);
+      } else {
+        // LLM unavailable — re-queue and stop; triggerScoringBacklog() resumes on reconnect
+        scoreQueue.set(jobId, { autoReject });
+        console.warn(`[scheduler] analyzeJob failed for ${jobId} — LLM may be down, stopping worker`);
+        break;
       }
     }
 
