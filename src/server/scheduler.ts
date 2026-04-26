@@ -10,7 +10,7 @@ import { analyzeJob } from './llm';
 import db from './db';
 import { randomUUID } from 'crypto';
 import type { Job } from './types';
-import { getPreferences, getResume } from './settings';
+import { getPreferences, getResume, getSetting, setSetting } from './settings';
 import { contentFingerprint, isFuzzyDuplicate, normalizeCompany } from './utils/normalize';
 import { classifyLiveness } from './utils/liveness';
 import { sendFetchSummary, type ScoredJob } from './telegram';
@@ -18,8 +18,8 @@ import { sendFetchSummary, type ScoredJob } from './telegram';
 let lastFetchAt: string | null = null;
 let isFetching = false;
 let lastFetchNewJobs = 0;
-let isFetchPaused = false;
-let isScoringPaused = false;
+let isFetchPaused = getSetting('fetch_paused') === '1';
+let isScoringPaused = getSetting('scoring_paused') === '1';
 
 export function getLastFetchAt(): string | null {
   return lastFetchAt;
@@ -29,8 +29,22 @@ export function getIsFetching(): boolean { return isFetching; }
 export function getLastFetchNewJobs(): number { return lastFetchNewJobs; }
 export function getIsFetchPaused(): boolean { return isFetchPaused; }
 export function getIsScoringPaused(): boolean { return isScoringPaused; }
-export function toggleFetchPause(): boolean { isFetchPaused = !isFetchPaused; return isFetchPaused; }
-export function toggleScoringPause(): boolean { isScoringPaused = !isScoringPaused; return isScoringPaused; }
+export function toggleFetchPause(): boolean {
+  isFetchPaused = !isFetchPaused;
+  setSetting('fetch_paused', isFetchPaused ? '1' : '0');
+  return isFetchPaused;
+}
+export function toggleScoringPause(): boolean {
+  isScoringPaused = !isScoringPaused;
+  setSetting('scoring_paused', isScoringPaused ? '1' : '0');
+  if (!isScoringPaused) {
+    const unscored = db.query<{ id: string }, []>(
+      `SELECT id FROM jobs WHERE match_score IS NULL AND duplicate_of IS NULL AND status != 'rejected'`
+    ).all();
+    if (unscored.length > 0) enqueueForScoring(unscored.map(r => r.id), false);
+  }
+  return isScoringPaused;
+}
 
 type JobPartial = {
   source: string;

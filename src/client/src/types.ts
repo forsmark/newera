@@ -32,6 +32,8 @@ export interface AppStatus {
     pending: number;
   };
   llm_available?: boolean | null;
+  is_fetch_paused?: boolean;
+  is_scoring_paused?: boolean;
   last_fetch_new_jobs?: number;
   stale_count?: number;
   data_files?: { resume: boolean; preferences: boolean };

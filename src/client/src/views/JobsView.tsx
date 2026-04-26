@@ -53,7 +53,7 @@ function FirstTimeSetup({ status }: { status: AppStatus | null }) {
   const navigate = useNavigate();
   const hasResume = status?.data_files?.resume ?? false;
   const hasSearchTerms = status?.data_files?.preferences ?? false;
-  const ollamaOk = status?.ollama_available ?? null;
+  const ollamaOk = status?.llm_available ?? null;
 
   return (
     <div className="max-w-[480px] mx-auto">
@@ -704,8 +704,17 @@ const [staleBannerDismissed, setStaleBannerDismissed] = useState(false);
       {/* Scoring status */}
       {hasPendingScores && (
         <div className="text-[0.75rem] text-text-3 mb-3 flex items-center gap-[0.375rem]">
-          <span className="inline-block w-[5px] h-[5px] rounded-full bg-amber" style={{ animation: "pulse 1.5s ease-in-out infinite" }} />
-          Scoring {status?.score_distribution?.pending ?? 0} jobs…
+          {status?.is_scoring_paused ? (
+            <>
+              <span className="inline-block w-[5px] h-[5px] rounded-full bg-text-3" />
+              {status.score_distribution?.pending ?? 0} unscored jobs
+            </>
+          ) : (
+            <>
+              <span className="inline-block w-[5px] h-[5px] rounded-full bg-amber" style={{ animation: "pulse 1.5s ease-in-out infinite" }} />
+              Scoring {status?.score_distribution?.pending ?? 0} jobs…
+            </>
+          )}
         </div>
       )}
 
