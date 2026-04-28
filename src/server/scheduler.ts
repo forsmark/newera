@@ -45,7 +45,7 @@ export function triggerScoringBacklog(): void {
   const unscored = db.query<{ id: string }, []>(
     `SELECT id FROM jobs WHERE match_score IS NULL AND duplicate_of IS NULL AND status != 'rejected'`
   ).all();
-  if (unscored.length > 0) enqueueForScoring(unscored.map(r => r.id), false);
+  if (unscored.length > 0) enqueueForScoring(unscored.map(r => r.id));
 }
 
 type JobPartial = {
