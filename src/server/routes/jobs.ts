@@ -42,7 +42,7 @@ app.get('/', (c) => {
   const limit = Math.max(1, Math.min(parseInt(limitParam ?? '100', 10) || 100, 200));
   const offset = Math.max(0, parseInt(offsetParam ?? '0', 10) || 0);
 
-  if (status !== undefined && !VALID_STATUSES.has(status)) {
+  if (status !== undefined && !VALID_STATUSES.has(status) && status !== 'unread') {
     return c.json({ error: 'Invalid status' }, 400);
   }
 
@@ -53,7 +53,9 @@ app.get('/', (c) => {
   const conditions: string[] = [];
   const countParams: (string | number)[] = [];
 
-  if (status) {
+  if (status === 'unread') {
+    conditions.push("seen_at IS NULL AND status != 'rejected'");
+  } else if (status) {
     conditions.push('status = ?');
     countParams.push(status);
   }

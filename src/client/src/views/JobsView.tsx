@@ -151,18 +151,27 @@ const [staleBannerDismissed, setStaleBannerDismissed] = useState(false);
 
   const queryClient = useQueryClient();
 
+  // 'all' gets the unfiltered dataset; every other tab scopes to its own server-side filter.
+  const apiStatus =
+    filterStatus === 'rejected' ? 'rejected' :
+    filterStatus === 'saved'    ? 'saved'    :
+    filterStatus === 'unsaved'  ? 'new'      :
+    filterStatus === 'unread'   ? 'unread'   :
+    null;
+
   const {
-    data: mainData,
-    fetchNextPage: mainFetchNext,
-    hasNextPage: mainHasNext,
+    data: jobsData,
+    fetchNextPage,
+    hasNextPage,
     isFetching: isQueryFetching,
-    isFetchingNextPage: mainIsFetchingNext,
+    isFetchingNextPage,
     isError: isJobsError,
     refetch: refetchJobs,
   } = useInfiniteQuery<JobsPage>({
-    queryKey: ['jobs', refreshKey],
+    queryKey: ['jobs', refreshKey, apiStatus ?? 'all'],
     queryFn: async ({ pageParam }) => {
-      const res = await fetch(`/api/jobs?limit=100&offset=${pageParam as number}`);
+      const statusParam = apiStatus ? `&status=${apiStatus}` : '';
+      const res = await fetch(`/api/jobs?limit=100&offset=${pageParam as number}${statusParam}`);
       if (!res.ok) throw new Error('Failed to load jobs');
       return res.json() as Promise<JobsPage>;
     },
@@ -176,39 +185,9 @@ const [staleBannerDismissed, setStaleBannerDismissed] = useState(false);
     staleTime: 30_000,
   });
 
-  const {
-    data: rejectedData,
-    fetchNextPage: rejectedFetchNext,
-    hasNextPage: rejectedHasNext,
-    isFetchingNextPage: rejectedIsFetchingNext,
-  } = useInfiniteQuery<JobsPage>({
-    queryKey: ['jobs-rejected', refreshKey],
-    queryFn: async ({ pageParam }) => {
-      const res = await fetch(`/api/jobs?status=rejected&limit=100&offset=${pageParam as number}`);
-      if (!res.ok) throw new Error('Failed to load jobs');
-      return res.json() as Promise<JobsPage>;
-    },
-    initialPageParam: 0,
-    getNextPageParam: (_lastPage, allPages) => {
-      const loaded = allPages.reduce((sum, p) => sum + p.jobs.length, 0);
-      const total = allPages[0]?.total ?? 0;
-      return loaded < total ? loaded : undefined;
-    },
-    enabled: filterStatus === 'rejected',
-    staleTime: 30_000,
-  });
-
-  const isOnRejected = filterStatus === 'rejected';
-  const jobs = isOnRejected
-    ? (rejectedData?.pages.flatMap(p => p.jobs) ?? [])
-    : (mainData?.pages.flatMap(p => p.jobs) ?? []);
-  const totalJobs = isOnRejected
-    ? (rejectedData?.pages[0]?.total ?? 0)
-    : (mainData?.pages[0]?.total ?? 0);
-  const fetchNextPage = isOnRejected ? rejectedFetchNext : mainFetchNext;
-  const hasNextPage = isOnRejected ? rejectedHasNext : mainHasNext;
-  const isFetchingNextPage = isOnRejected ? rejectedIsFetchingNext : mainIsFetchingNext;
-  const loading = isQueryFetching && !mainIsFetchingNext && !mainData;
+  const jobs = jobsData?.pages.flatMap(p => p.jobs) ?? [];
+  const totalJobs = jobsData?.pages[0]?.total ?? 0;
+  const loading = isQueryFetching && !isFetchingNextPage && !jobsData;
   const loadingMore = isFetchingNextPage;
 
   useEffect(() => {
