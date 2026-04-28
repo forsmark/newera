@@ -134,6 +134,8 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
   const [compact, setCompact] = useState<boolean>(() =>
     localStorage.getItem("jobs-compact-view") === "true"
   );
+  const [pinnedIds, setPinnedIds] = useState<Set<string> | null>(null);
+  const [needsPin, setNeedsPin] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
 const [staleBannerDismissed, setStaleBannerDismissed] = useState(false);
@@ -260,15 +262,42 @@ const [staleBannerDismissed, setStaleBannerDismissed] = useState(false);
     return () => observer.disconnect();
   }, []);
 
-  // Trigger load-more when sentinel is visible and there are more jobs
+  // When refreshKey changes (fresh fetch triggered), re-pin the sticky tab.
+  const prevRefreshKey = useRef(refreshKey);
+  useEffect(() => {
+    if (refreshKey === prevRefreshKey.current) return;
+    prevRefreshKey.current = refreshKey;
+    setPinnedIds(null);
+    if (isSticky) setNeedsPin(true);
+  }, [refreshKey, isSticky]);
+
+  // Pin the snapshot once the first page of data loads for a sticky tab.
+  // jobsData changes reference when the query fetches new data.
+  useEffect(() => {
+    if (!needsPin) return;
+    if (jobs.length === 0) return;
+    setPinnedIds(new Set(jobs.map(j => j.id)));
+    setNeedsPin(false);
+  }, [needsPin, jobsData]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Trigger load-more when sentinel is visible and there are more jobs.
+  // Frozen when pinned — the snapshot is the complete view.
   useEffect(() => {
     if (!sentinelVisible) return;
+    if (pinnedIds) return;
     if (!hasNextPage) return;
     if (isFetchingNextPage) return;
     fetchNextPage();
-  }, [sentinelVisible, hasNextPage, isFetchingNextPage, filterStatus, fetchNextPage]);
+  }, [sentinelVisible, pinnedIds, hasNextPage, isFetchingNextPage, filterStatus, fetchNextPage]);
 
   function handleFilterStatusChange(s: FilterStatus) {
+    if (STICKY_FILTERS.includes(s)) {
+      setPinnedIds(null);
+      setNeedsPin(true);
+    } else {
+      setPinnedIds(null);
+      setNeedsPin(false);
+    }
     setFilterStatus(s);
   }
 
@@ -433,15 +462,15 @@ const [staleBannerDismissed, setStaleBannerDismissed] = useState(false);
     });
   }
 
-  // All filters and sorting happen server-side. The only client-side rule is:
-  // for non-sticky tabs, hide jobs whose status changed locally and no longer
-  // matches the tab. Sticky tabs keep cached jobs visible (snapshot semantics).
+  // All filters and sorting happen server-side.
+  // Sticky tabs (Unread/Saved) freeze a snapshot of IDs at click time so jobs
+  // don't vanish as the user reads or saves them — even when the query refetches.
+  // Non-sticky tabs re-apply the status check locally so status changes are
+  // reflected immediately without waiting for a server round-trip.
   const filtered = jobs.filter(j => {
-    if (isSticky) return true;
+    if (isSticky) return pinnedIds ? pinnedIds.has(j.id) : true;
     if (filterStatus === 'rejected') return j.status === 'rejected';
     if (filterStatus === 'unsaved') return j.status === 'new';
-    if (filterStatus === 'unread') return j.status !== 'rejected' && j.seen_at === null;
-    if (filterStatus === 'saved') return j.status === 'saved';
     return j.status !== 'rejected';
   });
 
@@ -487,14 +516,14 @@ const [staleBannerDismissed, setStaleBannerDismissed] = useState(false);
     staleTime: 30_000,
   });
 
-  // For active sticky tabs the badge mirrors the snapshot frozen at fetch time
-  // (totalJobs from the server response) so it doesn't drift as the user reads
-  // or saves jobs locally. For other tabs use live filter-aware counts.
+  // Active sticky tab badge = frozen snapshot size (pinnedIds) so it matches
+  // what's rendered and doesn't drift as the user reads/saves locally.
+  // Inactive tabs use live filter-aware counts from /api/jobs/counts.
   const liveUnread = countsData?.unread ?? 0;
   const liveSaved = countsData?.saved ?? 0;
-  const unreadCount = filterStatus === 'unread' ? totalJobs : liveUnread;
+  const unreadCount = filterStatus === 'unread' && pinnedIds ? pinnedIds.size : liveUnread;
+  const savedCount  = filterStatus === 'saved'  && pinnedIds ? pinnedIds.size : liveSaved;
   const unsavedCount = countsData?.unsaved ?? 0;
-  const savedCount = filterStatus === 'saved' ? totalJobs : liveSaved;
   const rejectedCount = countsData?.rejected ?? 0;
   const allCount = countsData?.all_count ?? 0;
 
