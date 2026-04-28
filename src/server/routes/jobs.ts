@@ -15,6 +15,21 @@ const VALID_STATUSES = new Set(['new', 'saved', 'applied', 'rejected']);
 
 const VALID_WORK_TYPES = new Set(['remote', 'hybrid', 'onsite']);
 
+// GET /api/jobs/counts
+// Returns total job counts per status tab for badge display.
+app.get('/counts', (c) => {
+  const row = db.query(`
+    SELECT
+      COUNT(*) FILTER (WHERE status = 'new')                                    AS unsaved,
+      COUNT(*) FILTER (WHERE status = 'saved')                                  AS saved,
+      COUNT(*) FILTER (WHERE status = 'rejected')                               AS rejected,
+      COUNT(*) FILTER (WHERE seen_at IS NULL AND status != 'rejected')          AS unread
+    FROM jobs
+    WHERE duplicate_of IS NULL
+  `).get() as { unsaved: number; saved: number; rejected: number; unread: number };
+  return c.json(row);
+});
+
 // GET /api/jobs
 // Query params: status, q, limit, offset, include_duplicates, work_type (comma-separated)
 app.get('/', (c) => {

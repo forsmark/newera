@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useInfiniteQuery, useQueryClient, InfiniteData } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, useQueryClient, InfiniteData } from "@tanstack/react-query";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { Job, AppStatus } from "../types";
@@ -527,14 +527,16 @@ const [staleBannerDismissed, setStaleBannerDismissed] = useState(false);
   const remotiveCount = jobs.filter(j => j.source === 'remotive').length;
   const arbeitnowCount = jobs.filter(j => j.source === 'arbeitnow').length;
   const remoteokCount = jobs.filter(j => j.source === 'remoteok').length;
-  const allMainJobs = mainData?.pages.flatMap(p => p.jobs) ?? [];
-  const visibleJobs = hideJobsFromDisabledSources
-    ? allMainJobs.filter(j => !disabledSources.includes(j.source))
-    : allMainJobs;
-  const unreadCount = visibleJobs.filter(j => j.seen_at === null && j.status !== 'rejected').length;
-  const unsavedCount = visibleJobs.filter(j => j.status === 'new').length;
-  const savedCount = visibleJobs.filter(j => j.status === 'saved').length;
-  const rejectedCount = rejectedData?.pages[0]?.total ?? visibleJobs.filter(j => j.status === 'rejected').length;
+  const { data: countsData } = useQuery({
+    queryKey: ['job-counts', refreshKey],
+    queryFn: () => fetch('/api/jobs/counts').then(r => r.json()) as Promise<{ unread: number; unsaved: number; saved: number; rejected: number }>,
+    staleTime: 30_000,
+  });
+
+  const unreadCount = countsData?.unread ?? 0;
+  const unsavedCount = countsData?.unsaved ?? 0;
+  const savedCount = countsData?.saved ?? 0;
+  const rejectedCount = countsData?.rejected ?? 0;
 
   // Determine whether to animate the list (filter changed)
   const shouldAnimate = !prefersReducedMotion && filterKey !== prevFilterKey.current;
