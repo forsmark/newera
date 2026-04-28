@@ -160,9 +160,10 @@ const [staleBannerDismissed, setStaleBannerDismissed] = useState(false);
     isError: isJobsError,
     refetch: refetchJobs,
   } = useInfiniteQuery<JobsPage>({
-    queryKey: ['jobs', refreshKey],
+    queryKey: ['jobs', refreshKey, filterStatus === 'rejected' ? 'rejected' : 'all'],
     queryFn: async ({ pageParam }) => {
-      const res = await fetch(`/api/jobs?limit=100&offset=${pageParam as number}`);
+      const statusParam = filterStatus === 'rejected' ? '&status=rejected' : '';
+      const res = await fetch(`/api/jobs?limit=100&offset=${pageParam as number}${statusParam}`);
       if (!res.ok) throw new Error('Failed to load jobs');
       return res.json() as Promise<JobsPage>;
     },
@@ -233,7 +234,6 @@ const [staleBannerDismissed, setStaleBannerDismissed] = useState(false);
   useEffect(() => {
     if (!sentinelVisible) return;
     if (pinnedIds) return;
-    if (filterStatus === 'rejected') return;
     if (!hasNextPage) return;
     if (isFetchingNextPage) return;
     fetchNextPage();
