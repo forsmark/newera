@@ -6,7 +6,7 @@ import { fetchRemoteOK } from './sources/remoteok';
 import { fetchInfojobs } from './sources/infojobs';
 import { fetchTecnoempleo } from './sources/tecnoempleo';
 import { fetchJobDescription } from './sources/linkedin';
-import { analyzeJob } from './llm';
+import { analyzeJob, getLLMAvailable } from './llm';
 import db from './db';
 import { randomUUID } from 'crypto';
 import type { Job } from './types';
@@ -191,11 +191,14 @@ async function runScoringWorker(): Promise<void> {
         if (autoReject) maybeAutoReject(jobId, result.match_score);
         scored.push({ job, score: result.match_score, matchSummary: result.match_summary });
         console.log(`[scheduler] Analyzed job ${jobId}: score=${result.match_score} tags=${result.tags.join(',')}`);
-      } else {
-        // LLM unavailable — re-queue and stop; triggerScoringBacklog() resumes on reconnect
+      } else if (getLLMAvailable() === false) {
+        // LLM truly unreachable — re-queue and stop; triggerScoringBacklog() resumes on reconnect
         scoreQueue.set(jobId, { autoReject });
         console.warn(`[scheduler] analyzeJob failed for ${jobId} — LLM may be down, stopping worker`);
         break;
+      } else {
+        // Per-job parse failure (LLM is healthy) — skip and continue
+        console.warn(`[scheduler] analyzeJob failed for ${jobId} after max retries — skipping`);
       }
     }
 

@@ -141,9 +141,20 @@ export function extractJson(raw: string): AnalysisResult {
     .replace(/<[^>]+>/g, '');
   const stripped = noThink.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim();
 
-  const match = stripped.match(/\{[\s\S]*\}/);
+  let match = stripped.match(/\{[\s\S]*\}/);
   if (!match) {
-    throw new Error(`No JSON object found in model response: ${raw.slice(0, 200)}`);
+    // Attempt to repair a truncated response (no closing brace)
+    const openIdx = stripped.indexOf('{');
+    if (openIdx !== -1) {
+      const partial = stripped.slice(openIdx)
+        .replace(/,?\s*"[^"]*"?\s*:\s*"[^"]*$/, '')  // truncated string value
+        .replace(/,?\s*"[^"]*"?\s*:\s*[^,}\]]*$/, '') // truncated non-string value
+        .replace(/,\s*$/, '') + '}';
+      match = partial.match(/\{[\s\S]*\}/) ?? null;
+    }
+    if (!match) {
+      throw new Error(`No JSON object found in model response: ${raw.slice(0, 200)}`);
+    }
   }
 
   // Sanitize common model JSON quirks before parsing
@@ -439,7 +450,7 @@ export async function analyzeJob(job: Job): Promise<AnalysisResult | null> {
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
     try {
-      const raw = await llmComplete(prompt, 2048, controller.signal);
+      const raw = await llmComplete(prompt, 4096, controller.signal);
       clearTimeout(timer);
 
       if (!raw) throw new Error('LLM response missing content');
