@@ -79,6 +79,87 @@ describe('GET /api/jobs', () => {
     const { jobs } = await (await app.request('/api/jobs')).json() as { jobs: Array<{ tags: string[] }> };
     expect(jobs[0].tags).toEqual(['React', 'TypeScript']);
   });
+
+  it('filters by min_score, keeping unscored jobs', async () => {
+    seedJob({ title: 'Strong', match_score: 80 });
+    seedJob({ title: 'Weak', match_score: 10 });
+    seedJob({ title: 'Pending', match_score: null });
+
+    const { jobs } = await (await app.request('/api/jobs?min_score=50')).json() as { jobs: Array<{ title: string }> };
+    expect(jobs.map(j => j.title).sort()).toEqual(['Pending', 'Strong']);
+  });
+
+  it('hide_unscored excludes null-score jobs', async () => {
+    seedJob({ title: 'Scored', match_score: 60 });
+    seedJob({ title: 'Pending', match_score: null });
+
+    const { jobs } = await (await app.request('/api/jobs?hide_unscored=1')).json() as { jobs: Array<{ title: string }> };
+    expect(jobs.map(j => j.title)).toEqual(['Scored']);
+  });
+
+  it('filters by sources whitelist', async () => {
+    seedJob({ title: 'L', source: 'linkedin' });
+    seedJob({ title: 'J', source: 'jobindex' });
+    seedJob({ title: 'R', source: 'remoteok' });
+
+    const { jobs } = await (await app.request('/api/jobs?sources=linkedin,remoteok')).json() as { jobs: Array<{ title: string }> };
+    expect(jobs.map(j => j.title).sort()).toEqual(['L', 'R']);
+  });
+
+  it('excludes sources via exclude_sources', async () => {
+    seedJob({ title: 'L', source: 'linkedin' });
+    seedJob({ title: 'J', source: 'jobindex' });
+
+    const { jobs } = await (await app.request('/api/jobs?exclude_sources=linkedin')).json() as { jobs: Array<{ title: string }> };
+    expect(jobs.map(j => j.title)).toEqual(['J']);
+  });
+
+  it('filters by tags (AND, null tags pass through)', async () => {
+    seedJob({ title: 'A', tags: ['python', 'aws'] });
+    seedJob({ title: 'B', tags: ['python'] });
+    seedJob({ title: 'C', tags: ['monty-python'] });
+    seedJob({ title: 'D', tags: null });
+
+    const { jobs } = await (await app.request('/api/jobs?tags=python,aws')).json() as { jobs: Array<{ title: string }> };
+    expect(jobs.map(j => j.title).sort()).toEqual(['A', 'D']);
+  });
+
+  it('total reflects filtered count', async () => {
+    seedJob({ title: 'A', match_score: 80 });
+    seedJob({ title: 'B', match_score: 10 });
+
+    const body = await (await app.request('/api/jobs?min_score=50')).json() as { total: number };
+    expect(body.total).toBe(1);
+  });
+});
+
+describe('GET /api/jobs/counts', () => {
+  it('returns per-status counts honoring global filters', async () => {
+    seedJob({ status: 'new', match_score: 80 });
+    seedJob({ status: 'new', match_score: 10 });
+    seedJob({ status: 'saved', match_score: 90 });
+    seedJob({ status: 'rejected', match_score: 70 });
+    seedJob({ status: 'new', seen_at: null, match_score: 80 });
+    seedJob({ status: 'new', seen_at: '2026-04-10T00:00:00.000Z', match_score: 80 });
+
+    const baseline = await (await app.request('/api/jobs/counts')).json() as {
+      unsaved: number; saved: number; rejected: number; unread: number; all_count: number;
+    };
+    expect(baseline.unsaved).toBe(4);
+    expect(baseline.saved).toBe(1);
+    expect(baseline.rejected).toBe(1);
+    // 6 seeded jobs: 4 'new' with seen_at=null (unread), 1 'saved' with seen_at=null (unread),
+    // 1 'rejected' (excluded from unread), and one 'new' with seen_at set (excluded).
+    expect(baseline.unread).toBe(4);
+    expect(baseline.all_count).toBe(6);
+
+    const filtered = await (await app.request('/api/jobs/counts?min_score=50')).json() as {
+      unsaved: number; rejected: number; all_count: number;
+    };
+    expect(filtered.unsaved).toBe(3);
+    expect(filtered.rejected).toBe(1);
+    expect(filtered.all_count).toBe(5);
+  });
 });
 
 // ─── PATCH /api/jobs/:id ──────────────────────────────────────────────────────

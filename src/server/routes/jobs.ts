@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import db from '../db';
 import type { Job } from '../types';
 import { analyzeJob } from '../llm';
@@ -15,30 +15,143 @@ const VALID_STATUSES = new Set(['new', 'saved', 'applied', 'rejected']);
 
 const VALID_WORK_TYPES = new Set(['remote', 'hybrid', 'onsite']);
 
+const VALID_POSTED_WITHIN = new Set(['7d', '30d']);
+
+const VALID_SORT_BY = new Set(['score', 'posted', 'fetched']);
+
+type GlobalFilters = {
+  q?: string;
+  workTypes: string[];
+  sources: string[];
+  excludeSources: string[];
+  tags: string[];
+  minScore?: number;
+  hideUnscored: boolean;
+  postedWithin?: '7d' | '30d';
+  includeDuplicates: boolean;
+};
+
+function parseGlobalFilters(c: Context): GlobalFilters {
+  const q = c.req.query('q');
+  const workTypeParam = c.req.query('work_type');
+  const sourcesParam = c.req.query('sources');
+  const excludeSourcesParam = c.req.query('exclude_sources');
+  const tagsParam = c.req.query('tags');
+  const minScoreParam = c.req.query('min_score');
+  const hideUnscored = c.req.query('hide_unscored') === '1';
+  const postedWithinParam = c.req.query('posted_within');
+  const includeDuplicates = c.req.query('include_duplicates') === '1';
+
+  const splitCsv = (s: string | undefined) =>
+    s ? s.split(',').map(v => v.trim()).filter(Boolean) : [];
+
+  const minScore = minScoreParam !== undefined ? Number.parseInt(minScoreParam, 10) : undefined;
+
+  return {
+    q: q && q.length > 0 ? q : undefined,
+    workTypes: splitCsv(workTypeParam).filter(v => VALID_WORK_TYPES.has(v)),
+    sources: splitCsv(sourcesParam),
+    excludeSources: splitCsv(excludeSourcesParam),
+    tags: splitCsv(tagsParam),
+    minScore: typeof minScore === 'number' && Number.isFinite(minScore) ? minScore : undefined,
+    hideUnscored,
+    postedWithin: postedWithinParam && VALID_POSTED_WITHIN.has(postedWithinParam)
+      ? (postedWithinParam as '7d' | '30d')
+      : undefined,
+    includeDuplicates,
+  };
+}
+
+// Builds the WHERE clause shared between /api/jobs and /api/jobs/counts so both
+// endpoints answer the same question and tab badges match what is rendered.
+// Behavior intentionally mirrors the old client-side filter rules (e.g. null
+// work_type / null tags pass through tag- and work-type filters).
+function buildGlobalFilterClause(filters: GlobalFilters): {
+  sql: string;
+  params: (string | number)[];
+} {
+  const conditions: string[] = [];
+  const params: (string | number)[] = [];
+
+  if (filters.q) {
+    const like = `%${filters.q}%`;
+    conditions.push('(title LIKE ? OR company LIKE ? OR work_type LIKE ? OR tags LIKE ?)');
+    params.push(like, like, like, like);
+  }
+
+  if (filters.workTypes.length > 0) {
+    conditions.push(`(work_type IS NULL OR work_type IN (${filters.workTypes.map(() => '?').join(',')}))`);
+    params.push(...filters.workTypes);
+  }
+
+  if (filters.sources.length > 0) {
+    conditions.push(`source IN (${filters.sources.map(() => '?').join(',')})`);
+    params.push(...filters.sources);
+  }
+
+  if (filters.excludeSources.length > 0) {
+    conditions.push(`source NOT IN (${filters.excludeSources.map(() => '?').join(',')})`);
+    params.push(...filters.excludeSources);
+  }
+
+  if (filters.tags.length > 0) {
+    const tagConds = filters.tags.map(() => 'tags LIKE ?').join(' AND ');
+    conditions.push(`(tags IS NULL OR (${tagConds}))`);
+    params.push(...filters.tags.map(t => `%"${t}"%`));
+  }
+
+  if (typeof filters.minScore === 'number') {
+    conditions.push('(match_score IS NULL OR match_score >= ?)');
+    params.push(filters.minScore);
+  }
+
+  if (filters.hideUnscored) {
+    conditions.push('match_score IS NOT NULL');
+  }
+
+  if (filters.postedWithin) {
+    const days = filters.postedWithin === '7d' ? 7 : 30;
+    conditions.push(`(posted_at IS NULL OR posted_at >= datetime('now', '-' || ? || ' day'))`);
+    params.push(days);
+  }
+
+  if (!filters.includeDuplicates) {
+    conditions.push('duplicate_of IS NULL');
+  }
+
+  return { sql: conditions.join(' AND '), params };
+}
+
 // GET /api/jobs/counts
-// Returns total job counts per status tab for badge display.
+// Returns total job counts per status tab for badge display. Honors the same
+// global filters as /api/jobs so badge counts always match what's rendered.
 app.get('/counts', (c) => {
+  const filters = parseGlobalFilters(c);
+  const { sql, params } = buildGlobalFilterClause(filters);
+  const where = sql ? `WHERE ${sql}` : '';
   const row = db.query(`
     SELECT
       COUNT(*) FILTER (WHERE status = 'new')                                    AS unsaved,
       COUNT(*) FILTER (WHERE status = 'saved')                                  AS saved,
       COUNT(*) FILTER (WHERE status = 'rejected')                               AS rejected,
-      COUNT(*) FILTER (WHERE seen_at IS NULL AND status != 'rejected')          AS unread
+      COUNT(*) FILTER (WHERE seen_at IS NULL AND status != 'rejected')          AS unread,
+      COUNT(*)                                                                  AS all_count
     FROM jobs
-    WHERE duplicate_of IS NULL
-  `).get() as { unsaved: number; saved: number; rejected: number; unread: number };
+    ${where}
+  `).get(...params) as {
+    unsaved: number; saved: number; rejected: number; unread: number; all_count: number;
+  };
   return c.json(row);
 });
 
 // GET /api/jobs
-// Query params: status, q, limit, offset, include_duplicates, work_type (comma-separated)
+// Query params: status, limit, offset, sort_by, plus all global filter params
+// (see parseGlobalFilters). Returns paginated jobs filtered server-side.
 app.get('/', (c) => {
   const status = c.req.query('status');
-  const q = c.req.query('q');
-  const workTypeParam = c.req.query('work_type');
   const limitParam = c.req.query('limit');
   const offsetParam = c.req.query('offset');
-  const includeDuplicates = c.req.query('include_duplicates') === '1';
+  const sortByParam = c.req.query('sort_by');
   const limit = Math.max(1, Math.min(parseInt(limitParam ?? '100', 10) || 100, 200));
   const offset = Math.max(0, parseInt(offsetParam ?? '0', 10) || 0);
 
@@ -46,44 +159,30 @@ app.get('/', (c) => {
     return c.json({ error: 'Invalid status' }, 400);
   }
 
-  const workTypes = workTypeParam
-    ? workTypeParam.split(',').map(s => s.trim()).filter(s => VALID_WORK_TYPES.has(s))
-    : [];
-
-  const conditions: string[] = [];
-  const countParams: (string | number)[] = [];
+  const filters = parseGlobalFilters(c);
+  const { sql: filterSql, params: filterParams } = buildGlobalFilterClause(filters);
+  const conditions: string[] = filterSql ? [filterSql] : [];
 
   if (status === 'unread') {
     conditions.push("seen_at IS NULL AND status != 'rejected'");
   } else if (status) {
     conditions.push('status = ?');
-    countParams.push(status);
+    filterParams.push(status);
   }
 
-  if (q) {
-    conditions.push('(title LIKE ? OR company LIKE ?)');
-    const like = `%${q}%`;
-    countParams.push(like, like);
-  }
-
-  if (workTypes.length > 0) {
-    conditions.push(`work_type IN (${workTypes.map(() => '?').join(',')})`);
-    countParams.push(...workTypes);
-  }
-
-  if (!includeDuplicates) {
-    conditions.push('duplicate_of IS NULL');
-  }
+  const sortBy = sortByParam && VALID_SORT_BY.has(sortByParam) ? sortByParam : 'score';
+  const orderBy =
+    sortBy === 'posted' ? 'posted_at DESC NULLS LAST, fetched_at DESC' :
+    sortBy === 'fetched' ? 'fetched_at DESC' :
+    'match_score DESC NULLS LAST, fetched_at DESC';
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-  const params = [...countParams, limit, offset];
-
-  const sql = `SELECT * FROM jobs ${where} ORDER BY match_score DESC NULLS LAST, fetched_at DESC LIMIT ? OFFSET ?`;
+  const sql = `SELECT * FROM jobs ${where} ORDER BY ${orderBy} LIMIT ? OFFSET ?`;
   const countSql = `SELECT COUNT(*) as total FROM jobs ${where}`;
 
-  const rawJobs = db.query(sql).all(...params) as (Job & { tags: string | null })[];
+  const rawJobs = db.query(sql).all(...filterParams, limit, offset) as (Job & { tags: string | null })[];
   const jobs = rawJobs.map(j => ({ ...j, tags: j.tags ? JSON.parse(j.tags) as string[] : null }));
-  const countRow = db.query(countSql).get(...countParams) as { total: number } | null;
+  const countRow = db.query(countSql).get(...filterParams) as { total: number } | null;
   return c.json({ jobs, total: countRow?.total ?? 0, limit, offset });
 });
 

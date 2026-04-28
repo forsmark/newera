@@ -134,7 +134,6 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
   const [compact, setCompact] = useState<boolean>(() =>
     localStorage.getItem("jobs-compact-view") === "true"
   );
-  const [pinnedIds, setPinnedIds] = useState<Set<string> | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
 const [staleBannerDismissed, setStaleBannerDismissed] = useState(false);
@@ -159,6 +158,33 @@ const [staleBannerDismissed, setStaleBannerDismissed] = useState(false);
     filterStatus === 'unread'   ? 'unread'   :
     null;
 
+  // Sticky tabs use the fetched cache as a snapshot — once a tab is loaded,
+  // local mutations (mark read, save, etc.) update the cache in place but the
+  // server isn't re-queried, so jobs whose state changed locally remain visible.
+  const STICKY_FILTERS: FilterStatus[] = ['unread', 'saved'];
+  const isSticky = STICKY_FILTERS.includes(filterStatus);
+
+  // All global filters (search, sources, score threshold, etc.) are applied
+  // server-side so badge counts and the rendered list always agree.
+  const globalFilterParams = (() => {
+    const p = new URLSearchParams();
+    if (hideWeakMatches) p.set('min_score', String(lowScoreThreshold));
+    if (hideUnscored) p.set('hide_unscored', '1');
+    if (selectedSources.size > 0) p.set('sources', [...selectedSources].sort().join(','));
+    if (hideJobsFromDisabledSources && disabledSources.length > 0) {
+      p.set('exclude_sources', [...disabledSources].sort().join(','));
+    }
+    if (selectedWorkTypes.size > 0) p.set('work_type', [...selectedWorkTypes].sort().join(','));
+    if (activeTags.length > 0) p.set('tags', [...activeTags].sort().join(','));
+    if (searchQuery) p.set('q', searchQuery);
+    if (postedWithin !== 'any') p.set('posted_within', postedWithin);
+    if (sortBy !== 'score') p.set('sort_by', sortBy);
+    return p;
+  })();
+  const globalFilterParamsString = globalFilterParams.toString();
+
+  const jobsQueryKey = ['jobs', refreshKey, apiStatus ?? 'all', globalFilterParamsString] as const;
+
   const {
     data: jobsData,
     fetchNextPage,
@@ -168,10 +194,13 @@ const [staleBannerDismissed, setStaleBannerDismissed] = useState(false);
     isError: isJobsError,
     refetch: refetchJobs,
   } = useInfiniteQuery<JobsPage>({
-    queryKey: ['jobs', refreshKey, apiStatus ?? 'all'],
+    queryKey: jobsQueryKey,
     queryFn: async ({ pageParam }) => {
-      const statusParam = apiStatus ? `&status=${apiStatus}` : '';
-      const res = await fetch(`/api/jobs?limit=100&offset=${pageParam as number}${statusParam}`);
+      const params = new URLSearchParams(globalFilterParamsString);
+      params.set('limit', '100');
+      params.set('offset', String(pageParam as number));
+      if (apiStatus) params.set('status', apiStatus);
+      const res = await fetch(`/api/jobs?${params.toString()}`);
       if (!res.ok) throw new Error('Failed to load jobs');
       return res.json() as Promise<JobsPage>;
     },
@@ -193,13 +222,6 @@ const [staleBannerDismissed, setStaleBannerDismissed] = useState(false);
   useEffect(() => {
     if (isJobsError) toast('Failed to load jobs');
   }, [isJobsError]);
-
-  const prevRefreshKey = useRef(refreshKey);
-  useEffect(() => {
-    if (refreshKey === prevRefreshKey.current) return;
-    prevRefreshKey.current = refreshKey;
-    setPinnedIds(null);
-  }, [refreshKey]);
 
   useEffect(() => {
     fetch('/api/settings')
@@ -241,29 +263,17 @@ const [staleBannerDismissed, setStaleBannerDismissed] = useState(false);
   // Trigger load-more when sentinel is visible and there are more jobs
   useEffect(() => {
     if (!sentinelVisible) return;
-    if (pinnedIds) return;
     if (!hasNextPage) return;
     if (isFetchingNextPage) return;
     fetchNextPage();
-  }, [sentinelVisible, hasNextPage, isFetchingNextPage, pinnedIds, filterStatus, fetchNextPage]);
-
-  // Filters that persist in-view even as items change state (sticky snapshot)
-  const STICKY_FILTERS: FilterStatus[] = ['unread', 'saved'];
+  }, [sentinelVisible, hasNextPage, isFetchingNextPage, filterStatus, fetchNextPage]);
 
   function handleFilterStatusChange(s: FilterStatus) {
-    if (STICKY_FILTERS.includes(s)) {
-      const matchFn = s === 'unread'
-        ? (j: Job) => j.seen_at === null && j.status !== 'rejected'
-        : (j: Job) => j.status === 'saved';
-      setPinnedIds(new Set(jobs.filter(matchFn).map(j => j.id)));
-    } else {
-      setPinnedIds(null);
-    }
     setFilterStatus(s);
   }
 
   function updateJobInCache(id: string, update: Partial<Job>) {
-    queryClient.setQueryData<InfiniteData<JobsPage>>(['jobs', refreshKey], (old) => {
+    queryClient.setQueryData<InfiniteData<JobsPage>>(jobsQueryKey, (old) => {
       if (!old) return old;
       return {
         ...old,
@@ -276,7 +286,7 @@ const [staleBannerDismissed, setStaleBannerDismissed] = useState(false);
   }
 
   function updateJobsInCache(ids: Set<string>, updateFn: (j: Job) => Job) {
-    queryClient.setQueryData<InfiniteData<JobsPage>>(['jobs', refreshKey], (old) => {
+    queryClient.setQueryData<InfiniteData<JobsPage>>(jobsQueryKey, (old) => {
       if (!old) return old;
       return {
         ...old,
@@ -423,55 +433,17 @@ const [staleBannerDismissed, setStaleBannerDismissed] = useState(false);
     });
   }
 
-  const filtered = jobs
-    .filter(j => {
-      // Sticky snapshot: keep jobs that were in view when the filter was applied
-      if (pinnedIds && STICKY_FILTERS.includes(filterStatus)) {
-        if (!pinnedIds.has(j.id)) return false;
-        if (j.status === 'rejected') return false;
-      } else {
-        if (filterStatus !== "rejected" && j.status === "rejected") return false;
-        if (hideWeakMatches && j.match_score !== null && j.match_score < lowScoreThreshold) return false;
-        if (hideUnscored && j.match_score === null) return false;
-        if (filterStatus === "unread" && j.seen_at !== null) return false;
-        if (filterStatus === "unsaved" && j.status !== "new") return false;
-        if (filterStatus === "saved" && j.status !== "saved") return false;
-        if (filterStatus === "rejected" && j.status !== "rejected") return false;
-      }
-      if (selectedSources.size > 0 && !selectedSources.has(j.source)) return false;
-      if (hideJobsFromDisabledSources && disabledSources.includes(j.source)) return false;
-      if (selectedWorkTypes.size > 0 && j.work_type !== null && !selectedWorkTypes.has(j.work_type)) return false;
-      if (activeTags.length > 0 && j.tags !== null && !activeTags.every(tag => j.tags!.includes(tag))) return false;
-      if (searchQuery) {
-        const q = searchQuery.toLowerCase();
-        const matchesTitle = j.title.toLowerCase().includes(q);
-        const matchesCompany = j.company.toLowerCase().includes(q);
-        const matchesWorkType = j.work_type?.toLowerCase().includes(q) ?? false;
-        const matchesTags = j.tags?.some(t => t.toLowerCase().includes(q)) ?? false;
-        if (!(matchesTitle || matchesCompany || matchesWorkType || matchesTags)) return false;
-      }
-      if (postedWithin !== 'any' && j.posted_at) {
-        const days = postedWithin === '7d' ? 7 : 30;
-        const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
-        if (new Date(j.posted_at).getTime() < cutoff) return false;
-      }
-      return true;
-    })
-    .sort((a, b) => {
-      if (sortBy === 'score') {
-        if (a.match_score === null && b.match_score === null) return 0;
-        if (a.match_score === null) return 1;
-        if (b.match_score === null) return -1;
-        return b.match_score - a.match_score;
-      }
-      if (sortBy === 'posted') {
-        if (!a.posted_at && !b.posted_at) return 0;
-        if (!a.posted_at) return 1;
-        if (!b.posted_at) return -1;
-        return new Date(b.posted_at).getTime() - new Date(a.posted_at).getTime();
-      }
-      return new Date(b.fetched_at).getTime() - new Date(a.fetched_at).getTime();
-    });
+  // All filters and sorting happen server-side. The only client-side rule is:
+  // for non-sticky tabs, hide jobs whose status changed locally and no longer
+  // matches the tab. Sticky tabs keep cached jobs visible (snapshot semantics).
+  const filtered = jobs.filter(j => {
+    if (isSticky) return true;
+    if (filterStatus === 'rejected') return j.status === 'rejected';
+    if (filterStatus === 'unsaved') return j.status === 'new';
+    if (filterStatus === 'unread') return j.status !== 'rejected' && j.seen_at === null;
+    if (filterStatus === 'saved') return j.status === 'saved';
+    return j.status !== 'rejected';
+  });
 
   useEffect(() => {
     setSelectedIds(new Set());
@@ -507,15 +479,24 @@ const [staleBannerDismissed, setStaleBannerDismissed] = useState(false);
   const arbeitnowCount = jobs.filter(j => j.source === 'arbeitnow').length;
   const remoteokCount = jobs.filter(j => j.source === 'remoteok').length;
   const { data: countsData } = useQuery({
-    queryKey: ['job-counts', refreshKey],
-    queryFn: () => fetch('/api/jobs/counts').then(r => r.json()) as Promise<{ unread: number; unsaved: number; saved: number; rejected: number }>,
+    queryKey: ['job-counts', refreshKey, globalFilterParamsString],
+    queryFn: () =>
+      fetch(`/api/jobs/counts?${globalFilterParamsString}`).then(r => r.json()) as Promise<{
+        unread: number; unsaved: number; saved: number; rejected: number; all_count: number;
+      }>,
     staleTime: 30_000,
   });
 
-  const unreadCount = countsData?.unread ?? 0;
+  // For active sticky tabs the badge mirrors the snapshot frozen at fetch time
+  // (totalJobs from the server response) so it doesn't drift as the user reads
+  // or saves jobs locally. For other tabs use live filter-aware counts.
+  const liveUnread = countsData?.unread ?? 0;
+  const liveSaved = countsData?.saved ?? 0;
+  const unreadCount = filterStatus === 'unread' ? totalJobs : liveUnread;
   const unsavedCount = countsData?.unsaved ?? 0;
-  const savedCount = countsData?.saved ?? 0;
+  const savedCount = filterStatus === 'saved' ? totalJobs : liveSaved;
   const rejectedCount = countsData?.rejected ?? 0;
+  const allCount = countsData?.all_count ?? 0;
 
   // Determine whether to animate the list (filter changed)
   const shouldAnimate = !prefersReducedMotion && filterKey !== prevFilterKey.current;
@@ -616,7 +597,13 @@ const [staleBannerDismissed, setStaleBannerDismissed] = useState(false);
           {/* Status tabs */}
           <div className="flex gap-0 border-b border-border overflow-x-auto sm:overflow-x-visible shrink-0 w-full sm:w-auto">
             {(["all", "unread", "unsaved", "saved", "rejected"] as FilterStatus[]).map(s => {
-              const count = s === "unread" ? unreadCount : s === "unsaved" ? unsavedCount : s === "saved" ? savedCount : s === "rejected" ? rejectedCount : null;
+              const count =
+                s === "all"      ? allCount      :
+                s === "unread"   ? unreadCount   :
+                s === "unsaved"  ? unsavedCount  :
+                s === "saved"    ? savedCount    :
+                s === "rejected" ? rejectedCount :
+                null;
               const isActive = filterStatus === s;
               return (
                 <button
