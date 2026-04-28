@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import db from '../db';
 import type { Job } from '../types';
 import { analyzeJob } from '../llm';
-import { analyzeUnscoredJobs } from '../scheduler';
+import { analyzeUnscoredJobs, enqueueForScoring } from '../scheduler';
 import { fetchPageText } from '../utils/fetchPageText';
 import { computePrefsHash } from '../utils/hash';
 import { getSetting, getResume } from '../settings';
@@ -307,27 +307,15 @@ app.post('/bulk-rescore', async (c) => {
     return c.json({ error: 'ids must be a non-empty string array' }, 400);
   }
 
-  const placeholders = (ids as string[]).map(() => '?').join(',');
+  const validIds = ids as string[];
+  const placeholders = validIds.map(() => '?').join(',');
   db.run(
-    `UPDATE jobs SET match_score = NULL, match_reasoning = NULL, match_summary = NULL WHERE id IN (${placeholders})`,
-    ids as string[]
+    `UPDATE jobs SET match_score = NULL, match_reasoning = NULL, match_summary = NULL, tags = NULL, work_type = NULL WHERE id IN (${placeholders})`,
+    validIds
   );
+  enqueueForScoring(validIds, false);
 
-  (async () => {
-    for (const id of ids as string[]) {
-      const job = db.query('SELECT * FROM jobs WHERE id = ?').get(id) as Job | null;
-      if (!job) continue;
-      const result = await analyzeJob(job);
-      if (!result) continue;
-      db.run(
-        `UPDATE jobs SET match_score=?, match_reasoning=?, match_summary=?, tags=?, work_type=?, prefs_hash=? WHERE id=?`,
-        [result.match_score, result.match_reasoning, result.match_summary,
-         JSON.stringify(result.tags), result.work_type, result.prefs_hash, id]
-      );
-    }
-  })().catch(console.error);
-
-  return c.json({ queued: (ids as string[]).length }, 202);
+  return c.json({ queued: validIds.length }, 202);
 });
 
 // POST /api/jobs/rescore-all
@@ -372,24 +360,11 @@ app.post('/rescore-stale', (c) => {
 
   const ids = staleJobs.map(j => j.id);
   db.run(
-    `UPDATE jobs SET match_score = NULL, match_reasoning = NULL, match_summary = NULL
+    `UPDATE jobs SET match_score = NULL, match_reasoning = NULL, match_summary = NULL, tags = NULL, work_type = NULL
      WHERE id IN (${ids.map(() => '?').join(',')})`,
     ids
   );
-
-  (async () => {
-    for (const { id } of staleJobs) {
-      const job = db.query('SELECT * FROM jobs WHERE id = ?').get(id) as Job | null;
-      if (!job) continue;
-      const result = await analyzeJob(job);
-      if (!result) continue;
-      db.run(
-        `UPDATE jobs SET match_score=?, match_reasoning=?, match_summary=?, tags=?, work_type=?, prefs_hash=? WHERE id=?`,
-        [result.match_score, result.match_reasoning, result.match_summary,
-         JSON.stringify(result.tags), result.work_type, result.prefs_hash, id]
-      );
-    }
-  })().catch(console.error);
+  enqueueForScoring(ids, true);
 
   return c.json({ queued: staleJobs.length }, 202);
 });
