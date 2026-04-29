@@ -134,7 +134,7 @@ export default function JobsView({ refreshKey, isFetching, status }: Props) {
   const [compact, setCompact] = useState<boolean>(() =>
     localStorage.getItem("jobs-compact-view") === "true"
   );
-  const [pinnedIds, setPinnedIds] = useState<Set<string> | null>(null);
+  const [pinnedJobs, setPinnedJobs] = useState<Job[] | null>(null);
   const [needsPin, setNeedsPin] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
@@ -267,16 +267,17 @@ const [staleBannerDismissed, setStaleBannerDismissed] = useState(false);
   useEffect(() => {
     if (refreshKey === prevRefreshKey.current) return;
     prevRefreshKey.current = refreshKey;
-    setPinnedIds(null);
+    setPinnedJobs(null);
     if (isSticky) setNeedsPin(true);
   }, [refreshKey, isSticky]);
 
   // Pin the snapshot once the first page of data loads for a sticky tab.
-  // jobsData changes reference when the query fetches new data.
+  // Stores full job objects so the pinned view survives cache replacements from
+  // background refetches (e.g. scoring poll removes a now-read job from ?status=unread).
   useEffect(() => {
     if (!needsPin) return;
     if (jobs.length === 0) return;
-    setPinnedIds(new Set(jobs.map(j => j.id)));
+    setPinnedJobs([...jobs]);
     setNeedsPin(false);
   }, [needsPin, jobsData]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -284,18 +285,18 @@ const [staleBannerDismissed, setStaleBannerDismissed] = useState(false);
   // Frozen when pinned — the snapshot is the complete view.
   useEffect(() => {
     if (!sentinelVisible) return;
-    if (pinnedIds) return;
+    if (pinnedJobs) return;
     if (!hasNextPage) return;
     if (isFetchingNextPage) return;
     fetchNextPage();
-  }, [sentinelVisible, pinnedIds, hasNextPage, isFetchingNextPage, filterStatus, fetchNextPage]);
+  }, [sentinelVisible, pinnedJobs, hasNextPage, isFetchingNextPage, filterStatus, fetchNextPage]);
 
   function handleFilterStatusChange(s: FilterStatus) {
     if (STICKY_FILTERS.includes(s)) {
-      setPinnedIds(null);
+      setPinnedJobs(null);
       setNeedsPin(true);
     } else {
-      setPinnedIds(null);
+      setPinnedJobs(null);
       setNeedsPin(false);
     }
     setFilterStatus(s);
@@ -312,6 +313,7 @@ const [staleBannerDismissed, setStaleBannerDismissed] = useState(false);
         })),
       };
     });
+    setPinnedJobs(prev => prev ? prev.map(j => j.id === id ? { ...j, ...update } : j) : null);
   }
 
   function updateJobsInCache(ids: Set<string>, updateFn: (j: Job) => Job) {
@@ -325,6 +327,7 @@ const [staleBannerDismissed, setStaleBannerDismissed] = useState(false);
         })),
       };
     });
+    setPinnedJobs(prev => prev ? prev.map(j => ids.has(j.id) ? updateFn(j) : j) : null);
   }
 
   function handleStatusChange(id: string, newStatus: string) {
@@ -463,16 +466,20 @@ const [staleBannerDismissed, setStaleBannerDismissed] = useState(false);
   }
 
   // All filters and sorting happen server-side.
-  // Sticky tabs (Unread/Saved) freeze a snapshot of IDs at click time so jobs
-  // don't vanish as the user reads or saves them — even when the query refetches.
+  // Sticky tabs (Unread/Saved) freeze a snapshot of Job objects at click time so
+  // jobs don't vanish as the user reads or saves them — even when the query
+  // refetches and the server excludes the now-read job from ?status=unread.
+  // Local mutations (handleSeenChange, handleStatusChange, etc.) update both
+  // the cache and pinnedJobs so changes remain visible in the frozen view.
   // Non-sticky tabs re-apply the status check locally so status changes are
   // reflected immediately without waiting for a server round-trip.
-  const filtered = jobs.filter(j => {
-    if (isSticky) return pinnedIds ? pinnedIds.has(j.id) : true;
-    if (filterStatus === 'rejected') return j.status === 'rejected';
-    if (filterStatus === 'unsaved') return j.status === 'new';
-    return j.status !== 'rejected';
-  });
+  const filtered = (() => {
+    if (isSticky && pinnedJobs !== null) return pinnedJobs;
+    if (isSticky) return jobs;
+    if (filterStatus === 'rejected') return jobs.filter(j => j.status === 'rejected');
+    if (filterStatus === 'unsaved') return jobs.filter(j => j.status === 'new');
+    return jobs.filter(j => j.status !== 'rejected');
+  })();
 
   useEffect(() => {
     setSelectedIds(new Set());
@@ -516,13 +523,13 @@ const [staleBannerDismissed, setStaleBannerDismissed] = useState(false);
     staleTime: 30_000,
   });
 
-  // Active sticky tab badge = frozen snapshot size (pinnedIds) so it matches
+  // Active sticky tab badge = frozen snapshot size (pinnedJobs) so it matches
   // what's rendered and doesn't drift as the user reads/saves locally.
   // Inactive tabs use live filter-aware counts from /api/jobs/counts.
   const liveUnread = countsData?.unread ?? 0;
   const liveSaved = countsData?.saved ?? 0;
-  const unreadCount = filterStatus === 'unread' && pinnedIds ? pinnedIds.size : liveUnread;
-  const savedCount  = filterStatus === 'saved'  && pinnedIds ? pinnedIds.size : liveSaved;
+  const unreadCount = filterStatus === 'unread' && pinnedJobs ? pinnedJobs.length : liveUnread;
+  const savedCount  = filterStatus === 'saved'  && pinnedJobs ? pinnedJobs.length : liveSaved;
   const unsavedCount = countsData?.unsaved ?? 0;
   const rejectedCount = countsData?.rejected ?? 0;
   const allCount = countsData?.all_count ?? 0;
