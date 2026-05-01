@@ -300,6 +300,7 @@ const [staleBannerDismissed, setStaleBannerDismissed] = useState(false);
       setNeedsPin(false);
     }
     setFilterStatus(s);
+    refetchJobs();
   }
 
   function updateJobInCache(id: string, update: Partial<Job>) {
