@@ -135,7 +135,7 @@ app.get('/counts', (c) => {
       COUNT(*) FILTER (WHERE status = 'saved')                                  AS saved,
       COUNT(*) FILTER (WHERE status = 'rejected')                               AS rejected,
       COUNT(*) FILTER (WHERE seen_at IS NULL AND status != 'rejected')          AS unread,
-      COUNT(*)                                                                  AS all_count
+      COUNT(*) FILTER (WHERE status != 'rejected')                              AS all_count
     FROM jobs
     ${where}
   `).get(...params) as {
@@ -168,6 +168,8 @@ app.get('/', (c) => {
   } else if (status) {
     conditions.push('status = ?');
     filterParams.push(status);
+  } else {
+    conditions.push("status != 'rejected'");
   }
 
   const sortBy = sortByParam && VALID_SORT_BY.has(sortByParam) ? sortByParam : 'score';

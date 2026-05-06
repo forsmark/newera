@@ -151,14 +151,16 @@ describe('GET /api/jobs/counts', () => {
     // 6 seeded jobs: 4 'new' with seen_at=null (unread), 1 'saved' with seen_at=null (unread),
     // 1 'rejected' (excluded from unread), and one 'new' with seen_at set (excluded).
     expect(baseline.unread).toBe(4);
-    expect(baseline.all_count).toBe(6);
+    // all_count excludes rejected (5 non-rejected out of 6 total)
+    expect(baseline.all_count).toBe(5);
 
     const filtered = await (await app.request('/api/jobs/counts?min_score=50')).json() as {
       unsaved: number; rejected: number; all_count: number;
     };
     expect(filtered.unsaved).toBe(3);
     expect(filtered.rejected).toBe(1);
-    expect(filtered.all_count).toBe(5);
+    // all_count excludes rejected: new(80)+saved(90)+new(80)+new(80) = 4 (rejected score=70 excluded)
+    expect(filtered.all_count).toBe(4);
   });
 });
 

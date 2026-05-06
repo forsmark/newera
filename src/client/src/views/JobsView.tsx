@@ -301,6 +301,7 @@ const [staleBannerDismissed, setStaleBannerDismissed] = useState(false);
     }
     setFilterStatus(s);
     refetchJobs();
+    refetchCounts();
   }
 
   function updateJobInCache(id: string, update: Partial<Job>) {
@@ -475,7 +476,7 @@ const [staleBannerDismissed, setStaleBannerDismissed] = useState(false);
   // Non-sticky tabs re-apply the status check locally so status changes are
   // reflected immediately without waiting for a server round-trip.
   const filtered = (() => {
-    if (isSticky && pinnedJobs !== null) return pinnedJobs;
+    if (isSticky && pinnedJobs !== null) return pinnedJobs.filter(j => j.status !== 'rejected');
     if (isSticky) return jobs;
     if (filterStatus === 'rejected') return jobs.filter(j => j.status === 'rejected');
     if (filterStatus === 'unsaved') return jobs.filter(j => j.status === 'new');
@@ -515,7 +516,7 @@ const [staleBannerDismissed, setStaleBannerDismissed] = useState(false);
   const remotiveCount = jobs.filter(j => j.source === 'remotive').length;
   const arbeitnowCount = jobs.filter(j => j.source === 'arbeitnow').length;
   const remoteokCount = jobs.filter(j => j.source === 'remoteok').length;
-  const { data: countsData } = useQuery({
+  const { data: countsData, refetch: refetchCounts } = useQuery({
     queryKey: ['job-counts', refreshKey, globalFilterParamsString],
     queryFn: () =>
       fetch(`/api/jobs/counts?${globalFilterParamsString}`).then(r => r.json()) as Promise<{
@@ -529,8 +530,8 @@ const [staleBannerDismissed, setStaleBannerDismissed] = useState(false);
   // Inactive tabs use live filter-aware counts from /api/jobs/counts.
   const liveUnread = countsData?.unread ?? 0;
   const liveSaved = countsData?.saved ?? 0;
-  const unreadCount = filterStatus === 'unread' && pinnedJobs ? pinnedJobs.length : liveUnread;
-  const savedCount  = filterStatus === 'saved'  && pinnedJobs ? pinnedJobs.length : liveSaved;
+  const unreadCount = filterStatus === 'unread' && pinnedJobs ? pinnedJobs.filter(j => j.status !== 'rejected').length : liveUnread;
+  const savedCount  = filterStatus === 'saved'  && pinnedJobs ? pinnedJobs.filter(j => j.status !== 'rejected').length : liveSaved;
   const unsavedCount = countsData?.unsaved ?? 0;
   const rejectedCount = countsData?.rejected ?? 0;
   const allCount = countsData?.all_count ?? 0;
