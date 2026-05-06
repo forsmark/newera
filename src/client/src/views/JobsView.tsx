@@ -147,6 +147,9 @@ const [staleBannerDismissed, setStaleBannerDismissed] = useState(false);
   // Track filter identity to re-trigger list animation
   const filterKey = `${filterStatus}|${[...selectedSources].sort().join(',')}|${[...selectedWorkTypes].sort().join(',')}|${activeTags.join(',')}|${searchQuery}|${postedWithin}|${sortBy}|${hideJobsFromDisabledSources}|${[...disabledSources].sort().join(',')}`;
   const prevFilterKey = useRef(filterKey);
+  // Ref to guard async re-pin callbacks against stale filterStatus closures
+  const filterStatusRef = useRef(filterStatus);
+  useEffect(() => { filterStatusRef.current = filterStatus; }, [filterStatus]);
 
   const hasPendingScores = (status?.score_distribution?.pending ?? 0) > 0;
 
@@ -292,15 +295,23 @@ const [staleBannerDismissed, setStaleBannerDismissed] = useState(false);
   }, [sentinelVisible, pinnedJobs, hasNextPage, isFetchingNextPage, filterStatus, fetchNextPage]);
 
   function handleFilterStatusChange(s: FilterStatus) {
+    const isSameTab = s === filterStatus;
+    setPinnedJobs(null);
     if (STICKY_FILTERS.includes(s)) {
-      setPinnedJobs(null);
-      setNeedsPin(true);
+      if (!isSameTab) {
+        setNeedsPin(true);
+      } else {
+        // Re-click on sticky tab: don't pin stale cache — wait for fresh data
+        setNeedsPin(false);
+        refetchJobs().then(() => {
+          if (filterStatusRef.current === s) setNeedsPin(true);
+        });
+      }
     } else {
-      setPinnedJobs(null);
       setNeedsPin(false);
+      if (isSameTab) refetchJobs();
     }
-    setFilterStatus(s);
-    refetchJobs();
+    if (!isSameTab) setFilterStatus(s);
     refetchCounts();
   }
 
@@ -655,7 +666,10 @@ const [staleBannerDismissed, setStaleBannerDismissed] = useState(false);
                   }}
                 >
                   {s === "rejected" ? "Discarded" : s === "unsaved" ? "New" : s.charAt(0).toUpperCase() + s.slice(1)}
-                  {count !== null && count > 0 && (
+                  {isActive && isQueryFetching && !isFetchingNextPage ? (
+                    <span className="ml-[0.3rem] inline-block w-[5px] h-[5px] rounded-full shrink-0 align-middle"
+                      style={{ background: '#7a95b0', animation: 'pulse 1.5s ease-in-out infinite' }} />
+                  ) : count !== null && count > 0 ? (
                     <span className="ml-[0.3rem] rounded-full px-[0.3rem] text-[0.6875rem] font-semibold"
                       style={{
                         background: isActive ? '#1a2840' : '#0b1628',
@@ -663,7 +677,7 @@ const [staleBannerDismissed, setStaleBannerDismissed] = useState(false);
                       }}>
                       {count}
                     </span>
-                  )}
+                  ) : null}
                 </button>
               );
             })}
