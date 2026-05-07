@@ -343,6 +343,46 @@ const [staleBannerDismissed, setStaleBannerDismissed] = useState(false);
     setPinnedJobs(prev => prev ? prev.map(j => ids.has(j.id) ? updateFn(j) : j) : null);
   }
 
+  function removeJobsFromCache(ids: Set<string>) {
+    queryClient.setQueryData<InfiniteData<JobsPage>>(jobsQueryKey, (old) => {
+      if (!old) return old;
+      return {
+        ...old,
+        pages: old.pages.map(p => ({
+          ...p,
+          jobs: p.jobs.filter(j => !ids.has(j.id)),
+        })),
+      };
+    });
+    setPinnedJobs(prev => prev ? prev.filter(j => !ids.has(j.id)) : null);
+  }
+
+  function handleDelete(id: string) {
+    removeJobsFromCache(new Set([id]));
+    refetchCounts();
+  }
+
+  async function bulkDelete() {
+    if (selectedIds.size === 0) return;
+    setBulkLoading(true);
+    try {
+      const res = await fetch('/api/jobs/bulk-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [...selectedIds] }),
+      });
+      if (!res.ok) {
+        toast('Delete failed — please try again');
+      } else {
+        removeJobsFromCache(selectedIds);
+        setSelectedIds(new Set());
+        refetchCounts();
+      }
+    } finally {
+      setBulkLoading(false);
+    }
+  }
+
   function handleStatusChange(id: string, newStatus: string) {
     updateJobInCache(id, { status: newStatus as Job['status'] });
   }
@@ -818,6 +858,7 @@ const [staleBannerDismissed, setStaleBannerDismissed] = useState(false);
                     focused={index === focusedIndex}
                     onFocusRequest={() => setFocusedIndex(index)}
                     onStatusChange={handleStatusChange}
+                    onDelete={handleDelete}
                     compact={compact}
                     selected={selectedIds.has(job.id)}
                     onToggleSelect={toggleSelect}
@@ -926,10 +967,17 @@ const [staleBannerDismissed, setStaleBannerDismissed] = useState(false);
                   className="py-2 rounded-sm border border-border-accent bg-transparent text-accent cursor-pointer text-[0.8125rem] font-medium disabled:opacity-40">
                   Save all
                 </button>
-                <button onClick={() => bulkSetStatus('rejected')} disabled={bulkLoading}
-                  className="py-2 rounded-sm border border-border-red bg-transparent text-red cursor-pointer text-[0.8125rem] font-medium disabled:opacity-40">
-                  Discard all
-                </button>
+                {filterStatus === 'rejected' ? (
+                  <button onClick={bulkDelete} disabled={bulkLoading}
+                    className="py-2 rounded-sm border border-border-red bg-transparent text-red cursor-pointer text-[0.8125rem] font-medium disabled:opacity-40">
+                    Delete all
+                  </button>
+                ) : (
+                  <button onClick={() => bulkSetStatus('rejected')} disabled={bulkLoading}
+                    className="py-2 rounded-sm border border-border-red bg-transparent text-red cursor-pointer text-[0.8125rem] font-medium disabled:opacity-40">
+                    Discard all
+                  </button>
+                )}
               </div>
             </div>
 
@@ -952,10 +1000,17 @@ const [staleBannerDismissed, setStaleBannerDismissed] = useState(false);
                 className="px-2.5 py-1.5 rounded-sm border border-border-accent bg-transparent text-accent cursor-pointer text-[0.8125rem] font-medium disabled:opacity-40">
                 Save all
               </button>
-              <button onClick={() => bulkSetStatus('rejected')} disabled={bulkLoading}
-                className="px-2.5 py-1.5 rounded-sm border border-border-red bg-transparent text-red cursor-pointer text-[0.8125rem] font-medium disabled:opacity-40">
-                Discard all
-              </button>
+              {filterStatus === 'rejected' ? (
+                <button onClick={bulkDelete} disabled={bulkLoading}
+                  className="px-2.5 py-1.5 rounded-sm border border-border-red bg-transparent text-red cursor-pointer text-[0.8125rem] font-medium disabled:opacity-40">
+                  Delete all
+                </button>
+              ) : (
+                <button onClick={() => bulkSetStatus('rejected')} disabled={bulkLoading}
+                  className="px-2.5 py-1.5 rounded-sm border border-border-red bg-transparent text-red cursor-pointer text-[0.8125rem] font-medium disabled:opacity-40">
+                  Discard all
+                </button>
+              )}
               <button onClick={() => bulkSetStatus('new')} disabled={bulkLoading}
                 className="px-2.5 py-1.5 rounded-sm border border-border bg-transparent text-text-3 cursor-pointer text-[0.8125rem] font-medium disabled:opacity-40">
                 Restore all

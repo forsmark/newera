@@ -17,6 +17,7 @@ interface Props {
   selected?: boolean;
   onToggleSelect?: (id: string) => void;
   onRescore?: (id: string) => void;
+  onDelete?: (id: string) => void;
   focused?: boolean;
   onFocusRequest?: () => void;
   onTagClick?: (tag: string) => void;
@@ -67,7 +68,7 @@ function formatDate(dateStr: string | null): string {
   return date.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
-export default function JobRow({ job, onStatusChange, onSeenChange, compact, selected, onToggleSelect, onRescore, focused, onFocusRequest, onTagClick, activeTags, isFetching, isScoring }: Props) {
+export default function JobRow({ job, onStatusChange, onSeenChange, compact, selected, onToggleSelect, onRescore, onDelete, focused, onFocusRequest, onTagClick, activeTags, isFetching, isScoring }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [scope, animate] = useAnimate();
@@ -143,6 +144,16 @@ export default function JobRow({ job, onStatusChange, onSeenChange, compact, sel
     }
   }
 
+  async function handleDelete() {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/jobs/${job.id}`, { method: 'DELETE' });
+      if (res.ok) onDelete?.(job.id);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   function handleRowClick(e: React.MouseEvent) {
     if ((e.target as HTMLElement).closest("button") || (e.target as HTMLElement).closest("a")) return;
     onFocusRequest?.();
@@ -194,10 +205,17 @@ export default function JobRow({ job, onStatusChange, onSeenChange, compact, sel
       )}
 
       {job.status === "rejected" && (
-        <button onClick={() => patchStatus("new")} disabled={loading}
-          className="px-3 py-1.5 text-[0.75rem] rounded-sm border border-border text-text-3 font-medium leading-none bg-transparent cursor-pointer">
-          Restore
-        </button>
+        <>
+          <button onClick={() => patchStatus("new")} disabled={loading}
+            className="px-3 py-1.5 text-[0.75rem] rounded-sm border border-border text-text-3 font-medium leading-none bg-transparent cursor-pointer">
+            Restore
+          </button>
+          <button onClick={handleDelete} disabled={loading}
+            title="Delete permanently"
+            className="px-2 py-1.5 text-[0.75rem] rounded-sm border border-border-red text-red font-medium leading-none bg-transparent cursor-pointer flex items-center">
+            <TrashIcon />
+          </button>
+        </>
       )}
 
       {(job.status === "new" || job.status === "saved") && (

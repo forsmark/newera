@@ -310,6 +310,30 @@ app.delete('/:id', (c) => {
   return c.json({ deleted: id });
 });
 
+// POST /api/jobs/bulk-delete
+// Body: { ids: string[] }
+app.post('/bulk-delete', async (c) => {
+  let body: { ids?: unknown };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400);
+  }
+  const { ids } = body;
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return c.json({ error: 'ids must be a non-empty array' }, 400);
+  }
+  const deleteMany = db.transaction((jobIds: string[]) => {
+    for (const id of jobIds) {
+      db.run('DELETE FROM applications WHERE job_id = ?', [id]);
+      db.run('DELETE FROM jobs WHERE id = ?', [id]);
+    }
+    return jobIds.length;
+  });
+  const deleted = deleteMany(ids as string[]);
+  return c.json({ deleted });
+});
+
 // POST /api/jobs/bulk-status
 // Body: { ids: string[], status: 'saved' | 'rejected' }
 // Updates status for all provided job IDs in a single transaction

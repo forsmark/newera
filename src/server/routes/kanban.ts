@@ -145,6 +145,10 @@ app.patch('/:id', async (c) => {
 
   db.run(`UPDATE applications SET ${fields.join(', ')} WHERE job_id = ?`, params);
 
+  if (body.kanban_column === 'rejected') {
+    db.run(`UPDATE jobs SET status = 'rejected', updated_at = ? WHERE id = ?`, [new Date().toISOString(), jobId]);
+  }
+
   const updated = db.query(`
     SELECT ${SELECT_FIELDS}
     FROM applications a

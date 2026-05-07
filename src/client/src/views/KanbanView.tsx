@@ -11,7 +11,7 @@ const COLUMNS: { key: KanbanCol; title: string; color: string }[] = [
   { key: "applied",   title: "Applied",   color: "#3b82f6" },
   { key: "interview", title: "Interview", color: "#a855f7" },
   { key: "offer",     title: "Offer",     color: "#22c55e" },
-  { key: "rejected",  title: "Rejected",  color: "#ef4444" },
+  { key: "rejected",  title: "Closed",    color: "#ef4444" },
 ];
 
 interface Props { refreshKey?: number; }
